@@ -2,7 +2,49 @@
 
 An independent observatory for the New Zealand electricity market. Gridwatch turns public market data into plain-English explanations of what happened, why, and what it means. See the [project brief](docs/brief.md).
 
-The project is in planning. There is no code yet.
+The repository is a TypeScript monorepo. There is no dataset code yet. See [ADR-0001](docs/adr/0001-typescript-monorepo-and-data-layers.md) for the decisions behind the layout.
+
+## Layout
+
+| Path          | Role                                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| `collector/`  | Downloads source files unchanged into `data/bronze/` and records a manifest                      |
+| `publisher/`  | Reads bronze. Writes `data/silver/` (normalised) and `data/gold/` (derived tables and site JSON) |
+| `data/`       | The data. Gitignored. [`data/README.md`](data/README.md) explains the layers                     |
+| `site/`       | Astro site (placeholder). Reads `data/gold/site/` at build time                                  |
+| `compose.yml` | Runs `collector` and `publisher` as one-shot jobs                                                |
+
+Processing is per NZ trading day. Dataset code lives in `collector/src/electricity-authority/<dataset>.ts`, `publisher/src/silver/<dataset>.ts` and `publisher/src/gold/`.
+
+### Data layers
+
+| Layer          | Brief term (section 4.2)    | Contents                                                                               | Written by |
+| -------------- | --------------------------- | -------------------------------------------------------------------------------------- | ---------- |
+| `data/bronze/` | Raw archive                 | Source files exactly as published, plus manifest                                       | collector  |
+| `data/silver/` | Canonical datasets          | Typed, validated Parquet, UTC timestamps, source IDs kept, partitioned by trading date | publisher  |
+| `data/gold/`   | Derived + presentation data | Analytical Parquet tables, and site JSON under `gold/site/`                            | publisher  |
+
+Set the `DATA_ROOT` environment variable to move the data directory. The default is `./data`.
+
+## Develop
+
+Use the Node version in `.nvmrc`.
+
+```bash
+npm ci
+npm run lint        # Biome
+npm run typecheck   # tsc, all workspaces
+npm test            # Vitest
+```
+
+Run the jobs with Docker Compose. Both are no-ops for now.
+
+```bash
+docker compose run --rm collector
+docker compose run --rm publisher
+```
+
+Architecture decisions are in [`docs/adr/`](docs/adr/). Copy `0000-template.md` for a new one.
 
 ## How work is tracked
 

@@ -1,0 +1,12 @@
+# The site service is added in a later issue.
+services:
+  collector:
+    build: .
+    command: ["node", "collector/src/main.ts"]
+    volumes:
+      - ./data:/data
+  publisher:
+    build: .
+    command: ["node", "publisher/src/main.ts"]
+    volumes:
+      - ./data:/data
