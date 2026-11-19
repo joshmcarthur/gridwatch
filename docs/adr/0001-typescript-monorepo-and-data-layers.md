@@ -49,7 +49,7 @@ A dataset uses the same ID in the collector and the publisher.
 
 - Vitest is the test runner. It runs TypeScript with no extra build step. It runs from the repository root over all workspaces.
 - Biome is the one lint and format tool. It needs one config file and one dependency. It replaces ESLint plus Prettier.
-- TypeScript checks types only (`noEmit`). Node 24 runs `.ts` files directly in the compose services, so the repository has no build step.
+- TypeScript checks types only (`noEmit`). Node 26 runs `.ts` files directly in the compose services, so the repository has no build step.
 
 ## Consequences
 
