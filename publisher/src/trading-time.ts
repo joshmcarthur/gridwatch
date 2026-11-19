@@ -6,18 +6,18 @@
  * (DST starts) or 50 (DST ends).
  */
 
-export const TRADING_ZONE = "Pacific/Auckland";
-export const PERIOD_MS = 30 * 60 * 1000;
-export const DISPATCH_INTERVAL_MS = 5 * 60 * 1000;
+const TRADING_ZONE = "Pacific/Auckland";
+const PERIOD_MS = 30 * 60 * 1000;
+const DISPATCH_INTERVAL_MS = 5 * 60 * 1000;
 
-export interface TradingPeriod {
+interface TradingPeriod {
   /** NZ calendar date, `YYYY-MM-DD`. */
   tradingDate: string;
   /** 1-based period number within the trading date. */
   tradingPeriod: number;
 }
 
-export interface PeriodSpan {
+interface PeriodSpan {
   /** Event start (inclusive). */
   eventStartUtc: Date;
   /** Event end (exclusive). */

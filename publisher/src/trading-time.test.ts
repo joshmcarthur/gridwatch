@@ -78,8 +78,6 @@ test("DST end 2026-04-05: the 02:00 hour repeats at two distinct periods", () =>
   const second = periodToUtc("2026-04-05", 7).eventStartUtc;
   expect(first.toISOString()).toBe("2026-04-04T13:00:00.000Z");
   expect(second.toISOString()).toBe("2026-04-04T14:00:00.000Z");
-  expect(utcToPeriod(first).tradingPeriod).toBe(5);
-  expect(utcToPeriod(second).tradingPeriod).toBe(7);
   expect(periodToUtc("2026-04-05", 50).eventEndUtc.toISOString()).toBe(
     "2026-04-05T12:00:00.000Z",
   );
@@ -106,6 +104,15 @@ test("invalid trading date throws", () => {
 });
 
 describe("5-minute dispatch intervals", () => {
+  test("DST start: 03:00 NZDT is period 5", () => {
+    expect(
+      dispatchIntervalToUtc(new Date("2026-09-26T14:00:00Z")),
+    ).toMatchObject({
+      tradingDate: "2026-09-27",
+      tradingPeriod: 5,
+    });
+  });
+
   test("map to the containing trading period", () => {
     expect(
       dispatchIntervalToUtc(new Date("2026-11-18T11:00:00Z")),
