@@ -87,6 +87,15 @@ test("DST end 2026-04-05: the 02:00 hour repeats at two distinct periods", () =>
   );
 });
 
+test("DST end 2025-04-06: the 02:00 hour repeats at two distinct periods", () => {
+  expect(periodToUtc("2025-04-06", 5).eventStartUtc.toString()).toBe(
+    "2025-04-05T13:00:00Z",
+  );
+  expect(periodToUtc("2025-04-06", 7).eventStartUtc.toString()).toBe(
+    "2025-04-05T14:00:00Z",
+  );
+});
+
 test("invalid period throws a clear error", () => {
   expect(() => periodToUtc("2026-11-19", 49)).toThrow(
     "Invalid trading period 49 for 2026-11-19: expected an integer from 1 to 48",

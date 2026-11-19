@@ -38,7 +38,11 @@ function dayStart(tradingDate: string): Temporal.ZonedDateTime {
 
 /** Number of trading periods on a trading date: 48, 46 or 50. */
 export function periodsInTradingDate(tradingDate: string): number {
-  return (dayStart(tradingDate).hoursInDay * 60) / PERIOD_MINUTES;
+  return periodsPerDay(dayStart(tradingDate));
+}
+
+function periodsPerDay(start: Temporal.ZonedDateTime): number {
+  return (start.hoursInDay * 60) / PERIOD_MINUTES;
 }
 
 /** UTC start and end of a trading period. Throws if the period is not on that date. */
@@ -46,7 +50,8 @@ export function periodToUtc(
   tradingDate: string,
   tradingPeriod: number,
 ): PeriodSpan {
-  const count = periodsInTradingDate(tradingDate);
+  const start = dayStart(tradingDate);
+  const count = periodsPerDay(start);
   if (
     !Number.isInteger(tradingPeriod) ||
     tradingPeriod < 1 ||
@@ -56,7 +61,7 @@ export function periodToUtc(
       `Invalid trading period ${tradingPeriod} for ${tradingDate}: expected an integer from 1 to ${count}`,
     );
   }
-  const eventStartUtc = dayStart(tradingDate)
+  const eventStartUtc = start
     .toInstant()
     .add({ minutes: (tradingPeriod - 1) * PERIOD_MINUTES });
   return {
@@ -68,11 +73,12 @@ export function periodToUtc(
 /** The trading date and period that contain a UTC instant. */
 export function utcToPeriod(instant: Temporal.Instant): TradingPeriod {
   const local = instant.toZonedDateTimeISO(TRADING_ZONE);
-  const elapsedMinutes =
-    (instant.epochMilliseconds - local.startOfDay().epochMilliseconds) / 60_000;
+  const { minutes } = local.since(local.startOfDay(), {
+    largestUnit: "minutes",
+  });
   return {
     tradingDate: local.toPlainDate().toString(),
-    tradingPeriod: Math.floor(elapsedMinutes / PERIOD_MINUTES) + 1,
+    tradingPeriod: Math.floor(minutes / PERIOD_MINUTES) + 1,
   };
 }
 
