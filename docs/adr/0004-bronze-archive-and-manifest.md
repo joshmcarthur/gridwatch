@@ -52,9 +52,13 @@ data/bronze/
 
 `tradingDatesChangedSince(bronzeDir, since)` returns the sorted, unique `trading_dates` of records that have `retrieved_at` after `since`. The publisher runner calls it with the time of its last run.
 
+### Input checks
+
+The archive rejects a dataset ID or a decoded file name that is empty, `.`, `..`, or contains `/`, `\` or NUL. This stops a crafted URL from writing outside bronze.
+
 ### Retries
 
-The archive retries network errors, truncated bodies, 408, 429 and 5xx up to three times. The delay starts at 500 ms and doubles. Any other status throws.
+The archive retries network errors, truncated bodies, 408, 429 and 5xx up to three times. The delay starts at 500 ms and doubles. Any other status throws. Each attempt has a time limit (default 120 s, `timeoutMs`) that covers the request and the body. A timeout counts as a transient error.
 
 ## Consequences
 
@@ -62,5 +66,8 @@ The archive retries network errors, truncated bodies, 408, 429 and 5xx up to thr
 - Content addressing stores identical bytes once, even when the source changes only its headers.
 - The collector keeps every revision. Disk use grows with the number of revisions. Re-fetching the last five days each run adds a version only when content changes.
 - `unchanged` records grow the manifest by one line per check. Compact it later if it becomes large.
+- A crash can leave an orphan `.tmp-*` file in `<dataset>/`. It is safe to delete. The next run does not read it.
+- Each `archiveFile` call reads the whole manifest. This costs more as the manifest grows, and a backfill makes many calls. Before the backfill issue lands, callers can pass the previous record or memoise the read. We did not build that now.
+- A corrupt manifest line (for example from a crash during an append) makes `readManifest` throw with the line number. Fix or remove the line by hand.
 - The manifest has one writer at a time. Run the collector for one dataset file at a time.
 - Remote storage sync is out of scope. It needs a later decision.

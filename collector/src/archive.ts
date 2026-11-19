@@ -41,6 +41,8 @@ export interface ArchiveOptions {
   retries?: number;
   /** First backoff delay in ms. It doubles on each retry. Default 500. */
   backoffMs?: number;
+  /** Time limit for one attempt, request and body. Default 120000. */
+  timeoutMs?: number;
 }
 
 const MANIFEST = "manifest.jsonl";
@@ -55,10 +57,31 @@ export async function readManifest(
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
-  return text
-    .split("\n")
-    .filter((line) => line.trim() !== "")
-    .map((line) => JSON.parse(line) as ManifestRecord);
+  const records: ManifestRecord[] = [];
+  for (const [index, line] of text.split("\n").entries()) {
+    if (line.trim() === "") continue;
+    try {
+      records.push(JSON.parse(line) as ManifestRecord);
+    } catch {
+      throw new Error(
+        `Corrupt manifest line ${index + 1} in ${join(bronzeDir, MANIFEST)}. Fix or remove it.`,
+      );
+    }
+  }
+  return records;
+}
+
+/** A path segment from outside (dataset ID or decoded file name) must not leave its directory. */
+function assertSafeSegment(name: string, value: string): void {
+  if (
+    value === "" ||
+    value === "." ||
+    value === ".." ||
+    /[/\\\0]/.test(value) ||
+    basename(value) !== value
+  ) {
+    throw new Error(`Unsafe ${name}: ${JSON.stringify(value)}`);
+  }
 }
 
 class HttpError extends Error {
@@ -73,11 +96,15 @@ function isTransient(error: unknown): boolean {
   if (error instanceof HttpError) {
     return error.status === 408 || error.status === 429 || error.status >= 500;
   }
-  // fetch rejects with TypeError on network failure. A cut-off body errors with a stream code.
+  if (error instanceof TruncatedError) return true;
+  const e = error as NodeJS.ErrnoException;
+  // Timeout, or a body cut off mid-stream.
+  if (e.name === "TimeoutError" || e.code === "ERR_STREAM_PREMATURE_CLOSE")
+    return true;
+  // undici reports network failures as these TypeErrors. Other TypeErrors are bugs.
   return (
-    error instanceof TypeError ||
-    error instanceof TruncatedError ||
-    (error as NodeJS.ErrnoException).code === "ERR_STREAM_PREMATURE_CLOSE"
+    error instanceof TypeError &&
+    (error.message === "fetch failed" || error.message === "terminated")
   );
 }
 
@@ -120,7 +147,10 @@ export async function archiveFile(
   const now = options.now ?? (() => new Date());
   const retries = options.retries ?? 3;
   const backoff = options.backoffMs ?? 500;
+  const timeoutMs = options.timeoutMs ?? 120_000;
   const fileName = decodeURIComponent(basename(new URL(url).pathname));
+  assertSafeSegment("dataset", dataset);
+  assertSafeSegment("file name", fileName);
   const datasetDir = join(bronzeDir, dataset);
   await mkdir(datasetDir, { recursive: true });
 
@@ -136,7 +166,10 @@ export async function archiveFile(
   try {
     for (let attempt = 0; ; attempt++) {
       try {
-        const response = await doFetch(url, { headers });
+        const response = await doFetch(url, {
+          headers,
+          signal: AbortSignal.timeout(timeoutMs),
+        });
         const checkedAt = now().toISOString();
         const etag = response.headers.get("etag");
         const lastModified = response.headers.get("last-modified");
@@ -178,10 +211,11 @@ export async function archiveFile(
             const path = join(dataset, sha256, fileName);
             await mkdir(join(bronzeDir, dataset, sha256), { recursive: true });
             await rename(tempPath, join(bronzeDir, path));
+            const retrievedAt = now().toISOString();
             record = {
               ...common,
               status: previous ? "changed" : "new",
-              retrieved_at: checkedAt,
+              retrieved_at: retrievedAt,
               etag,
               last_modified: lastModified,
               sha256,
@@ -215,10 +249,15 @@ export async function archiveFile(
 export async function tradingDatesChangedSince(
   bronzeDir: string,
   since: Date,
+  dataset?: string,
 ): Promise<string[]> {
   const dates = new Set<string>();
   for (const record of await readManifest(bronzeDir)) {
-    if (record.retrieved_at && new Date(record.retrieved_at) > since) {
+    if (
+      (dataset === undefined || record.dataset === dataset) &&
+      record.retrieved_at &&
+      new Date(record.retrieved_at) > since
+    ) {
       for (const date of record.trading_dates) dates.add(date);
     }
   }

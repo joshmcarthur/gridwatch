@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -135,18 +135,77 @@ test("other errors fail at once", async () => {
   expect(requests).toHaveLength(1);
 });
 
-test("tradingDatesChangedSince lists dates of stored versions after T", async () => {
-  const t0 = new Date("2026-11-19T00:00:00Z");
-  const t1 = new Date("2026-11-20T00:00:00Z");
-  const t2 = new Date("2026-11-21T00:00:00Z");
-  await run({ now: () => t0, tradingDates: ["2026-11-18"] });
+test("tradingDatesChangedSince ignores unchanged checks and returns a sorted union", async () => {
+  const day = (d: number) => new Date(`2026-11-${d}T00:00:00Z`);
+  await run({ now: () => day(19), tradingDates: ["2026-11-18", "2026-11-17"] });
   body = "v2";
   etag = '"e2"';
-  await run({ now: () => t2, tradingDates: ["2026-11-18"] });
-  await run({ now: () => t2, tradingDates: ["2026-11-18"] }); // unchanged: not listed again
-  expect(
-    await tradingDatesChangedSince(bronze, new Date("2026-11-18T00:00:00Z")),
-  ).toEqual(["2026-11-18"]);
-  expect(await tradingDatesChangedSince(bronze, t1)).toEqual(["2026-11-18"]);
-  expect(await tradingDatesChangedSince(bronze, t2)).toEqual([]);
+  await run({ now: () => day(21), tradingDates: ["2026-11-18", "2026-11-16"] });
+  await run({ now: () => day(22), tradingDates: ["2026-11-18", "2026-11-16"] }); // unchanged
+  expect(await tradingDatesChangedSince(bronze, day(18))).toEqual([
+    "2026-11-16",
+    "2026-11-17",
+    "2026-11-18",
+  ]);
+  expect(await tradingDatesChangedSince(bronze, day(20))).toEqual([
+    "2026-11-16",
+    "2026-11-18",
+  ]);
+  expect(await tradingDatesChangedSince(bronze, day(21))).toEqual([]);
+  expect(await tradingDatesChangedSince(bronze, day(20), "other")).toEqual([]);
+  expect(await tradingDatesChangedSince(bronze, day(20), "prices")).toEqual([
+    "2026-11-16",
+    "2026-11-18",
+  ]);
+});
+
+test("uses If-Modified-Since when the server sends no ETag", async () => {
+  const lastModified = "Thu, 19 Nov 2026 18:06:00 GMT";
+  handler = (req, res) => {
+    if (req.headers["if-modified-since"] === lastModified)
+      return void res.writeHead(304).end();
+    res.writeHead(200, { "Last-Modified": lastModified }).end("v1");
+  };
+  await run();
+  const second = await run();
+  expect(requests[1]?.["if-modified-since"]).toBe(lastModified);
+  expect(requests[1]?.["if-none-match"]).toBeUndefined();
+  expect(second.status).toBe("unchanged");
+});
+
+test("a 304 with no previous record fails", async () => {
+  handler = (_req, res) => void res.writeHead(304).end();
+  await expect(run()).rejects.toThrow("HTTP 304");
+  expect(await readManifest(bronze)).toEqual([]);
+});
+
+test("rejects a file name or dataset that would leave bronze", async () => {
+  const evil = new URL("/Prices/..%2F..%2Fevil.csv", base).href;
+  await expect(run({ url: evil })).rejects.toThrow("Unsafe file name");
+  for (const dataset of ["..", "a/b", "a\\b", "", "."]) {
+    await expect(run({ dataset })).rejects.toThrow("Unsafe dataset");
+  }
+  expect(requests).toHaveLength(0);
+});
+
+test("a timeout is retried", async () => {
+  handler = () => {}; // never answers
+  await expect(run({ retries: 1, timeoutMs: 20 })).rejects.toThrow();
+  expect(requests).toHaveLength(2);
+});
+
+test("a truncated download is retried", async () => {
+  handler = (_req, res) => {
+    res.writeHead(200, { "Content-Length": "100" });
+    res.write("partial");
+    setTimeout(() => res.destroy(), 5);
+  };
+  await expect(run({ retries: 1 })).rejects.toThrow();
+  expect(requests).toHaveLength(2);
+});
+
+test("a corrupt manifest line fails with its line number", async () => {
+  await run();
+  await appendFile(join(bronze, "manifest.jsonl"), '{"dataset":"pri');
+  await expect(readManifest(bronze)).rejects.toThrow("Corrupt manifest line 2");
 });
