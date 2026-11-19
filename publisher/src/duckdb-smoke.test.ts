@@ -6,7 +6,7 @@ import { expect, test } from "vitest";
 
 test("DuckDB writes and reads back a Parquet file", async () => {
   const dir = await mkdtemp(join(tmpdir(), "gridwatch-"));
-  const file = join(dir, "smoke.parquet");
+  const file = join(dir, "smoke.parquet").replaceAll("'", "''");
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
     await connection.run(
