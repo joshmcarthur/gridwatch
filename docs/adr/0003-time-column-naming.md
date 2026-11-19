@@ -9,7 +9,7 @@ NZ market data uses a trading date and a trading period in NZ local time. Daylig
 
 ## Decision
 
-The module `publisher/src/trading-time.ts` implements the model with `Intl.DateTimeFormat` and the IANA zone `Pacific/Auckland`. It has no dependency. Node 24 has no `Temporal` without a flag.
+The module `publisher/src/trading-time.ts` implements the model with `Temporal` and the IANA zone `Pacific/Auckland`. Node 26 enables `Temporal` by default and TypeScript ships the types (`lib: esnext.temporal`), so it needs no dependency or polyfill. UTC instants are `Temporal.Instant` values. They are exact and immutable. Convert to `Date` at the edge if a client needs one.
 
 - A trading date is the NZ calendar date. Period 1 starts at local midnight.
 - A period is 30 real minutes. A day has 48 periods, 46 on the DST-start day, 50 on the DST-end day.
