@@ -1,5 +1,8 @@
-node_modules
+**/node_modules
 data
+site-out
+site/dist
+site/.astro
 .git
 .github
 .claude

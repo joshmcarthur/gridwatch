@@ -21,7 +21,13 @@ function defaultDataRoot(): string {
 function goldSiteDir(): string | null {
   const dataRoot = process.env.DATA_ROOT ?? defaultDataRoot();
   const goldIndex = resolve(dataRoot, "gold/site/index.json");
-  return existsSync(goldIndex) ? resolve(dataRoot, "gold/site") : null;
+  if (existsSync(goldIndex)) return resolve(dataRoot, "gold/site");
+  if (process.env.SITE_REQUIRE_GOLD === "1") {
+    throw new Error(
+      `SITE_REQUIRE_GOLD=1 but ${goldIndex} is missing. Run the publisher first.`,
+    );
+  }
+  return null;
 }
 
 function fixtureDay(relativePath: string): unknown {

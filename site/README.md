@@ -14,16 +14,16 @@ The build reads `DATA_ROOT/gold/site/index.json` when that file exists. If it do
 npm run dev -w site
 ```
 
-## Preview with compose
-
-Build the static files, then serve them with nginx:
+## Publish with compose
 
 ```bash
-npm run build -w site
-docker compose up site
+docker compose run --rm site-build
+docker compose up -d site
 ```
 
-The site is at http://localhost:8080. The compose service mounts `site/dist`. It does not run Astro.
+`site-build` runs `site/publish.ts`. It builds the site into the inactive slot (`site-out/releases/a` or `site-out/releases/b`), checks that `index.html` exists, then points the `site-out/current` symlink at that slot with an atomic rename. The first run uses `a`. The next run writes the other slot and swaps; the previous slot stays until the run after that overwrites it. Before spawning Astro, the job fails if `DATA_ROOT/gold/site/index.json` is missing (default `DATA_ROOT` is `/data`). The Astro child also sets `SITE_REQUIRE_GOLD=1`, so it does not fall back to fixtures. If the build fails, `current` keeps the old slot.
+
+The `site` service serves `site-out/current` with nginx at http://localhost:8080. It serves nothing until `site-build` has run once.
 
 ## Data contract
 
