@@ -6,7 +6,7 @@ Real extracts of three daily files. Each keeps the header and every row for four
 | --- | --- |
 | `UnitCode` `KPO0` (Karāpiro) | An injection unit with a macron in the plant name, in every period |
 | `UnitCode` `PTA3` (Patea unit 3) | An injection unit with a blank `Island` |
-| `UnitCode` `RHO99` | An offtake row with a unit code and plant name `N/A` |
+| `UnitCode` `RHO99` | An offtake row with a unit code. Only the plant name is `N/A` |
 | `PointOfConnectionCode` `BOB1101` | An offtake row with unit and plant name `N/A`, in every period |
 
 | File | Source | Day |

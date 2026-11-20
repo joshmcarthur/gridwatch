@@ -105,6 +105,8 @@ test("publishes a normal 48-period day with UTC times, null N/A fields and prove
             count(*) FILTER (WHERE unit_code = 'RHO99' AND plant_name IS NULL) AS offtake_unit,
             count(*) FILTER (WHERE product_class = 'Offtake' AND cleared_generation_megawatts IS NULL) AS offtake_no_energy,
             count(*) FILTER (WHERE unit_code = 'PTA3' AND island IS NULL) AS no_island,
+            count(*) FILTER (WHERE cleared_fir_megawatts IS NULL) AS no_fir,
+            count(*) FILTER (WHERE cleared_sir_megawatts IS NULL) AS no_sir,
             count(DISTINCT case_id) FILTER (WHERE event_start_utc = TIMESTAMPTZ '2026-11-17 21:40:00+00') AS cases_in_rerun_interval,
             any_value(bronze_file_name) AS file, any_value(bronze_sha256) AS sha,
             strftime(any_value(retrieved_at), '%Y-%m-%dT%H:%M:%SZ') AS retrieved
@@ -118,6 +120,8 @@ test("publishes a normal 48-period day with UTC times, null N/A fields and prove
     offtake_unit: "92",
     offtake_no_energy: "380",
     no_island: "260",
+    no_fir: "475",
+    no_sir: "185",
     cases_in_rerun_interval: "2",
     file: name,
     sha: sha256,
@@ -231,6 +235,7 @@ test("reports a day with no bronze file as missing", async () => {
 });
 
 test.each([
+  ["no rows", (lines: string[]) => lines.slice(0, 1), "no rows"],
   [
     "a duplicate key",
     (lines: string[]) => [...lines, lines[1] as string],
