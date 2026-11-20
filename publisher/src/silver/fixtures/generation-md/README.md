@@ -1,6 +1,6 @@
 # Generation_MD fixtures
 
-Real extracts of two monthly files. Each keeps the header and the rows of five units (`ARA2201`, `ASB0661`, `CML0331`, `KIW2201`, `BRB0331`) for the listed days. The units cover both code vocabularies: `Hydro/Hydro`, `Solar/Solar`, `HYD/HYD`, `WIN/ONW` and `ELE/BAT`. All periods stay in each row.
+Real extracts of two monthly files. Each keeps the header and the rows of five points of connection (`ARA2201`, `ASB0661`, `CML0331`, `KIW2201`, `BRB0331`) for the listed days. That gives 6 or 7 unit rows a day, because one point of connection can hold more than one unit. The rows cover both code vocabularies: `Hydro/Hydro`, `Solar/Solar`, `HYD/HYD`, `WIN/ONW` and `ELE/BAT`. All periods stay in each row.
 
 | File | Source | Days kept |
 | --- | --- | --- |

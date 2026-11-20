@@ -141,7 +141,7 @@ Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/Generation/Genera
 |---|---|
 | Pattern | One CSV per calendar month in one folder, 351 files, 1997-08 to 2026-10 with no missing month. |
 | Columns | **Wide:** `Site_Code, POC_Code, Nwk_Code, Gen_Code, Fuel_Code, Tech_Code, Trading_Date, TP1..TP50`. Values are **kWh** per trading period, from metered injections mapped to plants ([page](https://www.emi.ea.govt.nz/Wholesale/Datasets/Generation/Generation_MD)). 3,104 rows, 89 plants in Oct 2026. The date header is `Trading_date` in the 1997, 2009 and 2019 files I read and `Trading_Date` from 2022. Match case-insensitively. |
-| Resolution | Half-hour. `TP49`/`TP50` are blank except on 50-period days: 5 Apr 2026 has 50 values, 27 Sep 2026 has 46. |
+| Resolution | Half-hour. `TP49`/`TP50` are blank except on 50-period days: 5 Apr 2026 has 50 values, 27 Sep 2026 has 46. `TP47`/`TP48` are also blank on the 46-period day. |
 | Code vocabularies | Two in one file: `Hydro`/`HYD`, `Wind`/`WIN`, `Geo`/`GEO`, `Solar`/`SOL`, plus `ELE`/`BAT` for batteries; 1997 files use `Gas&Oil`. Newer plants use the short codes. |
 | Earliest | 1997-08 ([file](https://emidatasets.blob.core.windows.net/publicdata/Datasets/Wholesale/Generation/Generation_MD/199708_Generation_MD.csv)). |
 | Lag | Measured: the `202610` file is stamped 10 Nov 2026, `202608` 9 Oct, `202607` 11 Aug (all UTC), and no file exists for November. **Inferred:** metered data is 10 days to about 6 weeks behind. The page says the series "will be replaced" by a richer one; timing **unknown**. |
