@@ -1,4 +1,3 @@
-# The site service is added in a later issue.
 services:
   collector:
     build: .
@@ -10,3 +9,10 @@ services:
     entrypoint: ["node", "publisher/src/main.ts"]
     volumes:
       - ./data:/data
+  # Build first: npm run build -w site
+  site:
+    image: nginx:alpine
+    volumes:
+      - ./site/dist:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
