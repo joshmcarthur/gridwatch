@@ -8,6 +8,8 @@ import {
   recordCompleteness,
   saveCompleteness,
 } from "./silver/completeness.ts";
+import { SITE_EXPORT_ID } from "./site/contract.ts";
+import { exportSite } from "./site/export.ts";
 
 export interface RunOptions {
   bronzeDir: string;
@@ -167,6 +169,29 @@ export async function runPublish(
       dirty = false;
     }
   }
+  // The site export runs last, on the gold of this run and its completeness rows (ADR-0014).
+  if (!options.only || options.only.includes(SITE_EXPORT_ID)) {
+    try {
+      summaries.push(
+        await exportSite({
+          goldDir,
+          completeness,
+          registry: options.registry ?? datasets,
+          range,
+          force: options.force,
+        }),
+      );
+    } catch (error) {
+      summaries.push({
+        id: SITE_EXPORT_ID,
+        published: 0,
+        upToDate: 0,
+        missing: 0,
+        partial: [],
+        failed: [(error as Error).message],
+      });
+    }
+  }
   return summaries;
 }
 
@@ -193,7 +218,7 @@ With no range, each dataset publishes every date that is new or whose bronze fil
 With --from and --to, only dates in that range are considered (--from alone ends today; --to
 alone is not allowed). --force publishes the selected dates again even when they are up to date.
 publisher status prints the latest complete trading date for each dataset.
-Datasets: ${datasets.map((d) => d.id).join(", ")}`;
+Datasets: ${[...datasets.map((d) => d.id), SITE_EXPORT_ID].join(", ")}`;
 
 /** Parse the command line. Throws a RangeError or TypeError for bad input. */
 export function parseRunArgs(
@@ -215,7 +240,7 @@ export function parseRunArgs(
   if (values.to !== undefined && values.from === undefined)
     throw new TypeError("--to needs --from");
   for (const id of values.dataset ?? []) {
-    if (!registry.some((d) => d.id === id))
+    if (id !== SITE_EXPORT_ID && !registry.some((d) => d.id === id))
       throw new TypeError(`Unknown dataset ${id}`);
   }
   let range: RunOptions["range"];

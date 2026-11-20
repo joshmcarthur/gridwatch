@@ -6,7 +6,13 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import { datasets } from "../datasets.ts";
 import { goldPartitionPath } from "../gold/common.ts";
 import { completenessView } from "../gold/fixtures/completeness.ts";
+import { runPublish } from "../runner.ts";
 import { lit } from "../silver/common.ts";
+import {
+  type CompletenessRow,
+  completenessKey,
+  saveCompleteness,
+} from "../silver/completeness.ts";
 import {
   assertSiteDay,
   assertSiteIndex,
@@ -898,4 +904,64 @@ test("the worst realistic day stays under 40 KB", async () => {
   });
   assertSiteDay(built);
   expect(JSON.stringify(built).length).toBeLessThan(40_000);
+});
+
+test("the runner exports on each run, rebuilds only the days that changed, and honours --dataset", async () => {
+  const bronzeDir = join(root, "bronze");
+  const silverDir = join(root, "silver");
+  const run = (options: Partial<Parameters<typeof runPublish>[0]> = {}) =>
+    runPublish({
+      bronzeDir,
+      silverDir,
+      goldDir,
+      registry: [],
+      ...options,
+    });
+  const summaryOf = (summaries: Awaited<ReturnType<typeof run>>) =>
+    summaries.find((s) => s.id === "site_days");
+
+  await writePrices("2026-11-17", { periods: pricePeriods(48, (_n, p) => p) });
+  await writePrices(DATE, { periods: pricePeriods(48, (_n, p) => p) });
+  expect(summaryOf(await run())).toMatchObject({ published: 2, upToDate: 0 });
+  const dayOf17 = join(goldDir, "site", "days", "2026-11-17.json");
+  const mtime = (await stat(dayOf17)).mtimeMs;
+
+  // Nothing changed, so nothing is written.
+  expect(summaryOf(await run())).toMatchObject({ published: 0, upToDate: 2 });
+  expect((await stat(dayOf17)).mtimeMs).toBe(mtime);
+
+  // A gold input of 18 Nov changes: only that day is rebuilt.
+  await writePrices(DATE, {
+    periods: pricePeriods(
+      48,
+      (_n, p) => p,
+      () => ({ inputs_sha256: "sha-2" }),
+    ),
+  });
+  expect(summaryOf(await run())).toMatchObject({ published: 1, upToDate: 1 });
+
+  // Only the status of an input changes, with the same gold: that day is rebuilt.
+  const row: CompletenessRow = {
+    dataset: "dispatch_energy_prices",
+    tradingDate: DATE,
+    status: "partial",
+    expectedPeriodCount: 48,
+    actualPeriodCount: 47,
+    missingPeriods: [48],
+    bronzeSha256s: [],
+    sourcePublishedAt: null,
+    processedAt: "2026-11-20T00:00:00.000Z",
+    errors: [],
+  };
+  await saveCompleteness(
+    silverDir,
+    new Map([[completenessKey(row.dataset, row.tradingDate), row]]),
+  );
+  expect(summaryOf(await run())).toMatchObject({ published: 1, upToDate: 1 });
+
+  // A run for another dataset does not export. A run for the export alone does.
+  expect(await run({ only: ["gold_prices"] })).toEqual([]);
+  expect(await run({ only: ["site_days"] })).toEqual([
+    expect.objectContaining({ id: "site_days", upToDate: 2 }),
+  ]);
 });

@@ -277,6 +277,9 @@ test("parseRunArgs", () => {
   expect(() => parseRunArgs(["--to", "2026-11-01"], today)).toThrow("--from");
   expect(() => parseRunArgs(["--from", ""], today)).toThrow();
   expect(() => parseRunArgs(["--dataset", "nope"], today)).toThrow("Unknown");
+  expect(parseRunArgs(["--dataset", "site_days"], today).only).toEqual([
+    "site_days",
+  ]);
 });
 
 test("entity mappings build last, settle, and rebuild when an input partition changes", {
@@ -306,11 +309,12 @@ test("entity mappings build last, settle, and rebuild when an input partition ch
     );
 
   const first = await run();
-  expect(first.map((x) => x.id).slice(-4)).toEqual([
+  expect(first.map((x) => x.id).slice(-5)).toEqual([
     "entity_mappings",
     "gold_generation",
     "gold_prices",
     "gold_reserves",
+    "site_days",
   ]);
   expect(entity(first)).toMatchObject({
     published: 2,
