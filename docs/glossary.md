@@ -12,7 +12,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Dry year.** A year with low inflows to the hydro lakes. New Zealand relies on hydro, so a dry year needs more thermal generation, and prices rise. The Huntly Rankine units are kept as dry-year cover.
 
-**FIR and SIR.** The two reserve classes in the reserve price and cleared offer files. FIR is 6-second reserve. SIR is 60-second reserve. See [sources 3.2](sources.md#32-dispatch-reserve-prices).
+**FIR and SIR.** The two reserve classes in the reserve price and cleared offer files. FIR is 6-second reserve. SIR is 60-second reserve. Gold reserve tables have one row per class, island and trading period. See [sources 3.2](sources.md#32-dispatch-reserve-prices) and [ADR-0013](adr/0013-gold-reserve-prices.md).
 
 **Frequency keeping.** A service that keeps the system frequency at 50 Hz from moment to moment. The brief lists it as an ancillary service for a later phase.
 
