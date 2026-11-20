@@ -20,6 +20,7 @@ import {
   publishDispatchReservePrices,
 } from "../silver/dispatch-reserve-prices.ts";
 import { fingerprint, goldPartitionPath } from "./common.ts";
+import { completenessView } from "./fixtures/completeness.ts";
 import {
   ANALYSIS_VERSION,
   publishReserves,
@@ -154,7 +155,12 @@ const at = (
 
 test("period price is the time-weighted mean, and ties sort by price", async () => {
   await writeSilver(synthetic);
-  const result = await publishReserves({ silverDir, goldDir, date: DATE });
+  const result = await publishReserves({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   expect(result.status).toBe("partial");
   if (result.status !== "partial") throw new Error("expected partial");
   expect(result.missingPeriods.slice(0, 3)).toEqual([2, 3, 4]); // SIR has no period 2
@@ -198,7 +204,12 @@ test("period price is the time-weighted mean, and ties sort by price", async () 
 
 test("daily summary: mean of period prices, min and max of published prices", async () => {
   await writeSilver(synthetic);
-  await publishReserves({ silverDir, goldDir, date: DATE });
+  await publishReserves({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   const rows = await readGold("reserve_by_class_island_day");
   expect(rows[0]).not.toHaveProperty("time_weighted_mean_price");
   // (20*1800 + 7*1800) / 3600
@@ -229,7 +240,12 @@ test("segment ends are clamped into the period", async () => {
     row("FIR", "SI", BEN, 600, 4, 1),
     row("FIR", "SI", BEN, 2100, 999, 1),
   ]);
-  await publishReserves({ silverDir, goldDir, date: DATE });
+  await publishReserves({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   const rows = await readGold("reserve_by_class_island_period");
   expect(at(rows, "FIR", "NI", 1)).toMatchObject({
     dollars_per_megawatt_hour: 30,
@@ -251,7 +267,12 @@ test("two points of connection on one island and class make the date invalid", a
     row("FIR", "NI", "OTA2201", 20, 9),
     row("SIR", "NI", HAY, 0, 2),
   ]);
-  const result = await publishReserves({ silverDir, goldDir, date: DATE });
+  const result = await publishReserves({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   expect(result).toEqual({
     date: DATE,
     status: "invalid",
@@ -271,7 +292,12 @@ test("one island missing a period gets a null-price row, a false day flag and a 
       ...(i === 6 ? [] : [row("FIR", "SI", BEN, i * 1800, 2)]),
     ]),
   );
-  const result = await publishReserves({ silverDir, goldDir, date: DATE });
+  const result = await publishReserves({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   expect(result).toMatchObject({ status: "partial", missingPeriods: [7] });
   const periods = await readGold("reserve_by_class_island_period");
   expect(at(periods, "FIR", "SI", 7)).toMatchObject({
@@ -297,7 +323,12 @@ test("one island missing a period gets a null-price row, a false day flag and a 
 
 test("a null island is kept and flagged, not dropped", async () => {
   await writeSilver([row("FIR", null, "ZZZ2201", 0, 3)]);
-  const result = await publishReserves({ silverDir, goldDir, date: DATE });
+  const result = await publishReserves({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   expect(result.status).toBe("partial");
   expect(
     at(await readGold("reserve_by_class_island_day"), "FIR", null),
@@ -310,7 +341,14 @@ test("a null island is kept and flagged, not dropped", async () => {
 });
 
 test("a date with no reserve silver is missing", async () => {
-  expect(await publishReserves({ silverDir, goldDir, date: DATE })).toEqual({
+  expect(
+    await publishReserves({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date: DATE,
+    }),
+  ).toEqual({
     date: DATE,
     status: "missing",
   });
@@ -326,9 +364,19 @@ test("the same inputs and analysis version give identical bytes", async () => {
         ),
       ),
     );
-  await publishReserves({ silverDir, goldDir, date: DATE });
+  await publishReserves({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   const first = await bytes();
-  await publishReserves({ silverDir, goldDir, date: DATE });
+  await publishReserves({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   expect(await bytes()).toEqual(first);
 });
 
@@ -336,9 +384,16 @@ test("rows carry the analysis version, the fingerprint and the completeness flag
   await writeSilver(
     Array.from({ length: 48 }, (_, i) => row("FIR", "NI", HAY, i * 1800, 1)),
   );
-  const result = await publishReserves({ silverDir, goldDir, date: DATE });
+  const result = await publishReserves({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   expect(result.status).toBe("complete");
-  const wanted = (await reserves.wantedVersions?.(silverDir))?.get(DATE);
+  const wanted = (
+    await reserves.wantedVersions?.(silverDir, completenessView())
+  )?.get(DATE);
   for (const table of TABLES) {
     const rows = await readGold(table);
     const flags = [
@@ -426,7 +481,12 @@ test("real fixture period 1 FIR NI matches the hand-calculated rule B mean", {
 }, async () => {
   await archiveFixture(DATE);
   expect(
-    await publishReserves({ silverDir, goldDir, date: DATE }),
+    await publishReserves({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date: DATE,
+    }),
   ).toMatchObject({ status: "complete" });
   // HAY2201 FIR, period 1. Published 00:00:13 1.00, 00:04:40 1.00, 00:09:50 0.50,
   // 00:20:13 0.15, 00:24:46 0.15. Weights 280, 310, 623, 273, 314 s (the last runs to 00:30:00).
@@ -457,7 +517,14 @@ test("a DST-start day has 46 periods, and a row before a period starts is clampe
 }, async () => {
   const date = "2026-09-27";
   await archiveFixture(date);
-  expect(await publishReserves({ silverDir, goldDir, date })).toMatchObject({
+  expect(
+    await publishReserves({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date,
+    }),
+  ).toMatchObject({
     status: "complete",
   });
   const periods = await readGold("reserve_by_class_island_period", date);
@@ -500,4 +567,22 @@ test("a DST-start day has 46 periods, and a row before a period starts is clampe
     periods_expected: 46,
     inputs_complete: true,
   });
+});
+
+test("an invalid input day gives incomplete rows", async () => {
+  await writeSilver(
+    Array.from({ length: 48 }, (_, i) => row("FIR", "NI", HAY, i * 1800, 1)),
+  );
+  const result = await publishReserves({
+    silverDir,
+    goldDir,
+    completeness: completenessView([
+      ["dispatch_reserve_prices", DATE, "invalid"],
+    ]),
+    date: DATE,
+  });
+  expect(result).toMatchObject({ status: "partial", missingPeriods: [] });
+  for (const table of TABLES)
+    for (const r of await readGold(table))
+      expect(r.inputs_complete).toBe(false);
 });

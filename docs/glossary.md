@@ -117,7 +117,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **`analysis_version`.** An integer in every gold row. Each gold module has a constant of this name, and a person bumps it when the logic changes. The runner then rebuilds the gold tables. See [ADR-0011](adr/0011-gold-table-pattern.md).
 
-**`inputs_complete`.** A boolean in every gold row. Gold flags incomplete rows and does not drop them. Generation is complete when every silver input has rows in every expected trading period ([ADR-0011](adr/0011-gold-table-pattern.md)). Gold prices is complete when the node has at least one silver row in the period ([ADR-0012](adr/0012-gold-prices.md)). Gold is not a row in `silver/_completeness` ([ADR-0010](adr/0010-completeness.md)).
+**`inputs_complete`.** A boolean in every gold row. Gold flags incomplete rows and does not drop them. It is true only when every input of the gold table has the `_completeness` status `complete` for the date, and the row-level data rule holds ([ADR-0011](adr/0011-gold-table-pattern.md)). The data rule for generation is rows in every expected trading period. For gold prices and reserves it is at least one silver row for the node, or the class and island, in the period ([ADR-0012](adr/0012-gold-prices.md), [ADR-0013](adr/0013-gold-reserve-prices.md)). Gold is not a row in `silver/_completeness` ([ADR-0010](adr/0010-completeness.md)).
 
 **`inputs_sha256`.** A column in every entity table and every gold table. It is a hash of the version of each silver input that built the table (and, in gold, the `analysis_version`). The runner rebuilds a date when it changes. See [ADR-0008](adr/0008-entity-model.md) and [ADR-0011](adr/0011-gold-table-pattern.md).
 

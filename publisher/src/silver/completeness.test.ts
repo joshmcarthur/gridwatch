@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import type { PublisherDataset } from "../datasets.ts";
+import { datasets, type PublisherDataset } from "../datasets.ts";
 import { runPublish } from "../runner.ts";
 import {
   completenessPath,
@@ -81,7 +81,12 @@ test("records complete days, including a 46-period DST day, and a gap day stays 
   );
   await run();
 
-  const dst = await readCompleteness(silverDir, DISPATCH, "2026-09-27");
+  const dst = await readCompleteness(
+    silverDir,
+    datasets,
+    DISPATCH,
+    "2026-09-27",
+  );
   expect(dst).toMatchObject({
     status: "complete",
     expectedPeriodCount: 46,
@@ -94,7 +99,7 @@ test("records complete days, including a 46-period DST day, and a gap day stays 
   expect(dst.processedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
   expect(
-    await readCompleteness(silverDir, DISPATCH, "2026-11-18"),
+    await readCompleteness(silverDir, datasets, DISPATCH, "2026-11-18"),
   ).toMatchObject({
     status: "complete",
     expectedPeriodCount: 48,
@@ -105,7 +110,7 @@ test("records complete days, including a 46-period DST day, and a gap day stays 
 
   // 2025-09-11 to 2025-10-02 have no bronze. 28 Sep 2025 is the DST start inside that gap.
   expect(
-    await readCompleteness(silverDir, DISPATCH, "2025-09-11"),
+    await readCompleteness(silverDir, datasets, DISPATCH, "2025-09-11"),
   ).toMatchObject({
     status: "missing",
     expectedPeriodCount: 48,
@@ -115,7 +120,7 @@ test("records complete days, including a 46-period DST day, and a gap day stays 
     errors: [],
   });
   expect(
-    await readCompleteness(silverDir, DISPATCH, "2025-09-28"),
+    await readCompleteness(silverDir, datasets, DISPATCH, "2025-09-28"),
   ).toMatchObject({
     status: "missing",
     expectedPeriodCount: 46,
@@ -123,7 +128,7 @@ test("records complete days, including a 46-period DST day, and a gap day stays 
     processedAt: null,
   });
 
-  const lines = await completenessStatusLines(silverDir);
+  const lines = await completenessStatusLines(silverDir, datasets);
   expect(lines[0]).toBe(`${DISPATCH}: latest complete 2026-11-18`);
   expect(lines).toContain("generation_md: latest complete none");
   expect(lines.some((line) => line.startsWith("gold_generation:"))).toBe(false);
@@ -132,20 +137,25 @@ test("records complete days, including a 46-period DST day, and a gap day stays 
 
   const table = completenessPath(silverDir);
   const mtime = (await stat(table)).mtimeMs;
-  const september = await readCompleteness(silverDir, DISPATCH, "2026-09-27");
+  const september = await readCompleteness(
+    silverDir,
+    datasets,
+    DISPATCH,
+    "2026-09-27",
+  );
   await run();
   expect((await stat(table)).mtimeMs).toBe(mtime);
-  expect(await readCompleteness(silverDir, DISPATCH, "2026-09-27")).toEqual(
-    september,
-  );
+  expect(
+    await readCompleteness(silverDir, datasets, DISPATCH, "2026-09-27"),
+  ).toEqual(september);
 
   // A ranged republish rewrites November and keeps the September row.
   await run({ range: { from: "2026-11-01", to: "2026-11-30" }, force: true });
-  expect(await readCompleteness(silverDir, DISPATCH, "2026-09-27")).toEqual(
-    september,
-  );
   expect(
-    await readCompleteness(silverDir, DISPATCH, "2026-11-18"),
+    await readCompleteness(silverDir, datasets, DISPATCH, "2026-09-27"),
+  ).toEqual(september);
+  expect(
+    await readCompleteness(silverDir, datasets, DISPATCH, "2026-11-18"),
   ).toMatchObject({
     status: "complete",
     expectedPeriodCount: 48,
@@ -164,14 +174,14 @@ test("a partial day records the missing periods, and a deleted table is rebuilt 
   await run();
 
   expect(
-    await readCompleteness(silverDir, DISPATCH, "2026-11-18"),
+    await readCompleteness(silverDir, datasets, DISPATCH, "2026-11-18"),
   ).toMatchObject({
     status: "partial",
     expectedPeriodCount: 48,
     actualPeriodCount: 46,
     missingPeriods: [24, 25],
   });
-  const linesOut = await completenessStatusLines(silverDir);
+  const linesOut = await completenessStatusLines(silverDir, datasets);
   expect(linesOut[0]).toBe(`${DISPATCH}: latest complete 2026-09-27`);
 
   const dstMtime = (await stat(partition("2026-09-27"))).mtimeMs;
@@ -181,7 +191,7 @@ test("a partial day records the missing periods, and a deleted table is rebuilt 
   expect((await stat(partition("2026-09-27"))).mtimeMs).toBe(dstMtime);
   expect((await stat(partition("2026-11-18"))).mtimeMs).toBe(partialMtime);
   expect(
-    await readCompleteness(silverDir, DISPATCH, "2026-09-27"),
+    await readCompleteness(silverDir, datasets, DISPATCH, "2026-09-27"),
   ).toMatchObject({
     status: "complete",
     expectedPeriodCount: 46,
@@ -189,7 +199,7 @@ test("a partial day records the missing periods, and a deleted table is rebuilt 
     missingPeriods: [],
   });
   expect(
-    await readCompleteness(silverDir, DISPATCH, "2026-11-18"),
+    await readCompleteness(silverDir, datasets, DISPATCH, "2026-11-18"),
   ).toMatchObject({
     status: "partial",
     expectedPeriodCount: 48,
@@ -205,14 +215,19 @@ test("an invalid day is recorded as invalid and is not the latest complete date"
     "TradingDate,TradingPeriod,PublishDateTime,PointOfConnection,Island,IsProxyPriceFlag,DollarsPerMegawattHour\n2026-01-01,1,2026-11-17T00:00:13.000+13:00,OHG1101,,N,33.28\n",
   );
   await run();
-  const invalid = await readCompleteness(silverDir, DISPATCH, "2026-11-17");
+  const invalid = await readCompleteness(
+    silverDir,
+    datasets,
+    DISPATCH,
+    "2026-11-17",
+  );
   expect(invalid.status).toBe("invalid");
   expect(invalid.expectedPeriodCount).toBe(48);
   expect(invalid.actualPeriodCount).toBeNull();
   expect(invalid.errors.length).toBeGreaterThan(0);
   expect(invalid.processedAt).not.toBeNull();
   expect(existsSync(partition("2026-11-17"))).toBe(false);
-  expect((await completenessStatusLines(silverDir))[0]).toBe(
+  expect((await completenessStatusLines(silverDir, datasets))[0]).toBe(
     `${DISPATCH}: latest complete none`,
   );
 });
@@ -254,7 +269,7 @@ test("period counts follow the trading date, including a 50-period DST day", asy
   expect(existsSync(join(silverDir, "periods"))).toBe(false);
 
   expect(
-    await readCompleteness(silverDir, "periods", "2026-04-05"),
+    await readCompleteness(silverDir, registry, "periods", "2026-04-05"),
   ).toMatchObject({
     status: "missing",
     expectedPeriodCount: 50,
@@ -262,7 +277,7 @@ test("period counts follow the trading date, including a 50-period DST day", asy
     missingPeriods: [],
   });
   expect(
-    await readCompleteness(silverDir, "periods", "2026-09-27"),
+    await readCompleteness(silverDir, registry, "periods", "2026-09-27"),
   ).toMatchObject({
     status: "partial",
     expectedPeriodCount: 46,
@@ -270,14 +285,14 @@ test("period counts follow the trading date, including a 50-period DST day", asy
     missingPeriods: [1],
   });
   expect(
-    await readCompleteness(silverDir, "periods", "2026-11-18"),
+    await readCompleteness(silverDir, registry, "periods", "2026-11-18"),
   ).toMatchObject({
     status: "complete",
     expectedPeriodCount: 48,
     actualPeriodCount: 48,
   });
   expect(
-    await readCompleteness(silverDir, "periods", "2026-11-19"),
+    await readCompleteness(silverDir, registry, "periods", "2026-11-19"),
   ).toMatchObject({
     status: "partial",
     expectedPeriodCount: 48,
@@ -304,7 +319,12 @@ test("a snapshot has no period count", async () => {
   ];
   await runPublish({ bronzeDir, silverDir, goldDir, registry });
   expect(
-    await readCompleteness(silverDir, "network_supply_points", "2026-11-18"),
+    await readCompleteness(
+      silverDir,
+      registry,
+      "network_supply_points",
+      "2026-11-18",
+    ),
   ).toMatchObject({
     status: "complete",
     expectedPeriodCount: null,
@@ -318,7 +338,7 @@ test("a snapshot has no period count", async () => {
 
 test("Generation_MD before its month file is missing, not invalid", async () => {
   expect(
-    await readCompleteness(silverDir, "generation_md", "2026-11-19"),
+    await readCompleteness(silverDir, datasets, "generation_md", "2026-11-19"),
   ).toMatchObject({
     status: "missing",
     expectedPeriodCount: 48,
@@ -327,14 +347,14 @@ test("Generation_MD before its month file is missing, not invalid", async () => 
     errors: [],
   });
   expect(
-    await readCompleteness(silverDir, "generation_md", "2026-04-05"),
+    await readCompleteness(silverDir, datasets, "generation_md", "2026-04-05"),
   ).toMatchObject({
     status: "missing",
     expectedPeriodCount: 50,
     actualPeriodCount: 0,
     processedAt: null,
   });
-  expect(await completenessStatusLines(silverDir)).toContain(
+  expect(await completenessStatusLines(silverDir, datasets)).toContain(
     "generation_md: latest complete none",
   );
 });

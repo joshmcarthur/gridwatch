@@ -40,8 +40,8 @@ Rows are flagged, not dropped ([ADR-0011](0011-gold-table-pattern.md), the same 
 - A class-island-period is complete when it has at least one silver row.
 - A daily row is complete when all its periods are (`bool_and`). `periods_present` counts the periods with a price. `mean_price` ignores null periods.
 - The publish result is `partial` with every period in which any class and island has no row (so a missing period on `BEN2201` alone is `partial`), or `complete`, or `missing` when the date has no silver.
-- This is a row check, not `inputsComplete()` (that helper counts trading-period presence in silver, the wrong grain here). A pair that silver never holds has no rows.
-- Gold does not read `silver/_completeness` ([ADR-0010](0010-completeness.md)). That is [#77](https://github.com/joshmcarthur/gridwatch/issues/77).
+- This is the data rule of gold reserves. `inputs_complete` also needs the `_completeness` status of `dispatch_reserve_prices` to be `complete` ([ADR-0011](0011-gold-table-pattern.md)). A pair that silver never holds has no rows.
+- Gold reads this run's `silver/_completeness` rows from memory ([ADR-0010](0010-completeness.md), [ADR-0011](0011-gold-table-pattern.md)).
 
 ### Tables
 

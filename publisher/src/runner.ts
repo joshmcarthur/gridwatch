@@ -46,8 +46,9 @@ const isGold = (dataset: PublisherDataset) =>
  * Publish every dataset, in registry order (silver first, then gold). A date is published when its
  * partition is missing or holds a different input version than wanted: the newest bronze
  * version for silver, the silver fingerprint for gold (ADR-0011). Completeness rows are silver
- * only (ADR-0010). A run that publishes nothing, and already has a completeness row for each
- * skipped silver date, writes nothing. A failing dataset or date does not stop the others.
+ * only (ADR-0010). Gold gets the in-memory completeness rows of this run. A run that publishes
+ * nothing, and already has a completeness row for each skipped silver date, writes nothing.
+ * A failing dataset or date does not stop the others.
  */
 export async function runPublish(
   options: RunOptions,
@@ -70,7 +71,7 @@ export async function runPublish(
     summaries.push(summary);
     try {
       const wanted = dataset.wantedVersions
-        ? await dataset.wantedVersions(silverDir)
+        ? await dataset.wantedVersions(silverDir, completeness)
         : await bronzeVersions(bronzeDir, dataset.id);
       const held = options.force
         ? new Map<string, string>()
@@ -99,6 +100,7 @@ export async function runPublish(
             bronzeDir,
             silverDir,
             goldDir,
+            completeness,
             date,
           });
           switch (result.status) {
@@ -116,7 +118,11 @@ export async function runPublish(
             case "partial":
               summary.published++;
               summary.partial.push(
-                `${date}: PARTIAL ${result.rows} rows, missing periods ${result.missingPeriods.join(",")}`,
+                `${date}: PARTIAL ${result.rows} rows, ${
+                  result.missingPeriods.length > 0
+                    ? `missing periods ${result.missingPeriods.join(",")}`
+                    : "an input is not complete"
+                }`,
               );
               break;
             default: {
@@ -154,8 +160,13 @@ export async function runPublish(
     } catch (error) {
       summary.failed.push((error as Error).message);
     }
+    // Save after each dataset, so a crashed run keeps the rows of the datasets that finished.
+    // Gold reads the in-memory rows, not this file.
+    if (dirty) {
+      await saveCompleteness(silverDir, completeness);
+      dirty = false;
+    }
   }
-  if (dirty) await saveCompleteness(silverDir, completeness);
   return summaries;
 }
 

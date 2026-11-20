@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { afterEach, beforeEach, expect, test } from "vitest";
+import type { PublisherDataset } from "../datasets.ts";
 import { runPublish } from "../runner.ts";
 import { publishEntityMappings } from "../silver/entity-mappings.ts";
 import { publishGenerationMd } from "../silver/generation-md.ts";
@@ -20,9 +21,10 @@ import { publishNetworkSupplyPoints } from "../silver/network-supply-points.ts";
 import {
   fingerprint,
   goldPartitionPath,
-  inputsComplete,
+  periodsComplete,
   writeGoldTables,
 } from "./common.ts";
+import { completenessView } from "./fixtures/completeness.ts";
 import {
   ANALYSIS_VERSION,
   generation,
@@ -114,9 +116,14 @@ test("daily totals by fuel, by plant and by period equal the Generation_MD silve
     ["2026-09-26", 48],
     ["2026-09-27", 46],
   ] as const) {
-    expect(await publishGeneration({ silverDir, goldDir, date })).toMatchObject(
-      { status: "complete" },
-    );
+    expect(
+      await publishGeneration({
+        silverDir,
+        goldDir,
+        completeness: completenessView(),
+        date,
+      }),
+    ).toMatchObject({ status: "complete" });
     const [silver] = await query(
       `SELECT sum(kilowatt_hours) / 1000 AS mwh FROM '$S/generation_md/trading_date=${date}/data.parquet'`,
     );
@@ -155,10 +162,15 @@ test("rows carry the analysis version, the fingerprint and the completeness flag
   timeout: 60_000,
 }, async () => {
   await buildSilver();
-  await publishGeneration({ silverDir, goldDir, date: "2026-09-26" });
-  const wanted = (await generation.wantedVersions?.(silverDir))?.get(
-    "2026-09-26",
-  );
+  await publishGeneration({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: "2026-09-26",
+  });
+  const wanted = (
+    await generation.wantedVersions?.(silverDir, completenessView())
+  )?.get("2026-09-26");
   for (const table of TABLES) {
     const rows = await query(
       `SELECT DISTINCT analysis_version, inputs_sha256, inputs_complete
@@ -186,9 +198,19 @@ test("the same inputs and analysis version give identical bytes", {
         ),
       ),
     );
-  await publishGeneration({ silverDir, goldDir, date: "2026-04-05" });
+  await publishGeneration({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: "2026-04-05",
+  });
   const first = await bytes();
-  await publishGeneration({ silverDir, goldDir, date: "2026-04-05" });
+  await publishGeneration({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: "2026-04-05",
+  });
   expect(await bytes()).toEqual(first);
 });
 
@@ -251,7 +273,12 @@ test("unmapped plants, battery and incomplete days are kept and flagged", async 
     `SELECT 'AAA0111' AS poc_id, 'SI' AS island, 'sha-e' AS inputs_sha256
      UNION ALL SELECT 'BBB0111', 'NI', 'sha-e'`,
   );
-  const result = await publishGeneration({ silverDir, goldDir, date });
+  const result = await publishGeneration({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date,
+  });
   expect(result.status).toBe("partial");
   if (result.status !== "partial") throw new Error("expected partial");
   expect(result.missingPeriods.slice(0, 3)).toEqual([3, 4, 5]);
@@ -293,7 +320,12 @@ test("unmapped plants, battery and incomplete days are kept and flagged", async 
 
 test("a date with no entity silver or no Generation_MD is missing", async () => {
   expect(
-    await publishGeneration({ silverDir, goldDir, date: "2026-11-18" }),
+    await publishGeneration({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date: "2026-11-18",
+    }),
   ).toEqual({ date: "2026-11-18", status: "missing" });
 });
 
@@ -338,7 +370,7 @@ test("a NULL trading period does not hide missing periods", async () => {
   );
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
-    const result = await inputsComplete(connection, date, [
+    const result = await periodsComplete(connection, date, [
       join(silverDir, "generation_md", `trading_date=${date}`, "data.parquet"),
     ]);
     expect(result.complete).toBe(false);
@@ -385,4 +417,92 @@ test("a failure in a later table leaves the date out of date and writes nothing"
   } finally {
     connection.closeSync();
   }
+});
+
+test("an invalid Generation_MD day gives incomplete rows in the same run", async () => {
+  const date = "2026-11-18";
+  const rows: Array<[number, string, string, string, number]> = Array.from(
+    { length: 48 },
+    (_, i) => [i + 1, "AAA", "AAA0111", "hydro1", 1000],
+  );
+  await silver("generation_md", date, generationRows(rows));
+  await silver(
+    "entity_plants",
+    date,
+    "SELECT 'AAA/hydro1' AS plant_id, 'hydro1' AS plant_name, 'hydro' AS fuel_category, 'sha-e' AS inputs_sha256",
+  );
+  await silver(
+    "entity_points_of_connection",
+    date,
+    "SELECT 'AAA0111' AS poc_id, 'SI' AS island, 'sha-e' AS inputs_sha256",
+  );
+  // Entity mappings are complete, so only the generation_md status can make gold incomplete.
+  const entityMappings: PublisherDataset = {
+    id: "entity_mappings",
+    partitionKey: "trading_date",
+    countsTradingPeriods: true,
+    wantedVersions: async () => new Map([[date, "sha-e-new"]]),
+    publish: async ({ date: d }) => ({
+      date: d,
+      status: "complete",
+      rows: 1,
+      path: "p",
+    }),
+  };
+  // Silver keeps the old partition and records `invalid`, or `complete` once the file is valid.
+  let status: "complete" | "invalid" = "invalid";
+  const generationMd: PublisherDataset = {
+    id: "generation_md",
+    partitionKey: "trading_date",
+    countsTradingPeriods: true,
+    wantedVersions: async () => new Map([[date, "sha-new"]]),
+    publish: async ({ date: d }) =>
+      status === "complete"
+        ? { date: d, status: "complete", rows: 1, path: "p" }
+        : { date: d, status: "invalid", errors: ["bad file"] },
+  };
+  const run = () =>
+    runPublish({
+      bronzeDir,
+      silverDir,
+      goldDir,
+      registry: [generationMd, entityMappings, generation],
+    }).then((s) => s.find((x) => x.id === "gold_generation"));
+  const flagsOf = async () =>
+    Promise.all(
+      TABLES.map((table) =>
+        query(`SELECT DISTINCT inputs_complete FROM ${gold(table, date)}`),
+      ),
+    );
+
+  const invalid = await run();
+  expect(invalid).toMatchObject({ published: 1 });
+  expect(invalid?.partial).toHaveLength(1);
+  for (const [i, flags] of (await flagsOf()).entries())
+    expect(flags, TABLES[i]).toEqual([{ inputs_complete: false }]);
+  const invalidSha = (
+    await query(`SELECT DISTINCT inputs_sha256 FROM ${gold(TABLES[0], date)}`)
+  )[0]?.inputs_sha256;
+
+  // Control: the same inputs with generation_md `complete` give complete rows.
+  status = "complete";
+  expect(await run()).toMatchObject({ published: 1, partial: [] });
+  for (const [i, flags] of (await flagsOf()).entries())
+    expect(flags, TABLES[i]).toEqual([{ inputs_complete: true }]);
+  expect(
+    (
+      await query(`SELECT DISTINCT inputs_sha256 FROM ${gold(TABLES[0], date)}`)
+    )[0]?.inputs_sha256,
+  ).not.toBe(invalidSha);
+  expect(await run()).toMatchObject({ published: 0, upToDate: 1 });
+
+  // An invalid entity day flags gold on its own.
+  const publish = (view: ReturnType<typeof completenessView>) =>
+    publishGeneration({ silverDir, goldDir, completeness: view, date });
+  expect(await publish(completenessView())).toMatchObject({
+    status: "complete",
+  });
+  expect(
+    await publish(completenessView([["entity_mappings", date, "invalid"]])),
+  ).toMatchObject({ status: "partial", missingPeriods: [] });
 });

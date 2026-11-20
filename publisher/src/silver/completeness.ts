@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
-import { datasets, type PublisherDataset } from "../datasets.ts";
+import type { PublisherDataset } from "../datasets.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
 import { lit, type PublishResult, writeParquetAtomically } from "./common.ts";
 
@@ -23,6 +23,9 @@ export interface CompletenessRow {
 }
 
 export type CompletenessRows = Map<string, CompletenessRow>;
+
+/** A read-only view of the rows. Gold reads this run's rows through it (ADR-0010, ADR-0011). */
+export type CompletenessView = ReadonlyMap<string, CompletenessRow>;
 
 /** `silver/_completeness/data.parquet`. One file, one row per dataset and date. */
 export const completenessPath = (silverDir: string) =>
@@ -90,12 +93,13 @@ const fromEpochMs = (value: unknown): string | null => {
  * dispatch price gap (2025-09-11 to 2025-10-02) and a Generation_MD day before
  * its month file exists. `invalid` is stored only when publish returned `invalid`.
  *
- * Gold should call this instead of counting silver periods. The function to
- * replace is `inputsComplete` on the gold branch (issue #16). It is not on this
- * branch. See ADR-0010.
+ * This reads the file on disk. Gold does not call it: gold reads the in-memory rows of the
+ * run (ADR-0010). The registry is an argument so that this module does not import
+ * `datasets.ts`, which imports gold.
  */
 export async function readCompleteness(
   silverDir: string,
+  registry: readonly PublisherDataset[],
   datasetId: string,
   tradingDate: string,
 ): Promise<CompletenessRow> {
@@ -103,7 +107,7 @@ export async function readCompleteness(
     completenessKey(datasetId, tradingDate),
   );
   if (stored) return stored;
-  const dataset = datasets.find((item) => item.id === datasetId);
+  const dataset = registry.find((item) => item.id === datasetId);
   const counts = dataset?.countsTradingPeriods === true;
   return {
     dataset: datasetId,
@@ -122,7 +126,7 @@ export async function readCompleteness(
 /** Latest complete trading date per dataset, in registry order. */
 export async function completenessStatusLines(
   silverDir: string,
-  registry: readonly PublisherDataset[] = datasets,
+  registry: readonly PublisherDataset[],
 ): Promise<string[]> {
   const latest = new Map<string, string>();
   const seen = new Set<string>();
