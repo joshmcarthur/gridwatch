@@ -50,19 +50,24 @@ interface SilverRow {
 }
 
 /** Write a silver dispatch energy prices partition with only the columns gold reads. */
-async function writeSilver(rows: SilverRow[], sha = "sha-a") {
+async function writeSilver(
+  rows: SilverRow[],
+  sha = "sha-a",
+  date = DATE,
+  dayStart = DAY_START,
+) {
   const values = rows
     .map((r) => {
       const period = Math.floor(r.interval / 6) + 1;
-      const start = DAY_START + (period - 1) * 30 * 60_000;
+      const start = dayStart + (period - 1) * 30 * 60_000;
       const publish =
-        DAY_START + r.interval * 300_000 + (r.publishOffset ?? 10) * 1000;
+        dayStart + r.interval * 300_000 + (r.publishOffset ?? 10) * 1000;
       const iso = (ms: number) => lit(new Date(ms).toISOString());
       return `(${period}, ${iso(start)}::TIMESTAMPTZ, ${iso(start + 1_800_000)}::TIMESTAMPTZ,
         ${iso(publish)}::TIMESTAMPTZ, ${lit(r.poc)}, ${r.proxy ?? false}, ${r.price}::DOUBLE, ${lit(sha)})`;
     })
     .join(",");
-  const path = join(silverDir, DATASET, `trading_date=${DATE}`, "data.parquet");
+  const path = join(silverDir, DATASET, `trading_date=${date}`, "data.parquet");
   await mkdir(join(path, ".."), { recursive: true });
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
@@ -76,12 +81,12 @@ async function writeSilver(rows: SilverRow[], sha = "sha-a") {
   }
 }
 
-async function readGold(table: string) {
+async function readGold(table: string, date = DATE) {
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
     return (
       await connection.runAndReadAll(
-        `SELECT * FROM read_parquet(${lit(join(goldDir, table, `trading_date=${DATE}`, "data.parquet"))})`,
+        `SELECT * FROM read_parquet(${lit(join(goldDir, table, `trading_date=${date}`, "data.parquet"))})`,
       )
     ).getRowObjectsJson() as Array<Record<string, unknown>>;
   } finally {
@@ -129,7 +134,7 @@ test("price per reference node per period keeps the latest case and flags gaps",
     max_interval_price: 60,
     intervals_present: 6,
     inputs_complete: true,
-    region: "upper_north_island",
+    price_region: "upper_north_island",
     analysis_version: ANALYSIS_VERSION,
   });
   expect(at("BEN2201", 1)?.price).toBe(4.5);
@@ -262,6 +267,72 @@ test("inputs_sha256 follows the bronze version and the analysis version", async 
       expect(row.inputs_sha256).toBe(changed.inputsSha256);
 });
 
+test("two runs on the same input write identical bytes", async () => {
+  await writeSilver(synthetic);
+  const bytes = async () =>
+    Promise.all(
+      TABLES.map((t) =>
+        readFile(join(goldDir, t, `trading_date=${DATE}`, "data.parquet")),
+      ),
+    );
+  await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  const first = await bytes();
+  await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  expect(await bytes()).toEqual(first);
+});
+
+test("a DST-start day has 46 periods in every table, and a proxy price is flagged", async () => {
+  const date = "2026-09-27";
+  // Period 1 starts at 00:00 NZST (UTC+12), 2026-09-26T12:00Z.
+  const dayStart = Date.parse("2026-09-26T12:00:00Z");
+  const rows: SilverRow[] = [
+    ...each("OTA2201", [10, 10, 10, 10, 10, 10]),
+    ...each("HAY2201", [4, 4, 4, 4, 4, 4]),
+    ...each("BEN2201", [1, 1, 1, 1, 1, 1]),
+    // The last period of a 46-period day, with one proxy price at HAY2201.
+    ...each("OTA2201", [7, 7, 7, 7, 7, 7], 45 * 6),
+    ...each("HAY2201", [5, 5, 5, 5, 5, 5], 45 * 6),
+    { poc: "BEN2201", interval: 45 * 6, price: 3, proxy: true },
+  ];
+  await writeSilver(rows, "sha-a", date, dayStart);
+  const result = await publishGoldPrices({ silverDir, goldDir, date });
+  expect(result).toMatchObject({
+    status: "written",
+    inputsComplete: false,
+    rows: {
+      price_periods: 3 * 46,
+      price_daily_summary: 3,
+      price_spreads: 3 * 46,
+      price_distribution: 46,
+    },
+  });
+  const periods = await readGold("price_periods", date);
+  expect(periods).toHaveLength(3 * 46);
+  expect(Math.max(...periods.map((r) => Number(r.trading_period)))).toBe(46);
+  const at = (poc: string, period: number) =>
+    periods.find(
+      (r) => r.point_of_connection === poc && r.trading_period === period,
+    );
+  expect(at("BEN2201", 46)).toMatchObject({
+    price: 3,
+    has_proxy_price: true,
+    intervals_present: 1,
+    inputs_complete: false,
+  });
+  expect(at("HAY2201", 46)).toMatchObject({
+    has_proxy_price: false,
+    inputs_complete: true,
+  });
+  expect(
+    (await readGold("price_distribution", date)).map((r) => r.trading_period),
+  ).toEqual(Array.from({ length: 46 }, (_, i) => i + 1));
+  const summary = await readGold("price_daily_summary", date);
+  expect(summary[0]).toMatchObject({
+    periods_expected: 46,
+    intervals_expected: 276,
+  });
+});
+
 test("a date with no silver is missing and writes nothing", async () => {
   expect(await publishGoldPrices({ silverDir, goldDir, date: DATE })).toEqual({
     date: DATE,
@@ -270,7 +341,7 @@ test("a date with no silver is missing and writes nothing", async () => {
   expect(existsSync(goldDir)).toBe(false);
 });
 
-test("real data: spreads and daily summary agree with the silver prices of one day", async () => {
+test("real data: HAY2201 period prices match hand sums, and spreads equal from minus to", async () => {
   const csv = await readFile(
     join(fixtures, "20261118_DispatchEnergyPrices.csv"),
     "utf8",

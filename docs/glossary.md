@@ -20,15 +20,11 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Interim and final prices.** Dispatch prices are interim. The Authority declares them final by 2pm on the next business day, unless someone lodges a pricing error claim. Settled prices are in a separate dataset. See [sources 3.1](sources.md#31-dispatch-energy-prices).
 
-**Latest case.** One RTD run gives one price for each dispatch interval. A re-run gives a second price for the same interval. Gold keeps the price with the latest publish time. See [ADR-0011](adr/0011-gold-prices.md).
-
 **Proxy price.** A price copied from a nearby point of connection after an outage. The `IsProxyPriceFlag` column marks it (`Y`). Silver keeps it as a flag.
-
-**Spread.** The price at one reference node minus the price at another, in a trading period. See [ADR-0011](adr/0011-gold-prices.md).
 
 **Reserve.** The market prices and clears reserve as well as energy. The brief lists reserve prices as something the site should explain. See FIR and SIR for the two classes.
 
-**Time-weighted mean.** A mean where each price counts for the time it applies. All dispatch intervals last 5 minutes, so it is the mean of the intervals that exist. See [ADR-0011](adr/0011-gold-prices.md).
+**Spread.** The price at one reference node minus the price at another, in a trading period. See [ADR-0011](adr/0011-gold-prices.md).
 
 **Trading date.** The calendar date in New Zealand time. Silver partitions by trading date. See [ADR-0003](adr/0003-time-column-naming.md).
 
@@ -52,9 +48,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Point of connection (POC).** The 7-character code of a priced place in the grid, such as `HAY2201`. Dispatch prices, nodal prices, the fleet file and Generation_MD all use it, so it is the main join key. See [ADR-0008](adr/0008-entity-model.md).
 
-**Price region.** A Gridwatch label for one reference node: `upper_north_island` (`OTA2201`), `lower_north_island` (`HAY2201`) or `south_island` (`BEN2201`). It is not an entity-model region. See [ADR-0011](adr/0011-gold-prices.md).
 
-**Reference node.** One of the three POCs whose prices gold tracks for the price regions. See [ADR-0011](adr/0011-gold-prices.md).
+**Reference node and price region.** A reference node is one of three POCs whose prices gold tracks: `OTA2201`, `HAY2201` and `BEN2201`. Its price region is a Gridwatch label (`upper_north_island`, `lower_north_island`, `south_island`). A price region is not an entity-model region. See [ADR-0011](adr/0011-gold-prices.md).
 
 **Site.** The first three letters of a POC code, such as `HAY`. Several POCs can share one site. Generation_MD calls it `Site_Code`. See [ADR-0008](adr/0008-entity-model.md).
 

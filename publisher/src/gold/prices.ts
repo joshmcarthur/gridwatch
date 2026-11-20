@@ -12,11 +12,22 @@ const SILVER_DATASET = "dispatch_energy_prices";
 /** A trading period is 30 minutes and a dispatch interval is 5. */
 const INTERVALS_PER_PERIOD = 6;
 
+const OTA = "OTA2201";
+const HAY = "HAY2201";
+const BEN = "BEN2201";
+
 /** The reference nodes of ADR-0011. */
 export const REFERENCE_NODES = [
-  { pointOfConnection: "OTA2201", region: "upper_north_island" },
-  { pointOfConnection: "HAY2201", region: "lower_north_island" },
-  { pointOfConnection: "BEN2201", region: "south_island" },
+  { pointOfConnection: OTA, priceRegion: "upper_north_island" },
+  { pointOfConnection: HAY, priceRegion: "lower_north_island" },
+  { pointOfConnection: BEN, priceRegion: "south_island" },
+] as const;
+
+/** Spread pairs, `[from, to]`. A spread is `from - to`: north minus south. */
+export const SPREAD_PAIRS = [
+  [OTA, HAY],
+  [HAY, BEN],
+  [OTA, BEN],
 ] as const;
 
 export const TABLES = [
@@ -57,8 +68,6 @@ export async function publishGoldPrices(options: {
   silverDir: string;
   goldDir: string;
   date: string;
-  /** For tests. Default: now. */
-  processedAt?: Date;
 }): Promise<GoldPricesResult> {
   const { silverDir, goldDir, date } = options;
   const periods = periodsInTradingDate(date); // also rejects a malformed date
@@ -85,21 +94,18 @@ export async function publishGoldPrices(options: {
         )
       ).map((row) => `${relative(silverDir, input)} ${row.bronze_sha256}`),
     );
-    const processedAt = (options.processedAt ?? new Date()).toISOString();
-    const stamp = `DATE ${lit(date)} AS trading_date, ${ANALYSIS_VERSION}::INTEGER AS analysis_version, ${lit(inputsSha256)} AS inputs_sha256, ${lit(processedAt)}::TIMESTAMPTZ AS processed_at`;
+    const stamp = `DATE ${lit(date)} AS trading_date, ${ANALYSIS_VERSION}::INTEGER AS analysis_version, ${lit(inputsSha256)} AS inputs_sha256`;
 
     const spans = Array.from({ length: periods }, (_, i) => {
       const span = periodToUtc(date, i + 1);
       return `(${i + 1}, ${lit(span.eventStartUtc.toString())}::TIMESTAMPTZ, ${lit(span.eventEndUtc.toString())}::TIMESTAMPTZ)`;
     }).join(", ");
     const nodes = REFERENCE_NODES.map(
-      (n) => `(${lit(n.pointOfConnection)}, ${lit(n.region)})`,
+      (n) => `(${lit(n.pointOfConnection)}, ${lit(n.priceRegion)})`,
     ).join(", ");
-    const [ota, hay, ben] = REFERENCE_NODES.map((n) =>
-      lit(n.pointOfConnection),
-    );
-    // Spread = from - to. North minus south, so a positive spread means the north is dearer.
-    const pairs = `(${ota}, ${hay}), (${hay}, ${ben}), (${ota}, ${ben})`;
+    const pairs = SPREAD_PAIRS.map(
+      ([from, to]) => `(${lit(from)}, ${lit(to)})`,
+    ).join(", ");
 
     await connection.run(
       `CREATE TEMP TABLE spans AS
@@ -107,7 +113,7 @@ export async function publishGoldPrices(options: {
     );
     await connection.run(
       `CREATE TEMP TABLE nodes AS
-       SELECT * FROM (VALUES ${nodes}) n(point_of_connection, region)`,
+       SELECT * FROM (VALUES ${nodes}) n(point_of_connection, price_region)`,
     );
     // One row per POC and interval: the latest case.
     await connection.run(
@@ -136,10 +142,16 @@ export async function publishGoldPrices(options: {
          bool_or(is_proxy_price) AS has_proxy_price
        FROM latest GROUP BY ALL`,
     );
+    // Distinct intervals with a price from any POC, per period.
+    await connection.run(
+      `CREATE TEMP TABLE period_intervals AS
+       SELECT trading_period, count(DISTINCT interval_start_utc)::INTEGER AS intervals_present
+       FROM latest GROUP BY trading_period`,
+    );
     // The reference nodes on every expected period, with nulls where silver has no price.
     await connection.run(
       `CREATE TEMP TABLE node_periods AS
-       SELECT n.point_of_connection, n.region, s.trading_period,
+       SELECT n.point_of_connection, n.price_region, s.trading_period,
          s.event_start_utc, s.event_end_utc,
          p.price, p.min_interval_price, p.max_interval_price,
          coalesce(p.intervals_present, 0)::INTEGER AS intervals_present,
@@ -153,10 +165,10 @@ export async function publishGoldPrices(options: {
 
     const selects: Record<Table, string> = {
       price_periods: `SELECT ${stamp}, trading_period, event_start_utc, event_end_utc,
-         point_of_connection, region, price, min_interval_price, max_interval_price,
+         point_of_connection, price_region, price, min_interval_price, max_interval_price,
          intervals_present, intervals_expected, has_proxy_price, inputs_complete
        FROM node_periods ORDER BY point_of_connection, trading_period`,
-      price_daily_summary: `SELECT ${stamp}, point_of_connection, region,
+      price_daily_summary: `SELECT ${stamp}, point_of_connection, price_region,
          avg(price) AS mean_price,
          sum(price * intervals_present) / nullif(sum(intervals_present), 0) AS time_weighted_mean_price,
          min(min_interval_price) AS min_price,
@@ -166,12 +178,12 @@ export async function publishGoldPrices(options: {
          sum(intervals_present)::INTEGER AS intervals_present,
          ${periods * INTERVALS_PER_PERIOD}::INTEGER AS intervals_expected,
          bool_and(inputs_complete) AS inputs_complete
-       FROM node_periods GROUP BY point_of_connection, region
+       FROM node_periods GROUP BY point_of_connection, price_region
        ORDER BY point_of_connection`,
       price_spreads: `SELECT ${stamp}, a.trading_period, a.event_start_utc, a.event_end_utc,
          a.point_of_connection AS from_point_of_connection,
          b.point_of_connection AS to_point_of_connection,
-         a.region AS from_region, b.region AS to_region,
+         a.price_region AS from_price_region, b.price_region AS to_price_region,
          a.price AS from_price, b.price AS to_price,
          a.price - b.price AS spread,
          a.inputs_complete AND b.inputs_complete AS inputs_complete
@@ -194,26 +206,38 @@ export async function publishGoldPrices(options: {
          coalesce(max(i.intervals_present), 0) = ${INTERVALS_PER_PERIOD} AS inputs_complete
        FROM spans s
        LEFT JOIN poc_periods p ON p.trading_period = s.trading_period
-       LEFT JOIN (
-         SELECT trading_period, count(DISTINCT interval_start_utc) AS intervals_present
-         FROM latest GROUP BY trading_period) i ON i.trading_period = s.trading_period
+       LEFT JOIN period_intervals i ON i.trading_period = s.trading_period
        GROUP BY s.trading_period, s.event_start_utc, s.event_end_utc
        ORDER BY s.trading_period`,
     };
 
-    const rows = {} as Record<Table, number>;
-    let inputsComplete = true;
     for (const table of TABLES) {
-      const path = join(goldDir, table, `trading_date=${date}`, "data.parquet");
-      await writeParquetAtomically(connection, selects[table], path);
-      const [summary] = await query(
-        `SELECT count(*) AS n, coalesce(bool_and(inputs_complete), true) AS complete
-         FROM read_parquet(${lit(path)})`,
+      await writeParquetAtomically(
+        connection,
+        selects[table],
+        join(goldDir, table, `trading_date=${date}`, "data.parquet"),
       );
-      rows[table] = Number(summary?.n);
-      inputsComplete &&= summary?.complete === true;
     }
-    return { date, status: "written", inputsComplete, inputsSha256, rows };
+    // Every table has a row for each expected period, so the counts follow from the inputs.
+    const [flags] = await query(
+      `SELECT
+         (SELECT count(*) FROM node_periods WHERE NOT inputs_complete) = 0
+         AND (SELECT count(*) FROM spans s
+              LEFT JOIN period_intervals i USING (trading_period)
+              WHERE coalesce(i.intervals_present, 0) < ${INTERVALS_PER_PERIOD}) = 0 AS complete`,
+    );
+    return {
+      date,
+      status: "written",
+      inputsComplete: flags?.complete === true,
+      inputsSha256,
+      rows: {
+        price_periods: REFERENCE_NODES.length * periods,
+        price_daily_summary: REFERENCE_NODES.length,
+        price_spreads: SPREAD_PAIRS.length * periods,
+        price_distribution: periods,
+      },
+    };
   } finally {
     connection.closeSync();
   }

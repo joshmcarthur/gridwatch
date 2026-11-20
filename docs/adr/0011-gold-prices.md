@@ -19,7 +19,7 @@
 
 All three codes are in the dispatch energy prices file of 2026-11-18, with 288 rows each. The islands in that file are `NI`, `NI` and `SI`. The roles of the nodes (HVDC ends, Auckland) are domain knowledge and not in the source files (inferred).
 
-- **A price region is not an ADR-0008 region.** ADR-0008 regions are distribution network areas (1 to 40). `HAY2201` and `BEN2201` are grid nodes with no NSP row, so they have no network reporting region. A price region is a Gridwatch label for one reference node. It has no boundary. The gold tables carry the label in a `region` column next to the POC code.
+- **A price region is not an ADR-0008 region.** ADR-0008 regions are distribution network areas (1 to 40). `HAY2201` and `BEN2201` are grid nodes with no NSP row, so they have no network reporting region. A price region is a Gridwatch label for one reference node. It has no boundary. The gold tables carry the label in a `price_region` column next to the POC code (`from_price_region` and `to_price_region` in spreads). The name `region` stays for ADR-0008 regions.
 - **The set is a constant in `publisher/src/gold/prices.ts`.** A change to it changes the output, so it needs a bump of `ANALYSIS_VERSION`.
 
 ### Price of a node in a period
@@ -29,7 +29,7 @@ All three codes are in the dispatch energy prices file of 2026-11-18, with 288 r
 - **Period price.** The time-weighted mean of the latest-case interval prices in the period. Every interval lasts 5 minutes, so this equals the mean of the intervals that exist. A missing interval has no weight and is not filled. Each period has 6 expected intervals (30 minutes), also on a DST day.
 - **Daily summary.** `mean_price` is the mean of the period prices, so each period counts once. `time_weighted_mean_price` is the mean of the interval prices, so each interval counts once. They differ when a period lacks intervals. `min_price` and `max_price` are the lowest and highest interval price, not period prices, so a short spike stays visible.
 - **Proxy prices** stay in the data. `price_periods.has_proxy_price` is true when any interval in the period is a proxy price.
-- **Spreads** are `from - to` for the pairs OTA to HAY, HAY to BEN and OTA to BEN, on the period prices. A positive spread means the first node is dearer.
+- **Spreads** are `from - to` for the pairs OTA to HAY, HAY to BEN and OTA to BEN (`SPREAD_PAIRS` in `prices.ts`), on the period prices. A positive spread means the first node is dearer.
 - **National distribution.** For each period: the minimum, the 5th, 25th, 50th, 75th and 95th percentile (linear interpolation) and the maximum of the period prices of all POCs that have a price, with the POC count.
 
 ### Tables
@@ -43,11 +43,11 @@ Gold Parquet at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. The write i
 | `price_spreads` | pair of reference nodes and trading period |
 | `price_distribution` | trading period |
 
-Every row has `trading_date`, `analysis_version`, `inputs_sha256`, `inputs_complete` and `processed_at` ([ADR-0003](0003-time-column-naming.md)). Period tables keep `trading_period`, `event_start_utc` and `event_end_utc`.
+Every row has `trading_date`, `analysis_version`, `inputs_sha256` and `inputs_complete`. There is no `processed_at`, so a second run on the same input gives identical bytes ([ADR-0003](0003-time-column-naming.md) amendment). Period tables keep `trading_period`, `event_start_utc` and `event_end_utc`.
 
 - **`analysis_version`** is `ANALYSIS_VERSION` in `prices.ts`. Change it by hand when the logic changes.
 - **`inputs_sha256`** is a SHA-256 over the `bronze_sha256` values of the silver input partitions (with their paths) and the analysis version. It is modelled on [ADR-0008](0008-entity-model.md).
-- **`inputs_complete`** flags a row. No row is dropped. A node row is complete when the period has 6 intervals. A spread row is complete when both node rows are. A distribution row is complete when the period has 6 distinct intervals across all POCs. A daily summary is complete when every period is. Every expected period has a row, with null prices when silver has none. Silver `_completeness` ([#14](https://github.com/joshmcarthur/gridwatch/issues/14)) does not exist yet. The flag comes from the silver data now, and can move to `_completeness` later.
+- **`inputs_complete`** flags a row. No row is dropped. A node row is complete when the period has 6 intervals. A spread row is complete when both node rows are. A distribution row is complete when the period has 6 distinct intervals with a price from any POC. It does not mean that every POC has all 6, and a proxy price counts as a price. A daily summary is complete when every period is. Every expected period has a row, with null prices when silver has none. Silver `_completeness` ([#14](https://github.com/joshmcarthur/gridwatch/issues/14)) does not exist yet. The flag comes from the silver data now, and can move to `_completeness` later.
 
 ## Consequences
 
