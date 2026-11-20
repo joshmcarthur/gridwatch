@@ -47,7 +47,7 @@ function renderChart(data: GenerationMix): {
     height: 260,
     marginLeft: 56,
     marginBottom: 36,
-    style: { fontSize: "12px" },
+    style: { fontSize: "14px" },
     x: {
       label: "Hour (New Zealand time)",
       domain: [data.points[0]?.start, data.points.at(-1)?.start],
@@ -66,7 +66,7 @@ function renderChart(data: GenerationMix): {
         y1: "base",
         y2: "top",
         fill: "fuel",
-        stroke: "white",
+        stroke: "var(--color-card)",
         strokeWidth: 1,
       }),
       Plot.ruleX(data.points, {
@@ -105,68 +105,68 @@ const table = mix ? generationMixTable(mix) : null;
     </p>
   ) : (
     <>
-    <figure class="chart">
-      {mix.incomplete && (
-        <p class="chart-notice">
-          Some generation numbers are missing. Where a plant has no number, the
-          chart counts it as 0, and the table marks that time as incomplete.
-        </p>
-      )}
-      <Fragment set:html={rendered?.svg} />
-      <ul class="legend" aria-label="Fuels, in the order of the stack">
-        {mix.layers.map((layer) => (
-          <li>
-            <span
-              class="swatch"
-              style={`background: ${FUEL_COLOUR[layer.fuel]}`}
-              aria-hidden="true"
-            />
-            {layer.label}
-          </li>
-        ))}
-      </ul>
-      <figcaption>
-        <p>
-          Average megawatts (MW) for each 30-minute period. Each band is one
-          fuel, stacked on the bands below it. Hover over the chart to see the
-          numbers for one period.
-        </p>
-        <p>
-          Source: Electricity Authority generation data, one row per power
-          station, grouped by fuel.
-        </p>
-        <p>
-          Batteries are not in the stack. Their power is in the last column of
-          the table.
-        </p>
-      </figcaption>
-    </figure>
-    <details class="chart-table">
-      <summary>Show the numbers as a table</summary>
-      <div class="table-scroll">
-        <table>
-          <caption>
+      <figure class="chart">
+        {mix.incomplete && (
+          <p class="chart-notice">
+            Some generation numbers are missing. Where a plant has no number, the
+            chart counts it as 0, and the table marks that time as incomplete.
+          </p>
+        )}
+        <Fragment set:html={rendered?.svg} />
+        <ul class="legend" aria-label="Fuels, top of the stack first">
+          {[...mix.layers].reverse().map((layer) => (
+            <li>
+              <span
+                class="swatch"
+                style={`background: ${FUEL_COLOUR[layer.fuel]}`}
+                aria-hidden="true"
+              />
+              {layer.label}
+            </li>
+          ))}
+        </ul>
+        <figcaption>
+          <p>
+            Average megawatts (MW) for each 30-minute period. Each band is one
+            fuel, stacked on the bands below it. Hover over the chart to see the
+            numbers for one period.
+          </p>
+          <p>
+            Source: Electricity Authority generation data, one row per power
+            station, grouped by fuel.
+          </p>
+          <p>
+            Batteries are not in the stack. Their power is in the last column of
+            the table.
+          </p>
+        </figcaption>
+      </figure>
+      <details class="chart-table">
+        <summary>Show the numbers as a table</summary>
+        <div class="table-scroll">
+          <p class="table-caption" id="generation-mix-table-caption">
             Average megawatts by fuel for each 30-minute period. Shares are of
             the primary total, which excludes battery.
-          </caption>
-          <thead>
-            <tr>
-              {table?.headers.map((header) => <th scope="col">{header}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {table?.rows.map((row) => (
+          </p>
+          <table aria-labelledby="generation-mix-table-caption">
+            <thead>
               <tr>
-                <th scope="row">{row[0]}</th>
-                {row.slice(1).map((cell) => (
-                  <td>{cell}</td>
-                ))}
+                {table?.headers.map((header) => <th scope="col">{header}</th>)}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
+            </thead>
+            <tbody>
+              {table?.rows.map((row) => (
+                <tr>
+                  <th scope="row">{row[0]}</th>
+                  {row.slice(1).map((cell) => (
+                    <td>{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </>
   )
 }
@@ -181,7 +181,7 @@ const table = mix ? generationMixTable(mix) : null;
 
   .chart :global(svg) {
     width: 100%;
-    max-width: 560px;
+    max-width: 480px;
     height: auto;
     display: block;
   }
@@ -224,12 +224,11 @@ const table = mix ? generationMixTable(mix) : null;
     color: var(--color-ink-muted);
   }
 
+  /* prose.css styles every p, so inherit from figcaption instead. */
   figcaption p {
     margin: 0;
-    font-size: var(--text-label);
-    font-weight: 400;
-    line-height: 1.5;
-    color: var(--color-ink-muted);
+    font: inherit;
+    color: inherit;
   }
 
   .chart-table summary {
@@ -248,21 +247,17 @@ const table = mix ? generationMixTable(mix) : null;
     white-space: nowrap;
   }
 
-  caption {
-    text-align: left;
-    padding-bottom: var(--space-2);
+  .table-caption {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-label);
+    line-height: 1.5;
     color: var(--color-ink-muted);
-    white-space: normal;
   }
 
   th,
   td {
     padding: var(--space-1) var(--space-2);
     border-bottom: 1px solid var(--color-rule);
-    text-align: right;
-  }
-
-  th {
     text-align: right;
   }
 
