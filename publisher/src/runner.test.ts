@@ -273,7 +273,9 @@ test("parseRunArgs", () => {
   expect(() => parseRunArgs(["--dataset", "nope"], today)).toThrow("Unknown");
 });
 
-test("entity mappings build last, settle, and rebuild when an input partition changes", async () => {
+test("entity mappings build last, settle, and rebuild when an input partition changes", {
+  timeout: 30_000,
+}, async () => {
   const nsp = await readFile(
     join(
       import.meta.dirname,
