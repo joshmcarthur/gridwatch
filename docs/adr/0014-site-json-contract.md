@@ -20,8 +20,17 @@ The site must read prepared data and must not query the lake ([brief 4.2 and 9.3
 - **Rounding.** Megawatt-hours and megawatts keep 3 decimals. Prices and spreads keep 2 decimals. Silver holds kWh, so the 3 decimals lose nothing. Units are in the field names, and the price is $/MWh ([ADR-0012](0012-gold-prices.md)).
 - **No run timestamps.** A day has no `generated_at` or `processed_at`. A repeat export writes the same bytes.
 - **Rebuild.** `export_sha256` in each index entry is the held version. It hashes the export version, the contract version, the gold fingerprint of each section and the full `_completeness` status of each input dataset. A day is rebuilt when its held version differs from the wanted one. `EXPORT_VERSION` in `export.ts` is bumped by hand when the export logic changes, like `ANALYSIS_VERSION`. `--from` and `--to` limit only which days rebuild. The manual rebuild is `publisher --force --dataset site_days`.
-- **The index.** It lists every gold trading date, even outside a `--from` and `--to` range. It is written last, through a temporary file and a rename. A day that leaves gold drops out of the index. Its file stays on disk. `latest_complete` gives, for each silver dataset in the registry (partition root not set), the latest trading date whose `_completeness` status is `complete`, or null. Gold datasets are not in it. `latest_complete_sections` gives, for `generation` and `prices`, the latest index day whose section state is `complete`, or null.
+- **The index.** It lists every gold trading date, even outside a `--from` and `--to` range. It is written last, through a temporary file and a rename. A day that leaves gold drops out of the index. Its file stays on disk. `latest_complete` gives, for each silver dataset in the registry (partition root not set), the latest trading date whose `_completeness` status is `complete`, or null. Gold datasets are not in it. `latest_complete_sections` gives, for `generation`, `prices` and `sankey`, the latest index day whose section state is `complete`, or null. `sankey` on the index is optional so older files still validate.
 - **Extension points.** `reserves`, `sankey` and `observations` are optional. A consumer treats absence as "not built". Adding an optional field is not a breaking change. A breaking change bumps `SITE_CONTRACT_VERSION`, and that rebuilds every day.
+
+### Amendment (#97): energy balance and HVDC transfer
+
+Amended 2026-11-21. The exporter writes a `sankey` section on every day. The contract version stays 1: the field was already an optional extension. `EXPORT_VERSION` is 2.
+
+- **Shape.** Per island (`NI`, then `SI`): generation, HVDC import, grid load (modelled), residual, residual as a percent of load, and `inputs_complete`, in MWh for the day. Link losses sit on the section, not on an island. Residual keeps its sign. Units are in the field names.
+- **State.** `missing` when gold has no `energy_balance_period` partition (the HVDC month lag, or any other missing input of the balance). It is never zeros. `incomplete` when gold `inputs_complete` is false. `complete` otherwise. The energy-balance inputs are gold tables, so they have no `_completeness` row of their own.
+- **No invented transfer.** HVDC gold without an energy-balance row does not fill the section. The site shows "not published yet".
+- **`complete` on the day.** Still generation and prices only. Sankey follows the HVDC month lag, so a recent day can be complete for generation and prices while sankey is `missing`.
 - **Provenance.** Each section records `analysis_version`, `inputs_sha256`, `silver_tables` and `gold_tables`. Each dataset records its `bronze_sha256s`.
 
 ## Consequences
@@ -31,3 +40,4 @@ The site must read prepared data and must not query the lake ([brief 4.2 and 9.3
 - The index grows by about 0.2 KB for each day. It is one file, so a long backfill makes it large. If it reaches a few hundred KB, a later issue shards it by year.
 - `totals` may change when the national-total question is settled. That change is a rule change in `export.ts`, not a contract change.
 - The validator is hand-written. A schema file is a separate decision if the site needs one.
+- A day in the last month of the HVDC lag has `sankey.state = missing`. The site must not treat that as zero transfer.

@@ -129,6 +129,37 @@ export interface PricesSection extends SectionBase {
   };
 }
 
+/** One island row of the daily energy balance (ADR-0018). Null terms are not zeros. */
+export interface SankeyIsland {
+  island: Island;
+  /** Metered generation of the island, all fuels, battery included. */
+  generation_megawatt_hours: number | null;
+  /** Energy the island receives over the HVDC link. Negative when the island sends. */
+  hvdc_import_megawatt_hours: number | null;
+  /** Grid load (modelled), not metered consumption. */
+  load_megawatt_hours: number | null;
+  /** generation + HVDC import − load. The sign is kept. Null when any term is null. */
+  residual_megawatt_hours: number | null;
+  /** Residual as a percent of load. Null when residual or load is null or load is 0. */
+  residual_percent_of_load: number | null;
+  inputs_complete: boolean;
+}
+
+/**
+ * Daily energy balance and HVDC transfer (ADR-0014, ADR-0016, ADR-0018). Optional: absence
+ * means the exporter has not built it. A day with no gold balance row is `missing`, never zeros.
+ */
+export interface SankeySection extends SectionBase {
+  islands: SankeyIsland[];
+  /**
+   * HVDC link losses for the day. Not an island term. Null when the section is missing or gold
+   * has no HVDC day row. Never estimated from island residuals.
+   */
+  link_losses_megawatt_hours: number | null;
+  /** True when every island row is complete. Null when the section is missing. */
+  inputs_complete: boolean | null;
+}
+
 /** An extension point. The v1 exporter never writes one. A consumer treats absence as "not built". */
 export type SiteExtension = { state: SectionState } & Record<string, unknown>;
 
@@ -147,7 +178,8 @@ export interface SiteDay {
   /** Always present. `state` may be `missing`. */
   prices: PricesSection;
   reserves?: SiteExtension;
-  sankey?: SiteExtension;
+  /** Optional. Absence means not built. The exporter writes it on every day, `missing` when gold has no row. */
+  sankey?: SankeySection;
   observations?: SiteExtension;
 }
 
@@ -156,7 +188,12 @@ export interface SiteIndexDay {
   /** `days/YYYY-MM-DD.json`, relative to `index.json`. */
   path: string;
   complete: boolean;
-  sections: { generation: SectionState; prices: SectionState };
+  sections: {
+    generation: SectionState;
+    prices: SectionState;
+    /** Optional. The exporter writes it; older index files omit it. */
+    sankey?: SectionState;
+  };
   /** The held version of the day file (ADR-0014). */
   export_sha256: string;
 }
@@ -171,6 +208,8 @@ export interface SiteIndex {
   latest_complete_sections: {
     generation: string | null;
     prices: string | null;
+    /** Optional. The exporter writes it; older index files omit it. */
+    sankey?: string | null;
   };
 }
 
@@ -420,6 +459,63 @@ function checkPrices(
   return base.datasets;
 }
 
+function checkSankey(
+  value: unknown,
+  path: string,
+  periodCount: number,
+): string[] {
+  const section = record(value, path);
+  const base = checkSectionBase(section, path, periodCount);
+  const islands = list(section.islands, `${path}.islands`);
+  checkEmptyWhenMissing(islands, base.state, `${path}.islands`);
+  islands.forEach((item, i) => {
+    const at = `${path}.islands[${i}]`;
+    const row = record(item, at);
+    oneOf(row.island, ISLANDS, `${at}.island`);
+    nullable(
+      row.generation_megawatt_hours,
+      number,
+      `${at}.generation_megawatt_hours`,
+    );
+    nullable(
+      row.hvdc_import_megawatt_hours,
+      number,
+      `${at}.hvdc_import_megawatt_hours`,
+    );
+    nullable(row.load_megawatt_hours, number, `${at}.load_megawatt_hours`);
+    nullable(
+      row.residual_megawatt_hours,
+      number,
+      `${at}.residual_megawatt_hours`,
+    );
+    nullable(
+      row.residual_percent_of_load,
+      number,
+      `${at}.residual_percent_of_load`,
+    );
+    flag(row.inputs_complete, `${at}.inputs_complete`);
+  });
+  nullable(
+    section.link_losses_megawatt_hours,
+    number,
+    `${path}.link_losses_megawatt_hours`,
+  );
+  nullable(section.inputs_complete, flag, `${path}.inputs_complete`);
+  if (base.state === "missing") {
+    if (section.link_losses_megawatt_hours !== null)
+      fail(
+        `${path}.link_losses_megawatt_hours`,
+        "a missing section has no link losses",
+      );
+    if (section.inputs_complete !== null)
+      fail(
+        `${path}.inputs_complete`,
+        "a missing section has no inputs_complete",
+      );
+  }
+  return base.datasets;
+}
+
 /**
  * Throws a `TypeError` with the path of the first field that does not match the contract. The
  * exporter calls it on every day it writes, and the site may call it on every day it reads.
@@ -447,13 +543,25 @@ export function assertSiteDay(value: unknown): asserts value is SiteDay {
     ...checkGeneration(day.generation, "generation", periods.length),
     ...checkPrices(day.prices, "prices", periods.length),
   ];
+  for (const key of EXTENSIONS) {
+    if (day[key] === undefined) continue;
+    switch (key) {
+      case "sankey":
+        sectionDatasets.push(...checkSankey(day[key], key, periods.length));
+        break;
+      case "reserves":
+      case "observations":
+        oneOf(record(day[key], key).state, SECTION_STATES, `${key}.state`);
+        break;
+      default: {
+        const _exhaustive: never = key;
+        return _exhaustive;
+      }
+    }
+  }
   for (const id of sectionDatasets)
     if (!(id in datasets))
       fail("datasets", `${id} is read by a section but is not a key`);
-  for (const key of EXTENSIONS) {
-    if (day[key] === undefined) continue;
-    oneOf(record(day[key], key).state, SECTION_STATES, `${key}.state`);
-  }
 }
 
 /** Throws a `TypeError` with the path of the first field that does not match the contract. */
@@ -476,6 +584,8 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
     const sections = record(day.sections, `${at}.sections`);
     oneOf(sections.generation, SECTION_STATES, `${at}.sections.generation`);
     oneOf(sections.prices, SECTION_STATES, `${at}.sections.prices`);
+    if (sections.sankey !== undefined)
+      oneOf(sections.sankey, SECTION_STATES, `${at}.sections.sankey`);
     text(day.export_sha256, `${at}.export_sha256`);
   });
   for (const [id, date] of Object.entries(
@@ -488,4 +598,6 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
   );
   nullable(sections.generation, text, "latest_complete_sections.generation");
   nullable(sections.prices, text, "latest_complete_sections.prices");
+  if (sections.sankey !== undefined)
+    nullable(sections.sankey, text, "latest_complete_sections.sankey");
 }

@@ -4,11 +4,16 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { type DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 import type { PublisherDataset } from "../datasets.ts";
-import { type GoldInput, goldPartitionPath } from "../gold/common.ts";
+import { type GoldInput, goldPartitionPath, ISLANDS } from "../gold/common.ts";
+import {
+  INPUTS as ENERGY_BALANCE_INPUTS,
+  TABLES as ENERGY_BALANCE_TABLES,
+} from "../gold/energy-balance.ts";
 import {
   INPUTS as GENERATION_INPUTS,
   TABLES as GENERATION_TABLES,
 } from "../gold/generation.ts";
+import { TABLES as HVDC_TABLES } from "../gold/hvdc.ts";
 import {
   INPUTS as PRICE_INPUTS,
   TABLES as PRICE_TABLES,
@@ -30,6 +35,7 @@ import {
   type GenerationSection,
   type Island,
   type PricesSection,
+  type SankeySection,
   type SectionState,
   SITE_CONTRACT_VERSION,
   SITE_EXPORT_ID,
@@ -43,10 +49,10 @@ import {
  * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
  * rebuilt (ADR-0014).
  */
-export const EXPORT_VERSION = 1;
+export const EXPORT_VERSION = 2;
 
 interface Section {
-  name: "generation" | "prices";
+  name: "generation" | "prices" | "sankey";
   /** The first gold table. Its partition holds the section's `inputs_sha256`. */
   sentinel: string;
   inputs: readonly GoldInput[];
@@ -62,7 +68,17 @@ const PRICES_SECTION: Section = {
   sentinel: PRICE_TABLES[0],
   inputs: PRICE_INPUTS,
 };
-const SECTIONS: readonly Section[] = [GENERATION_SECTION, PRICES_SECTION];
+const SANKEY_SECTION: Section = {
+  name: "sankey",
+  sentinel: ENERGY_BALANCE_TABLES[0],
+  inputs: ENERGY_BALANCE_INPUTS,
+};
+const SECTIONS: readonly Section[] = [
+  GENERATION_SECTION,
+  PRICES_SECTION,
+  SANKEY_SECTION,
+];
+const [, HVDC_DAY_TABLE] = HVDC_TABLES;
 
 /** The `_completeness` datasets that a section reads. */
 const sectionDatasets = (section: Section) =>
@@ -466,6 +482,119 @@ async function buildPrices(
   };
 }
 
+const missingSankey = (base: {
+  silver_tables: string[];
+  gold_tables: string[];
+  datasets: string[];
+}): SankeySection => ({
+  ...base,
+  state: "missing",
+  missing_periods: [],
+  analysis_version: null,
+  inputs_sha256: null,
+  islands: [],
+  link_losses_megawatt_hours: null,
+  inputs_complete: null,
+});
+
+async function buildSankey(
+  connection: DuckDBConnection,
+  goldDir: string,
+  date: string,
+  completeness: CompletenessView,
+): Promise<SankeySection> {
+  const section = SANKEY_SECTION;
+  const base = {
+    silver_tables: [] as string[],
+    gold_tables: [...ENERGY_BALANCE_TABLES, HVDC_DAY_TABLE],
+    datasets: sectionDatasets(section),
+  };
+  const stamp = await readStamp(
+    connection,
+    goldPartitionPath(goldDir, section.sentinel, date),
+  );
+  if (!stamp) return missingSankey(base);
+
+  const dayPath = goldPartitionPath(goldDir, "energy_balance_day", date);
+  if (!existsSync(dayPath)) return missingSankey(base);
+
+  const state = sectionState(stamp, section, completeness, date);
+  const dayRows = await rowsOf(
+    connection,
+    goldDir,
+    "energy_balance_day",
+    date,
+    "island, generation_mwh, hvdc_import_mwh, load_mwh, residual_mwh, residual_pct_of_load, inputs_complete",
+    "island",
+  );
+  const byIsland = new Map(dayRows.map((row) => [String(row.island), row]));
+  const islands = ISLANDS.flatMap((island) => {
+    const row = byIsland.get(island);
+    if (!row) return [];
+    return [
+      {
+        island,
+        generation_megawatt_hours: roundOrNull(
+          numberOrNull(row.generation_mwh),
+          3,
+        ),
+        hvdc_import_megawatt_hours: roundOrNull(
+          numberOrNull(row.hvdc_import_mwh),
+          3,
+        ),
+        load_megawatt_hours: roundOrNull(numberOrNull(row.load_mwh), 3),
+        residual_megawatt_hours: roundOrNull(numberOrNull(row.residual_mwh), 3),
+        residual_percent_of_load: roundOrNull(
+          numberOrNull(row.residual_pct_of_load),
+          2,
+        ),
+        inputs_complete: row.inputs_complete === true,
+      },
+    ];
+  });
+
+  const periodRows = await rowsOf(
+    connection,
+    goldDir,
+    "energy_balance_period",
+    date,
+    "trading_period, residual_mwh",
+    "trading_period, island",
+  );
+  const missingPeriods = [
+    ...new Set(
+      periodRows
+        .filter((row) => numberOrNull(row.residual_mwh) === null)
+        .map((row) => Number(row.trading_period)),
+    ),
+  ].sort((a, b) => a - b);
+
+  const hvdcPath = goldPartitionPath(goldDir, HVDC_DAY_TABLE, date);
+  let linkLosses: number | null = null;
+  if (existsSync(hvdcPath)) {
+    const hvdcRows = await rowsOf(
+      connection,
+      goldDir,
+      HVDC_DAY_TABLE,
+      date,
+      "losses_mwh",
+      "losses_mwh",
+    );
+    linkLosses = roundOrNull(numberOrNull(hvdcRows[0]?.losses_mwh), 3);
+  }
+
+  return {
+    ...base,
+    state,
+    missing_periods: missingPeriods,
+    analysis_version: stamp.analysis_version,
+    inputs_sha256: stamp.inputs_sha256,
+    islands,
+    link_losses_megawatt_hours: linkLosses,
+    inputs_complete: stamp.inputs_complete,
+  };
+}
+
 /**
  * One site day from the gold tables of a date and this run's completeness rows. Opens one
  * in-memory DuckDB connection and reads only the sentinel and the tables of each section.
@@ -494,6 +623,7 @@ export async function buildSiteDay(options: {
       completeness,
       periods,
     );
+    const sankey = await buildSankey(connection, goldDir, date, completeness);
     const datasets = Object.fromEntries(
       DATASET_IDS.map((id) => [id, datasetStatus(completeness, id, date)]),
     );
@@ -501,10 +631,12 @@ export async function buildSiteDay(options: {
       contract_version: SITE_CONTRACT_VERSION,
       trading_date: date,
       periods,
+      // Sankey follows the HVDC month lag, so it does not take part in `complete` (ADR-0014).
       complete: generation.state === "complete" && prices.state === "complete",
       datasets,
       generation,
       prices,
+      sankey,
     };
   } finally {
     connection.closeSync();
@@ -635,6 +767,7 @@ export async function exportSite(options: {
         sections: {
           generation: day.generation.state,
           prices: day.prices.state,
+          sankey: day.sankey?.state ?? "missing",
         },
         export_sha256: wanted,
       });
@@ -647,7 +780,7 @@ export async function exportSite(options: {
 
   const entries = [...days.values()];
   const latest = latestCompleteDates(completeness);
-  const latestSection = (name: "generation" | "prices") =>
+  const latestSection = (name: "generation" | "prices" | "sankey") =>
     entries.filter((day) => day.sections[name] === "complete").at(-1)?.date ??
     null;
   const index: SiteIndex = {
@@ -661,6 +794,7 @@ export async function exportSite(options: {
     latest_complete_sections: {
       generation: latestSection("generation"),
       prices: latestSection("prices"),
+      sankey: latestSection("sankey"),
     },
   };
   assertSiteIndex(index);
