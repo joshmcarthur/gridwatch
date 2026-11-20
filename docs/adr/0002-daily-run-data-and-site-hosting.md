@@ -13,7 +13,7 @@ The owner said this is a "for fun" project. The data is not in git. The owner al
 
 Everything runs on the owner's home server.
 
-- **Runner:** cron (or a systemd timer) on the home server runs `docker compose run --rm collector`, then `docker compose run --rm publisher`. The schedule does not use GitHub Actions. GitHub Actions is for CI only.
+- **Runner:** cron (or a systemd timer) on the home server runs `docker compose run --rm collector`, then `docker compose run --rm publisher`, then `docker compose run --rm site-build`. The schedule does not use GitHub Actions. GitHub Actions is for CI only.
 - **Storage:** local disk on the home server, set as `DATA_ROOT`. The owner accepts a single copy of bronze. The risk is accepted.
 - **Site:** an nginx container on the home server serves the built site. Each run builds the site into a new release directory, swaps the `current` symlink to it atomically, and keeps the 3 newest releases.
 - **Secrets:** files on the home server, readable only by the user that runs the jobs. This covers the LLM key later.
