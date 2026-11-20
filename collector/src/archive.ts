@@ -247,22 +247,3 @@ export async function archiveFile(
     await rm(tempPath, { force: true });
   }
 }
-
-/** Trading dates covered by a file version stored after `since`, sorted. */
-export async function tradingDatesChangedSince(
-  bronzeDir: string,
-  since: Date,
-  dataset?: string,
-): Promise<string[]> {
-  const dates = new Set<string>();
-  for (const record of await readManifest(bronzeDir)) {
-    if (
-      (dataset === undefined || record.dataset === dataset) &&
-      record.retrieved_at &&
-      new Date(record.retrieved_at) > since
-    ) {
-      for (const date of record.trading_dates) dates.add(date);
-    }
-  }
-  return [...dates].sort();
-}

@@ -52,6 +52,8 @@ data/bronze/
 
 `tradingDatesChangedSince(bronzeDir, since)` returns the sorted, unique `trading_dates` of records that have `retrieved_at` after `since`. The publisher runner calls it with the time of its last run.
 
+Changed by [ADR-0009](0009-runner-default-mode.md): the publisher runner compares each silver partition's `bronze_sha256` with the newest bronze SHA-256 of the date. It does not call this function, and the function is removed.
+
 ### Input checks
 
 The archive rejects a dataset ID or a decoded file name that is empty, `.`, `..`, or contains `/`, `\` or NUL. This stops a crafted URL from writing outside bronze.
