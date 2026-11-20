@@ -22,6 +22,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Period price.** The time-weighted mean of the dispatch prices in one 30-minute trading period. Each price counts from its publish time until the next publish (rule B). See [ADR-0012](adr/0012-gold-prices.md).
 
+**Price anomaly.** A run of at least 2 trading periods when the price at a reference node is above the 99th percentile, or below the 1st percentile, of the node's last 28 days. The price must also be at least $25/MWh from the median. See [ADR-0015](adr/0015-observations-and-price-anomaly-detector.md).
+
 **Proxy price.** A price copied from a nearby point of connection after an outage. The `IsProxyPriceFlag` column marks it (`Y`). Silver keeps it as a flag.
 
 **Reserve.** The market prices and clears reserve as well as energy. The brief lists reserve prices as something the site should explain. See FIR and SIR for the two classes.
@@ -61,7 +63,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 **Point of connection (POC).** The 7-character code of a priced place in the grid, such as `HAY2201`. Dispatch prices, nodal prices, the fleet file and Generation_MD all use it, so it is the main join key. See [ADR-0008](adr/0008-entity-model.md).
 
 
-**Reference node and price region.** A reference node is one of three POCs whose prices gold tracks: `OTA2201`, `HAY2201` and `BEN2201`. Its price region is a Gridwatch label (`upper_north_island`, `lower_north_island`, `south_island`). A price region is not an entity-model region. See [ADR-0012](adr/0012-gold-prices.md).
+**Reference node and price region.** A reference node is one of three POCs whose prices gold tracks: `OTA2201`, `HAY2201` and `BEN2201`. Its price region is a Gridwatch label (`upper_north_island`, `lower_north_island`, `south_island`). A price region is not an entity-model region. Observation tables carry the label in `price_region`. Their `region_id` is the ADR-0008 region, not this label. See [ADR-0012](adr/0012-gold-prices.md) and [ADR-0015](adr/0015-observations-and-price-anomaly-detector.md).
 
 **Site.** The first three letters of a POC code, such as `HAY`. Several POCs can share one site. Generation_MD calls it `Site_Code`. See [ADR-0008](adr/0008-entity-model.md).
 
@@ -117,6 +119,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Backfill.** Collecting history. The first run of each dataset collects the last 12 months. See [ADR-0009](adr/0009-runner-default-mode.md).
 
+**Baseline window.** The earlier days whose complete values set the percentiles of a detector. It does not include the day under test. The price anomaly detector uses the 28 days before the date. See [ADR-0015](adr/0015-observations-and-price-anomaly-detector.md).
+
 **Bronze.** The raw archive: source files exactly as published, plus the manifest. See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md) and [ADR-0004](adr/0004-bronze-archive-and-manifest.md).
 
 **`bronze_sha256`.** A column in every silver table. It holds the SHA-256 of the bronze file the row came from. The runner uses it to find silver that is out of date. See [ADR-0009](adr/0009-runner-default-mode.md).
@@ -135,11 +139,13 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **`analysis_version`.** An integer in every gold row. Each gold module has a constant of this name, and a person bumps it when the logic changes. The runner then rebuilds the gold tables. See [ADR-0011](adr/0011-gold-table-pattern.md).
 
-**`inputs_complete`.** A boolean in every gold row. Gold flags incomplete rows and does not drop them. It is true only when every input of the gold table has the `_completeness` status `complete` for the date, and the row-level data rule holds ([ADR-0011](adr/0011-gold-table-pattern.md)). The data rule for generation is rows in every expected trading period. For gold prices and reserves it is at least one silver row for the node, or the class and island, in the period ([ADR-0012](adr/0012-gold-prices.md), [ADR-0013](adr/0013-gold-reserve-prices.md)). Gold is not a row in `silver/_completeness` ([ADR-0010](adr/0010-completeness.md)).
+**`inputs_complete`.** A boolean in every gold row. Gold flags incomplete rows and does not drop them. It is true only when every input of the gold table has the `_completeness` status `complete` for the date, and the row-level data rule holds ([ADR-0011](adr/0011-gold-table-pattern.md)). The data rule for generation is rows in every expected trading period. For gold prices and reserves it is at least one silver row for the node, or the class and island, in the period ([ADR-0012](adr/0012-gold-prices.md), [ADR-0013](adr/0013-gold-reserve-prices.md)). Gold is not a row in `silver/_completeness` ([ADR-0010](adr/0010-completeness.md)). For an observation table, the flag is the gold price day of the node: an observation is complete when that node's day is complete in `price_periods` ([ADR-0015](adr/0015-observations-and-price-anomaly-detector.md)).
 
 **`inputs_sha256`.** A column in every entity table and every gold table. It is a hash of the version of each silver input that built the table (and, in gold, the `analysis_version`). The runner rebuilds a date when it changes. See [ADR-0008](adr/0008-entity-model.md) and [ADR-0011](adr/0011-gold-table-pattern.md).
 
 **Manifest.** The append-only file `manifest.jsonl`. It records every download with its hash and the trading dates it covers. See [ADR-0004](adr/0004-bronze-archive-and-manifest.md).
+
+**Observation.** A fact that a detector found on one trading date, such as a run of high prices at a node. Each detector writes one gold table, `observations_<detector>`, with the same columns. See [ADR-0015](adr/0015-observations-and-price-anomaly-detector.md).
 
 **Partition.** One file of a silver table for one date, at `silver/<dataset>/trading_date=YYYY-MM-DD/data.parquet`. See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md) and [ADR-0005](adr/0005-dataset-pattern.md).
 
