@@ -85,6 +85,39 @@ Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricin
 | Pre-Nov 2022 values | **Inferred:** the page says real-time pricing began 1 Nov 2022, so earlier files likely hold RTD schedule prices that were not settlement prices. The page does not say so directly. |
 | Revisions | Section 2. |
 | Size | About 11 MB per day. The largest dataset. |
+| Interval time | `IntervalDateTime` is the interval start. Interval 00:00 is in period 1, and the last interval of the day, 23:55, is in the last period (checked on 18 Nov, 27 Sep and 5 Apr). `RunDateTime` is about one minute before the interval start. |
+| Cases | A `CaseID` belongs to one interval. Six intervals on 18 Nov 2026 have two cases (a re-run about two minutes later). The key is `(IntervalDateTime, CaseID, PointOfConnectionCode, UnitCode)`. Without `CaseID` the key has duplicates (1,531 of 74,050 rows on 18 Nov). |
+| Rows | 18 Nov 2026: 74,050 rows, 216 POCs. 181 POCs have point of connection rows. The other 35 appear only in generation rows. Generation rows carry a price, but it does not always match the point of connection row in the same run (at `WAI0331` the `HTR0` rows differ from the `N/A` row, for example 93.3355 against 93.356, in 160 run and case groups on 18 Nov). Generation rows have load 0 except 374 rows. |
+| `N/A` | `UnitCode` and `PlantName` are `N/A` together, on point of connection rows only. Silver stores null. |
+| Dead flag | `IsDeadFlag` and `IsDisconnectedFlag` are equal on every row of the three days checked. 288 rows on 18 Nov are `Y` (unit `PPI0`, price 0). |
+
+#### Which price dataset to use
+
+**Use Dispatch Energy Prices (3.1) for "the price at a node in a trading period".** Use Nodal Prices and Volumes (3.3) for load and generation by unit. The owner accepted this for now ([#9](https://github.com/joshmcarthur/gridwatch/issues/9)).
+
+Evidence, from the files for 18 Nov 2026 (measured):
+
+| Check | Dispatch energy prices | Nodal prices and volumes |
+|---|---|---|
+| POCs with a price | 246 | 216 |
+| POCs in one dataset only | 30 | 0 |
+| Rows | 70,848 | 74,050 |
+| Price precision | 2 decimals | 4 decimals |
+| Proxy flag | Yes (966 rows `Y`) | No |
+| Duplicate cases for one interval | No | Yes (6 intervals) |
+| File size | 4.3 MB | 12 MB |
+| First file | 2022-11-01 | 2020-09-10 |
+
+Matching rule: each dispatch row is paired with a nodal row for the same POC (any unit) from the latest `RunDateTime` at or before its `PublishDateTime`, and the pair counts only if the gap is under 5 minutes. Of 70,848 dispatch rows, 60,189 matched. Of those, about 99% have the same price once the nodal price is rounded to cents (98.9% to 99.1% with different tie-breaks). The median gap between run and publish is 38 seconds. 603 rows differ: 288 are proxy prices and 315 are not (cause unchecked, likely a re-run). The other 10,659 dispatch rows did not match: 8,640 are the 30 POCs missing from nodal, 555 are earlier than the first run for that POC, and 1,464 have a latest nodal run more than 5 minutes older, because nodal omits intervals. So the dispatch price is the published nodal price, rounded.
+
+Reasons:
+
+1. Dispatch covers more POCs, so a map or chart has fewer holes.
+2. It is the published price, with a proxy flag that says when it was copied from a nearby POC.
+3. It has no duplicate cases to resolve.
+4. It is a third of the size.
+
+Limits: dispatch prices arrive at irregular times, so [#17](https://github.com/joshmcarthur/gridwatch/issues/17) must set the rule that reaches a trading period. Nodal prices are the fallback for the 22 days missing from dispatch (2025-09-11 to 2025-10-02, outside the 12-month backfill). Nodal has no proxy flag, so a fallback price can hide a copied price.
 
 ### 3.4 Cleared Offers
 
