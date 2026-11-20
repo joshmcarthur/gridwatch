@@ -15,7 +15,7 @@ Everything runs on the owner's home server.
 
 - **Runner:** cron (or a systemd timer) on the home server runs `docker compose run --rm collector`, then `docker compose run --rm publisher`. The schedule does not use GitHub Actions. GitHub Actions is for CI only.
 - **Storage:** local disk on the home server, set as `DATA_ROOT`. The owner accepts a single copy of bronze. The risk is accepted.
-- **Site:** an nginx container on the home server serves the built site.
+- **Site:** an nginx container on the home server serves the built site. Each run builds the site into a new release directory, swaps the `current` symlink to it atomically, and keeps the 3 newest releases.
 - **Secrets:** files on the home server, readable only by the user that runs the jobs. This covers the LLM key later.
 
 **Invariant.** `collector` and `publisher` know only `DATA_ROOT`. No code path in the apps branches on hosting. If hosting moves to the cloud later, sync and publish stay separate steps because the apps only know `DATA_ROOT`.
@@ -26,4 +26,4 @@ Everything runs on the owner's home server.
 - The home server must be on at run time. If it is off, that day's run is missed. The collector re-fetches the last five days, so a short outage heals.
 - Scheduling and failure alerts are host configuration, outside this repository (owner decision, 2026-11-20; [#15](https://github.com/joshmcarthur/gridwatch/issues/15) is closed). The publisher exits with code 1 when a dataset fails, so the host can alert on the exit code.
 - The 12-month backfill (about 6.9 GB, about 1.2 hours) runs in place on the server. It has no disk or time limit.
-- Issue [#31](https://github.com/joshmcarthur/gridwatch/issues/31) builds the nginx service and the site publish step.
+- The nginx service and the site publish step are in `compose.yml` and `site/publish.ts` ([#31](https://github.com/joshmcarthur/gridwatch/issues/31)).

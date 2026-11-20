@@ -11,8 +11,8 @@ The repository is a TypeScript monorepo. To add a dataset, follow [ADR-0005](doc
 | `collector/`  | Downloads source files unchanged into `data/bronze/` and records a manifest                      |
 | `publisher/`  | Reads bronze. Writes `data/silver/` (normalised) and `data/gold/` (derived tables and site JSON) |
 | `data/`       | The data. Gitignored. [`data/README.md`](data/README.md) explains the layers                     |
-| `site/`       | Astro site (placeholder). Reads `data/gold/site/` at build time                                  |
-| `compose.yml` | Runs `collector` and `publisher` as one-shot jobs                                                |
+| `site/`       | Astro site. Reads `data/gold/site/` at build time. `site/publish.ts` builds it into `site-out/`  |
+| `compose.yml` | Runs `collector`, `publisher` and `site-build` as one-shot jobs, and serves the site with nginx  |
 
 Processing is per NZ trading day. Dataset code lives in `collector/src/electricity-authority/<dataset>.ts`, `publisher/src/silver/<dataset>.ts` and `publisher/src/gold/`.
 
@@ -42,7 +42,7 @@ npm test            # Vitest
 Two one-shot jobs bring `data/` up to date. Run the collector, then the publisher. The daily cron job does the same ([ADR-0002](docs/adr/0002-daily-run-data-and-site-hosting.md)).
 
 ```bash
-docker compose run --rm collector && docker compose run --rm publisher
+docker compose run --rm collector && docker compose run --rm publisher && docker compose run --rm site-build
 ```
 
 - **First run.** Each dataset backfills the last 12 months, computed from the run date. This is about 7 GB and about 1.2 hours ([`docs/sources.md`](docs/sources.md) section 4). Make sure the disk has room. `docker compose up` runs the same jobs.
