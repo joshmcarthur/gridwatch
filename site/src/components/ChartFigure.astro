@@ -1,0 +1,145 @@
+---
+/**
+ * The shared frame for a daily-page chart (ADR-0017). It holds the SVG, a legend, a caption and
+ * the same numbers as a table in a <details> element. Callers pass the SVG string and the rows.
+ */
+interface Props {
+  /** Static SVG from `renderPlot`. */
+  svg: string;
+  /** Id of the table caption paragraph. The table is labelled by it. */
+  tableCaptionId: string;
+  tableCaption: string;
+  /** First header is the row label column. */
+  headers: string[];
+  /** Each row starts with its row label. */
+  rows: string[][];
+  /** Accessible name of the legend list. Its items come from the `legend` slot. */
+  legendLabel: string;
+  /** One line shown above the chart, when the data is incomplete. */
+  notice?: string;
+}
+
+const { svg, tableCaptionId, tableCaption, headers, rows, legendLabel, notice } =
+  Astro.props;
+---
+
+<figure class="chart">
+  {notice && <p class="chart-notice">{notice}</p>}
+  <Fragment set:html={svg} />
+  <ul class="legend" aria-label={legendLabel}>
+    <slot name="legend" />
+  </ul>
+  <figcaption>
+    <slot name="caption" />
+  </figcaption>
+</figure>
+<details class="chart-table">
+  <summary>Show the numbers as a table</summary>
+  <div class="table-scroll">
+    <p class="table-caption" id={tableCaptionId}>{tableCaption}</p>
+    <table aria-labelledby={tableCaptionId}>
+      <thead>
+        <tr>
+          {headers.map((header) => <th scope="col">{header}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {
+          rows.map((row) => (
+            <tr>
+              <th scope="row">{row[0]}</th>
+              {row.slice(1).map((cell) => (
+                <td>{cell}</td>
+              ))}
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<style>
+  .chart {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .chart :global(svg) {
+    width: 100%;
+    max-width: 480px;
+    height: auto;
+    display: block;
+  }
+
+  .chart-notice {
+    margin: 0;
+  }
+
+  .legend {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    font-size: var(--text-label);
+  }
+
+  figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    font-size: var(--text-label);
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--color-ink-muted);
+  }
+
+  /* prose.css styles every p, so inherit from figcaption instead. */
+  figcaption :global(p) {
+    margin: 0;
+    font: inherit;
+    color: inherit;
+  }
+
+  .chart-table summary {
+    cursor: pointer;
+    font-size: var(--text-label);
+  }
+
+  .table-scroll {
+    overflow-x: auto;
+    margin-top: var(--space-3);
+  }
+
+  table {
+    border-collapse: collapse;
+    font-size: var(--text-label);
+    white-space: nowrap;
+  }
+
+  .table-caption {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-label);
+    line-height: 1.5;
+    color: var(--color-ink-muted);
+  }
+
+  th,
+  td {
+    padding: var(--space-1) var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+    text-align: right;
+  }
+
+  thead th {
+    font-weight: 700;
+  }
+
+  tbody th {
+    font-weight: 400;
+  }
+</style>

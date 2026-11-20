@@ -25,5 +25,18 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(/household bill/);
     expect(html).toMatch(/megawatt-hours/);
     expect(html).toMatch(/kilowatt-hours/);
+    expect(html).toContain('aria-labelledby="generation-mix"');
+    expect(html).toMatch(/<figure[\s>]/);
+    expect(html).toContain('role="img"');
+    expect(html).toContain(
+      'aria-labelledby="generation-mix-chart-title generation-mix-chart-summary"',
+    );
+    expect(html).toContain("<figcaption");
+    expect(html).toMatch(/<table[\s>]/);
+    expect(html).toContain('scope="col"');
+    expect(html).toContain('scope="row"');
+    expect(html).toMatch(/Average megawatts \(MW\)/);
+    expect(html).toMatch(/Electricity Authority generation data/);
+    expect(html).toContain("Show the numbers as a table");
   },
 );

@@ -17,6 +17,8 @@
   --color-fuel-gas: #7a8a8e;
   --color-fuel-coal-gas: #2b3a3f;
   --color-fuel-battery: #8a5aa8;
+  --color-fuel-other: var(--color-rule);
+  --color-fuel-unmapped: var(--color-ink-muted);
   --color-island-north: #1f6f78;
   --color-island-south: #b7791f;
   /* Data-layer accents for How. Left rules and chips only; body text stays ink.

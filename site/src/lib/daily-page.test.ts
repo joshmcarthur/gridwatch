@@ -166,13 +166,12 @@ test("headline falls back when generation or prices are missing", () => {
     prices: { state: "missing", nodes: [] },
   };
   const text = headlineParagraphs(day).join(" ");
-  expect(text).toMatch(/do not have generation numbers/i);
-  expect(text).toMatch(/do not have wholesale prices/i);
+  expect(text).toMatch(/generation numbers for this day are missing/i);
+  expect(text).toMatch(/wholesale prices for this day are missing/i);
 });
 
 test("chart slots leave empty homes for later issues", () => {
   expect(CHART_SLOTS.map((slot) => slot.id)).toEqual([
-    "generation-mix",
     "wholesale-prices",
     "energy-flow",
   ]);
