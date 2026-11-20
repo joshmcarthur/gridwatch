@@ -99,7 +99,7 @@ export async function publishGeneration(options: {
     const stamp = goldStamp(
       ANALYSIS_VERSION,
       await inputFingerprint(silverDir, ANALYSIS_VERSION, INPUTS, date),
-      completeness.complete,
+      completeness.complete ? "true" : "false",
     );
 
     // One row for each Generation_MD unit and period, with its plant, category and island.

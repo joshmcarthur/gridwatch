@@ -88,19 +88,14 @@ export async function publishGoldPrices(options: {
   try {
     await connection.run("SET TimeZone = 'UTC'");
     await connection.run("SET threads = 1");
-    const query = async (sql: string) =>
-      (await connection.runAndReadAll(sql)).getRowObjectsJson() as Array<
-        Record<string, unknown>
-      >;
-
     const inputsSha256 = await inputFingerprint(
       silverDir,
       ANALYSIS_VERSION,
       INPUTS,
       date,
     );
-    const stamp = (complete: boolean | string) =>
-      goldStamp(ANALYSIS_VERSION, inputsSha256, complete);
+    const stamp = (completeSql: string) =>
+      goldStamp(ANALYSIS_VERSION, inputsSha256, completeSql);
 
     const spans = Array.from({ length: periods }, (_, i) => {
       const span = periodToUtc(date, i + 1);
@@ -226,17 +221,14 @@ export async function publishGoldPrices(options: {
       date,
     );
     const path = goldPartitionPath(goldDir, TABLES[0], date);
+    const missingReader = await connection.runAndReadAll(
+      `SELECT DISTINCT trading_period AS period
+       FROM node_periods
+       WHERE NOT inputs_complete
+       ORDER BY 1`,
+    );
     const missingPeriods = (
-      await query(
-        `SELECT s.trading_period AS period FROM spans s
-         WHERE EXISTS (
-           SELECT 1 FROM node_periods n
-           WHERE n.trading_period = s.trading_period AND NOT n.inputs_complete)
-            OR coalesce((
-              SELECT i.intervals_present FROM period_intervals i
-              WHERE i.trading_period = s.trading_period), 0) < ${INTERVALS_PER_PERIOD}
-         ORDER BY 1`,
-      )
+      missingReader.getRowObjectsJson() as Array<{ period: string }>
     ).map((row) => Number(row.period));
     const rows = REFERENCE_NODES.length * periods;
     return missingPeriods.length === 0
