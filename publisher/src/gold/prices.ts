@@ -116,8 +116,11 @@ export async function publishGoldPrices(options: {
       `CREATE TEMP TABLE segments AS
        SELECT point_of_connection, trading_period, is_proxy_price, price,
          CASE WHEN rn = 1 THEN event_start_utc
-              ELSE least(source_published_at, event_end_utc) END AS segment_start,
-         coalesce(least(next_published_at, event_end_utc), event_end_utc) AS segment_end
+              ELSE least(greatest(source_published_at, event_start_utc), event_end_utc)
+         END AS segment_start,
+         CASE WHEN next_published_at IS NULL THEN event_end_utc
+              ELSE least(greatest(next_published_at, event_start_utc), event_end_utc)
+         END AS segment_end
        FROM (
          SELECT r.point_of_connection, r.trading_period, r.is_proxy_price,
            r.dollars_per_megawatt_hour AS price, r.source_published_at,
@@ -127,14 +130,12 @@ export async function publishGoldPrices(options: {
          FROM read_parquet(${lit(input)}) r
          JOIN spans s USING (trading_period)
          WINDOW w AS (PARTITION BY r.point_of_connection, r.trading_period
-                      ORDER BY r.source_published_at))`,
+                      ORDER BY r.source_published_at, r.dollars_per_megawatt_hour))`,
     );
     // One row per POC and period that has a row.
     await connection.run(
       `CREATE TEMP TABLE poc_periods AS
        SELECT point_of_connection, trading_period,
-         sum(price * epoch(segment_end - segment_start)) AS weighted_sum,
-         sum(epoch(segment_end - segment_start)) AS covered_seconds,
          sum(price * epoch(segment_end - segment_start))
            / sum(epoch(segment_end - segment_start)) AS price,
          min(price) AS min_price,
@@ -148,7 +149,7 @@ export async function publishGoldPrices(options: {
       `CREATE TEMP TABLE node_periods AS
        SELECT n.point_of_connection, n.price_region, s.trading_period,
          s.event_start_utc, s.event_end_utc,
-         p.price, p.weighted_sum, p.covered_seconds, p.min_price, p.max_price,
+         p.price, p.min_price, p.max_price,
          coalesce(p.rows_present, 0)::INTEGER AS rows_present,
          coalesce(p.has_proxy_price, false) AS has_proxy_price,
          p.rows_present IS NOT NULL AS inputs_complete
@@ -166,7 +167,6 @@ export async function publishGoldPrices(options: {
        FROM node_periods ORDER BY point_of_connection, trading_period`,
       price_daily_summary: `SELECT ${tradingDate}, point_of_connection, price_region,
          avg(price) AS mean_price,
-         sum(weighted_sum) / nullif(sum(covered_seconds), 0) AS time_weighted_mean_price,
          min(min_price) AS min_price,
          max(max_price) AS max_price,
          count(price)::INTEGER AS periods_present,

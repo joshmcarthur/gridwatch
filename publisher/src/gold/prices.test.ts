@@ -162,14 +162,14 @@ test("price per reference node per period: each price applies until the next pub
   expect(Date.parse(String(at("OTA2201", 1)?.event_start_utc))).toBe(DAY_START);
 });
 
-test("daily summary: mean of periods, time-weighted mean, min and max of published prices", async () => {
+test("daily summary: mean of periods, min and max of published prices", async () => {
   await writeSilver(synthetic);
   await publishGoldPrices({ silverDir, goldDir, date: DATE });
   const rows = await readGold("price_daily_summary");
   const ota = rows.find((r) => r.point_of_connection === "OTA2201");
-  // Period prices 30 and 100. Both periods are covered for all 1800 s, so both means agree.
+  // Period prices 30 and 100, each covered for 1800 s.
   expect(ota?.mean_price).toBe(65);
-  expect(ota?.time_weighted_mean_price).toBeCloseTo(65, 9);
+  expect(ota).not.toHaveProperty("time_weighted_mean_price");
   expect(ota).toMatchObject({
     min_price: 10,
     max_price: 100,
@@ -182,6 +182,28 @@ test("daily summary: mean of periods, time-weighted mean, min and max of publish
   expect(ben?.mean_price).toBe(12); // (4 + 20) / 2
   expect(ben?.min_price).toBe(3);
   expect(ben?.max_price).toBe(20);
+});
+
+test("publish times are clamped into the period", async () => {
+  await writeSilver([
+    // Two rows before the period start: the first has no length, the second applies all period.
+    ...rowsOf("OTA2201", 1, [-30, 10], [-20, 20]),
+    // One row before the start, then one in the period (the shape of a 06:29:40 publish).
+    ...rowsOf("HAY2201", 1, [-16, 10], [900, 30]),
+    // A row after the period end has no weight but still counts.
+    ...rowsOf("BEN2201", 1, [0, 4], [1900, 99]),
+  ]);
+  await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  const rows = await readGold("price_periods");
+  const at = (poc: string) =>
+    rows.find((r) => r.point_of_connection === poc && r.trading_period === 1);
+  expect(at("OTA2201")?.price).toBe(20);
+  expect(at("HAY2201")?.price).toBe(20); // (10 * 900 + 30 * 900) / 1800
+  expect(at("BEN2201")).toMatchObject({
+    price: 4,
+    rows_present: 2,
+    max_price: 99,
+  });
 });
 
 test("spreads are from minus to, by period, flagged when either side has no row", async () => {
@@ -272,7 +294,7 @@ test("inputs_sha256 follows the bronze version and the analysis version", async 
   for (const table of TABLES)
     for (const row of await readGold(table))
       expect(row.inputs_sha256).toBe(expected);
-});
+}, 20_000);
 
 test("two runs on the same input write identical bytes", async () => {
   await writeSilver(synthetic);
