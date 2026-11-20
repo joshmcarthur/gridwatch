@@ -26,9 +26,9 @@ const BEN = "BEN2201";
 
 /** The reference nodes of ADR-0012. */
 export const REFERENCE_NODES = [
-  { pointOfConnection: OTA, priceRegion: "upper_north_island", island: "NI" },
-  { pointOfConnection: HAY, priceRegion: "lower_north_island", island: "NI" },
-  { pointOfConnection: BEN, priceRegion: "south_island", island: "SI" },
+  { pointOfConnection: OTA, priceRegion: "upper_north_island" },
+  { pointOfConnection: HAY, priceRegion: "lower_north_island" },
+  { pointOfConnection: BEN, priceRegion: "south_island" },
 ] as const;
 
 /** Spread pairs, `[from, to]`. A spread is `from - to`: north minus south. */

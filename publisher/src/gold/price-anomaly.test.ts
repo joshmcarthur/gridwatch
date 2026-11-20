@@ -5,14 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { goldPartitionPath } from "../gold/common.ts";
-import { completenessView } from "../gold/fixtures/completeness.ts";
-import { prices, REFERENCE_NODES } from "../gold/prices.ts";
 import { runPublish } from "../runner.ts";
 import { lit } from "../silver/common.ts";
 import { completenessKey, saveCompleteness } from "../silver/completeness.ts";
 import { DATASET } from "../silver/dispatch-energy-prices.ts";
 import { periodsInTradingDate, periodToUtc } from "../trading-time.ts";
+import { goldPartitionPath } from "./common.ts";
+import { completenessView } from "./fixtures/completeness.ts";
 import { OBSERVATION_COLUMNS } from "./observation.ts";
 import {
   ANALYSIS_VERSION,
@@ -23,6 +22,7 @@ import {
   publishPriceAnomalies,
   TABLES,
 } from "./price-anomaly.ts";
+import { prices, REFERENCE_NODES } from "./prices.ts";
 
 const OTA = "OTA2201";
 const HAY = "HAY2201";
@@ -408,9 +408,26 @@ test("a period with no price row lists the missing period, and a status-only fai
   });
   const sentinel = await rowsOf(TABLES[0], DAY);
   expect(sentinel).toHaveLength(3);
-  expect(sentinel.find((r) => r.point_of_connection === HAY)).toMatchObject({
+  expect(sentinel.find((r) => r.subject_id === HAY)).toMatchObject({
     inputs_complete: false,
   });
+});
+
+test("wanted and written fingerprints are the same function", async () => {
+  await writeDay(BASE, ramp, { sha: "sha-a" });
+  await writeDay(DAY, flat, {
+    sha: "sha-b",
+    overrides: { [`${OTA}:10`]: 40, [`${OTA}:11`]: 50, [`${OTA}:12`]: 45 },
+  });
+  await publish(DAY);
+  const written = (await rowsOf(TABLES[0], DAY))[0]?.inputs_sha256;
+  const wanted = await priceAnomalyDataset(testConfig).wantedVersions?.(
+    silverDir,
+    completenessView(),
+    goldDir,
+  );
+  expect(written).toEqual(expect.any(String));
+  expect(wanted?.get(DAY)).toBe(written);
 });
 
 test("a date with no price partition is missing and writes nothing", async () => {

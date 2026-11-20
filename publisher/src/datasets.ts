@@ -1,8 +1,8 @@
-import { priceAnomaly } from "./analysis/price-anomaly.ts";
 import { energyBalance } from "./gold/energy-balance.ts";
 import { generation } from "./gold/generation.ts";
 import { gridLoad } from "./gold/grid-load.ts";
 import { hvdc } from "./gold/hvdc.ts";
+import { priceAnomaly } from "./gold/price-anomaly.ts";
 import { prices } from "./gold/prices.ts";
 import { reserves } from "./gold/reserves.ts";
 import { publishClearedOffers } from "./silver/cleared-offers.ts";
@@ -137,6 +137,6 @@ export const datasets: PublisherDataset[] = [
   gridLoad,
   // After the gold tables it reads: generation, HVDC and grid load (ADR-0011, ADR-0018).
   energyBalance,
-  // Detectors read gold prices, so they come after it (ADR-0015).
+  // After gold_prices: the detector reads price_periods (ADR-0019).
   priceAnomaly,
 ];

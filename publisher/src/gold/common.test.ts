@@ -7,6 +7,7 @@ import {
   type GoldInput,
   goldPartitionPath,
   inputFingerprint,
+  shiftDate,
   silverPartitionPath,
   wantedFingerprints,
 } from "./common.ts";
@@ -44,6 +45,14 @@ const UPSTREAM: GoldInput = {
   completenessDataset: null,
 };
 
+const WINDOWED: GoldInput = {
+  table: "price_periods",
+  layer: "gold",
+  versionColumn: "inputs_sha256",
+  completenessDataset: null,
+  windowDays: 2,
+};
+
 const SILVER: GoldInput = {
   table: "some_silver",
   layer: "silver",
@@ -65,27 +74,28 @@ async function writeSilver(table: string, date: string, sha: string) {
   }
 }
 
+const fingerprintOf = (
+  inputs: readonly GoldInput[],
+  date: string,
+  completeness = completenessView(),
+) => inputFingerprint(silverDir, goldDir, 1, inputs, completeness, date);
+
+const wantedOf = (
+  inputs: readonly GoldInput[],
+  completeness = completenessView(),
+) => wantedFingerprints(silverDir, goldDir, 1, inputs, completeness);
+
 // Catches: a gold input read from the silver directory, or a changed upstream gold
 // fingerprint that does not change the wanted fingerprint (the date would never rebuild).
 test("a gold input takes its version from goldDir, and a new upstream fingerprint changes the wanted one", async () => {
   const view = completenessView();
-  const wanted = () =>
-    wantedFingerprints(silverDir, goldDir, 1, [UPSTREAM], view);
+  const wanted = () => wantedOf([UPSTREAM], view);
   expect((await wanted()).size).toBe(0);
 
   await writeGold("upstream_gold", "2026-10-31", "aaa");
   const first = (await wanted()).get("2026-10-31");
   expect(first).toBeDefined();
-  expect(
-    await inputFingerprint(
-      silverDir,
-      goldDir,
-      1,
-      [UPSTREAM],
-      view,
-      "2026-10-31",
-    ),
-  ).toBe(first);
+  expect(await fingerprintOf([UPSTREAM], "2026-10-31", view)).toBe(first);
 
   await writeGold("upstream_gold", "2026-10-31", "bbb");
   expect((await wanted()).get("2026-10-31")).not.toBe(first);
@@ -95,20 +105,11 @@ test("a silver input takes its version from silverDir, not goldDir", async () =>
   const view = completenessView();
   await writeSilver("some_silver", "2026-10-31", "silver-aaa");
   await writeGold("some_silver", "2026-10-31", "gold-bbb");
-  const wanted = await wantedFingerprints(
-    silverDir,
-    goldDir,
-    1,
-    [SILVER],
-    view,
-  );
+  const wanted = await wantedOf([SILVER], view);
   expect(wanted.get("2026-10-31")).toBe(
-    await inputFingerprint(silverDir, goldDir, 1, [SILVER], view, "2026-10-31"),
+    await fingerprintOf([SILVER], "2026-10-31", view),
   );
-  const goldWanted = await wantedFingerprints(
-    silverDir,
-    goldDir,
-    1,
+  const goldWanted = await wantedOf(
     [
       {
         ...SILVER,
@@ -120,4 +121,39 @@ test("a silver input takes its version from silverDir, not goldDir", async () =>
     view,
   );
   expect(goldWanted.get("2026-10-31")).not.toBe(wanted.get("2026-10-31"));
+});
+
+test("windowDays folds in existing days and still wants a date that has only the subject partition", async () => {
+  const d0 = "2026-11-10";
+  const d1 = shiftDate(d0, 1);
+  const d2 = shiftDate(d0, 2);
+  await writeGold("price_periods", d2, "sha-subject");
+  const wanted = await wantedOf([WINDOWED]);
+  expect([...wanted.keys()]).toEqual([d2]);
+  expect(wanted.get(d2)).toBe(await fingerprintOf([WINDOWED], d2));
+
+  await writeGold("price_periods", d0, "sha-old");
+  await writeGold("price_periods", d1, "sha-mid");
+  const withWindow = await wantedOf([WINDOWED]);
+  expect([...withWindow.keys()].sort()).toEqual([d0, d1, d2]);
+  expect(withWindow.get(d2)).not.toBe(wanted.get(d2));
+  expect(withWindow.get(d2)).toBe(await fingerprintOf([WINDOWED], d2));
+});
+
+test("a missing earlier window day is omitted, and a changed window day changes the fingerprint", async () => {
+  const d0 = "2026-11-10";
+  const d1 = shiftDate(d0, 1);
+  const d2 = shiftDate(d0, 2);
+  await writeGold("price_periods", d1, "sha-mid");
+  await writeGold("price_periods", d2, "sha-subject");
+  const before = await fingerprintOf([WINDOWED], d2);
+  expect((await wantedOf([WINDOWED])).get(d2)).toBe(before);
+
+  await writeGold("price_periods", d0, "sha-old");
+  const withEarly = await fingerprintOf([WINDOWED], d2);
+  expect(withEarly).not.toBe(before);
+  expect((await wantedOf([WINDOWED])).get(d2)).toBe(withEarly);
+
+  await writeGold("price_periods", d1, "sha-mid-b");
+  expect(await fingerprintOf([WINDOWED], d2)).not.toBe(withEarly);
 });

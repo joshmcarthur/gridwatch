@@ -68,12 +68,38 @@ export interface GoldSilverInput extends GoldInputBase {
   completenessDataset: string | null;
 }
 
-/** A gold input. The type enforces `inputs_sha256` and no `_completeness` row. */
+/**
+ * A gold input. The type enforces `inputs_sha256` and no `_completeness` row. `windowDays` N
+ * folds in the versions of `date-N` … `date` that exist; a date is still wanted only when the
+ * subject date has a partition (ADR-0019).
+ */
 export interface GoldGoldInput extends GoldInputBase {
   layer: "gold";
   versionColumn: "inputs_sha256";
   completenessDataset: null;
+  windowDays?: number;
 }
+
+export const shiftDate = (date: string, days: number) =>
+  Temporal.PlainDate.from(date).add({ days }).toString();
+
+/** The dates from `date` minus `days` to `date`, in order. */
+export const windowDates = (date: string, days: number) =>
+  Array.from({ length: days + 1 }, (_, i) => shiftDate(date, i - days));
+
+/** The rolling window of a gold input, or `undefined` for a single-date input. */
+export const goldInputWindowDays = (input: GoldInput): number | undefined => {
+  switch (input.layer) {
+    case "gold":
+      return input.windowDays;
+    case "silver":
+      return undefined;
+    default: {
+      const unreachable: never = input;
+      return unreachable;
+    }
+  }
+};
 
 /** The directory that holds the partitions of an input. */
 const inputRoot = (
@@ -131,9 +157,9 @@ export const silverPartitionPath = (
 /**
  * The `inputs_sha256` value. A SHA-256 over the analysis version and, for each input, its
  * partition version and its `_completeness` status, named by table. A gold input contributes
- * `complete` as its status (it has no `_completeness` row). It changes when an input is rebuilt,
- * when a silver input changes status, and when the analysis version is bumped. It does not change
- * with the git SHA.
+ * `complete` as its status (it has no `_completeness` row). A windowed gold input names each
+ * day that exists. It changes when an input is rebuilt, when a silver input changes status,
+ * and when the analysis version is bumped. It does not change with the git SHA.
  */
 export function fingerprint(
   analysisVersion: number,
@@ -149,35 +175,55 @@ export function fingerprint(
     .digest("hex");
 }
 
+const inputFingerprintRows = (
+  input: GoldInput,
+  completeness: CompletenessView,
+  date: string,
+  versionOf: (input: GoldInput, day: string) => string | undefined,
+): Array<readonly [string, string]> => {
+  const windowDays = goldInputWindowDays(input);
+  const days =
+    windowDays === undefined ? [date] : windowDates(date, windowDays);
+  const rows: Array<readonly [string, string]> = [];
+  for (const day of days) {
+    const version = versionOf(input, day);
+    if (version === undefined) {
+      if (day === date)
+        throw new Error(`${input.table} has no version for ${date}`);
+      continue;
+    }
+    const name =
+      windowDays === undefined ? input.table : `${input.table} ${day}`;
+    rows.push([name, `${version} ${inputStatus(completeness, input, day)}`]);
+  }
+  return rows;
+};
+
 /**
  * The fingerprint of one date from the version of each input and the completeness view. Both
  * `wantedFingerprints` and `inputFingerprint` call it, so the wanted and the written value
- * always agree.
+ * always agree. A gold input with `windowDays` includes each window day that has a partition
+ * and omits missing days.
  */
 const dateFingerprint = (
   analysisVersion: number,
   inputs: readonly GoldInput[],
   completeness: CompletenessView,
   date: string,
-  versionOf: (input: GoldInput) => string | undefined,
+  versionOf: (input: GoldInput, day: string) => string | undefined,
 ) =>
   fingerprint(
     analysisVersion,
-    inputs.map((input) => {
-      const version = versionOf(input);
-      if (version === undefined)
-        throw new Error(`${input.table} has no version for ${date}`);
-      return [
-        input.table,
-        `${version} ${inputStatus(completeness, input, date)}`,
-      ];
-    }),
+    inputs.flatMap((input) =>
+      inputFingerprintRows(input, completeness, date, versionOf),
+    ),
   );
 
 /**
  * The fingerprint that a build would write, for each date on which every input has a
- * partition. The runner compares it with the value that gold holds (ADR-0009, ADR-0011).
- * It reads each input table once, not once for each date.
+ * partition. A windowed gold input still wants a date only when the subject date has a
+ * partition; earlier window days are optional. The runner compares it with the value that gold
+ * holds (ADR-0009, ADR-0011). It reads each input table once, not once for each date.
  */
 export async function wantedFingerprints(
   silverDir: string,
@@ -202,8 +248,12 @@ export async function wantedFingerprints(
     if (!rest.every((v) => v.has(date))) continue;
     wanted.set(
       date,
-      dateFingerprint(analysisVersion, inputs, completeness, date, (input) =>
-        versions[inputs.indexOf(input)]?.get(date),
+      dateFingerprint(
+        analysisVersion,
+        inputs,
+        completeness,
+        date,
+        (input, day) => versions[inputs.indexOf(input)]?.get(day),
       ),
     );
   }
@@ -213,7 +263,7 @@ export async function wantedFingerprints(
 /**
  * The same fingerprint for one date. It reads versions with `partitionVersions` and builds the
  * value with the same code as `wantedFingerprints`. Throws when an input has no version for the
- * date.
+ * subject date. A windowed gold input omits missing earlier days.
  */
 export async function inputFingerprint(
   silverDir: string,
@@ -223,22 +273,26 @@ export async function inputFingerprint(
   completeness: CompletenessView,
   date: string,
 ): Promise<string> {
-  const versions = new Map<GoldInput, string | undefined>();
-  for (const input of inputs)
+  const versions = new Map<GoldInput, Map<string, string>>();
+  for (const input of inputs) {
+    const windowDays = goldInputWindowDays(input);
     versions.set(
       input,
-      (
-        await partitionVersions(
-          inputRoot(silverDir, goldDir, input),
-          input.table,
-          "trading_date",
-          input.versionColumn,
-          date,
-        )
-      ).get(date),
+      await partitionVersions(
+        inputRoot(silverDir, goldDir, input),
+        input.table,
+        "trading_date",
+        input.versionColumn,
+        windowDays === undefined ? date : undefined,
+      ),
     );
-  return dateFingerprint(analysisVersion, inputs, completeness, date, (input) =>
-    versions.get(input),
+  }
+  return dateFingerprint(
+    analysisVersion,
+    inputs,
+    completeness,
+    date,
+    (input, day) => versions.get(input)?.get(day),
   );
 }
 
