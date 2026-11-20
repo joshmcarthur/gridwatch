@@ -4,6 +4,7 @@ import type {
   SiteIndex,
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
+import { PRICE_REGIONS } from "./price-regions.ts";
 
 const energyFormat = new Intl.NumberFormat("en-NZ", {
   maximumFractionDigits: 0,
@@ -21,18 +22,7 @@ const DATASET_LABELS: Record<string, string> = {
   entity_mappings: "plant names and locations",
 };
 
-const PRICE_REGIONS: Record<string, string> = {
-  upper_north_island: "the Upper North Island (Otahuhu, Auckland)",
-  lower_north_island: "the Lower North Island (Haywards, near Wellington)",
-  south_island: "the South Island (Benmore, in the Waitaki)",
-};
-
 export const CHART_SLOTS = [
-  {
-    id: "wholesale-prices",
-    title: "What it sold for",
-    body: "A chart of wholesale prices, and how they differed between regions, will sit here. It is not drawn yet.",
-  },
   {
     id: "energy-flow",
     title: "Where the energy went",

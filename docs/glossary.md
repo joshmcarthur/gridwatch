@@ -20,11 +20,13 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Interim and final prices.** Dispatch prices are interim. The Authority declares them final by 2pm on the next business day, unless someone lodges a pricing error claim. Settled prices are in a separate dataset. See [sources 3.1](sources.md#31-dispatch-energy-prices).
 
+**Period price.** The time-weighted mean of the dispatch prices in one 30-minute trading period. Each price counts from its publish time until the next publish (rule B). See [ADR-0012](adr/0012-gold-prices.md).
+
 **Proxy price.** A price copied from a nearby point of connection after an outage. The `IsProxyPriceFlag` column marks it (`Y`). Silver keeps it as a flag.
 
 **Reserve.** The market prices and clears reserve as well as energy. The brief lists reserve prices as something the site should explain. See FIR and SIR for the two classes.
 
-**Spread.** The price at one reference node minus the price at another, in a trading period. See [ADR-0012](adr/0012-gold-prices.md).
+**Spread.** The price at one reference node minus the price at another, in a trading period. A positive spread means the first node costs more. See [ADR-0012](adr/0012-gold-prices.md).
 
 **Trading date.** The calendar date in New Zealand time. Silver partitions by trading date. See [ADR-0003](adr/0003-time-column-naming.md).
 

@@ -92,7 +92,7 @@ const table = mix ? generationMixTable(mix) : null;
     </p>
   ) : (
     <ChartFigure
-      svg={svg}
+      plots={[svg]}
       tableCaptionId="generation-mix-table-caption"
       tableCaption="Average megawatts by fuel for each 30-minute period. Shares are of the primary total, which excludes battery."
       headers={table.headers}

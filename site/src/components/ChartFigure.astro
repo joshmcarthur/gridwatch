@@ -1,11 +1,12 @@
 ---
 /**
- * The shared frame for a daily-page chart (ADR-0017). It holds the SVG, a legend, a caption and
- * the same numbers as a table in a <details> element. Callers pass the SVG string and the rows.
+ * The shared frame for a daily-page chart (ADR-0017). It holds one or more SVGs, a legend, a
+ * caption and the same numbers as a table in a <details> element. Callers pass the SVG strings
+ * and the rows.
  */
 interface Props {
-  /** Static SVG from `renderPlot`. */
-  svg: string;
+  /** Static SVGs from `renderPlot` or `renderLinePlot`. One or more. */
+  plots: string[];
   /** Id of the table caption paragraph. The table is labelled by it. */
   tableCaptionId: string;
   tableCaption: string;
@@ -19,13 +20,15 @@ interface Props {
   notice?: string;
 }
 
-const { svg, tableCaptionId, tableCaption, headers, rows, legendLabel, notice } =
+const { plots, tableCaptionId, tableCaption, headers, rows, legendLabel, notice } =
   Astro.props;
 ---
 
 <figure class="chart">
   {notice && <p class="chart-notice">{notice}</p>}
-  <Fragment set:html={svg} />
+  {plots.map((svg) => (
+    <Fragment set:html={svg} />
+  ))}
   <ul class="legend" aria-label={legendLabel}>
     <slot name="legend" />
   </ul>
