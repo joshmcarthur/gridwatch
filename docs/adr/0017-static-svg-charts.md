@@ -19,7 +19,7 @@ The Landscape design rules for data colour say that battery is storage. It shoul
 - Layers are listed in the legend from the top of the stack down. The order matches what a reader sees.
 - Area edges are straight lines between periods. A step shape is a possible later change.
 - The time axis shows the hour only (`00`, `03`, ...). Its title says "Hour (New Zealand time)". Full times are in the table and in the hover text.
-- Sizes: the SVG has a logical width of 400 units and 14px text. On desktop it is capped at 480px wide. Measured on the built page, axis text is 9.8px at 375px and 16.8px at 1280px. A 12px phone size would need a logical width near 327 units. That was not chosen, because it makes desktop text larger.
+- Sizes: the SVG has a logical width of 330 units and 14px text. On desktop it is capped at 480px wide. Measured on the built page, axis text is about 12px at 375px and about 20px at 1280px. On desktop the SVG scales up to its 480px cap, so its text is larger there than on phones.
 - Battery is in the table's last column and in one caption sentence. It is not drawn in the chart for v1. This departs from the Landscape rule that battery shows below the zero line or in its own panel. The follow-up is [#92](https://github.com/joshmcarthur/gridwatch/issues/92).
 
 ## Consequences
@@ -28,6 +28,6 @@ The Landscape design rules for data colour say that battery is storage. It shoul
 - The page has no chart JavaScript to load or to keep in step with the data.
 - Tooltips use the browser's native tooltip. They appear after a short delay and cannot show rich layout. That is accepted for version 1.
 - Each chart adds its SVG to the page HTML. A daily page with many charts grows by that amount.
-- Phone axis text is small (9.8px). The table holds the same numbers at full size.
+- Desktop axis text is large (about 20px) because the SVG scales up to its cap. Reducing the cap changes the desktop size, not the phone size.
 - Battery is not visible in the chart until #92 is done. That departs from the design rule until then.
 - A later interactive feature needs a new decision. This ADR does not allow client JavaScript for charts.
