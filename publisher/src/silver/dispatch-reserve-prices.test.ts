@@ -138,6 +138,25 @@ test("publishes a 46-period DST day", async () => {
   });
 });
 
+test("keeps each FIR and SIR value on its own reserve class", async () => {
+  await archive("2026-11-18", await fixture("2026-11-18"));
+  const result = await publish("2026-11-18");
+  if (result.status !== "complete") throw new Error("expected complete");
+  const rows = await query(
+    result.path,
+    `SELECT reserve_class, dollars_per_megawatt_hour AS dollars
+     FROM read_parquet($FILE)
+     WHERE trading_period = 1 AND point_of_connection = 'HAY2201'
+       AND source_published_at = TIMESTAMPTZ '2026-11-18T00:09:50+13:00'
+     ORDER BY reserve_class`,
+  );
+  // Source line: 2026-11-18,1,2026-11-18T00:09:50.000+13:00,HAY2201,NI,0.50,1.00
+  expect(rows).toEqual([
+    { reserve_class: "FIR", dollars: 0.5 },
+    { reserve_class: "SIR", dollars: 1 },
+  ]);
+});
+
 test("publishing the same day again gives identical bytes", async () => {
   await archive("2026-11-18", await fixture("2026-11-18"));
   const first = await publish("2026-11-18");
@@ -191,6 +210,15 @@ test.each([
     (lines: string[]) => [
       ...lines.slice(0, 1),
       (lines[1] as string).replace(/[^,]+$/, "n/a"),
+      ...lines.slice(2),
+    ],
+    "1 rows have a missing or non-numeric value",
+  ],
+  [
+    "a blank FIR price",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace(",NI,1.00,", ",NI,,"),
       ...lines.slice(2),
     ],
     "1 rows have a missing or non-numeric value",

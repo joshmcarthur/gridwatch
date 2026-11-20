@@ -66,7 +66,7 @@ Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricin
 |---|---|
 | Pattern | One CSV per trading day, folder per year. |
 | Columns | `TradingDate, TradingPeriod, PublishDateTime, PointOfConnection, Island, FIRDollarsPerMegawattHour, SIRDollarsPerMegawattHour`. FIR is 6-second reserve, SIR is 60-second. Units are dollars per megawatt-hour. Two POCs only: `HAY2201` is always NI and `BEN2201` is always SI in the files checked (556 rows on 19 Nov; [definitions](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/DispatchReservePrices)). |
-| Resolution | Publish times are irregular. On the 5 Apr, 27 Sep and 19 Nov 2026 files, the median gap between publish times for one POC is 5 minutes. Gaps run from 76 seconds to 25 minutes. A trading period has 2 to 8 publish times. A price is published from about 1 minute before to 27 minutes after its period starts (4 files checked). |
+| Resolution | Publish times are irregular. On the 5 Apr, 27 Sep, 18 Nov and 19 Nov 2026 files, the median gap between publish times for one POC is 5 minutes. Gaps run from 76 seconds to 25 minutes. A trading period has 2 to 8 publish times. A price is published from about 1 minute before to 27 minutes after its period starts (5 Apr, 27 Sep, 18 Nov and 19 Nov 2026 files). |
 | DST | Confirmed. 46 periods on 27 Sep 2026 and 50 on 5 Apr 2026, all present. The UTC span is 23 and 25 hours. |
 | Earliest | 2022-11-01. |
 | Gap | Same 22 days as energy prices (2025-09-11 to 2025-10-02). |
