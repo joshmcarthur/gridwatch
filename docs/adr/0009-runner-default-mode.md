@@ -26,7 +26,7 @@ The default range ends yesterday in NZ. The start depends on the kind of dataset
 
 | Kind | Datasets | First run (empty manifest for the dataset) | Later runs |
 | --- | --- | --- | --- |
-| Daily files | dispatch energy prices, dispatch reserve prices, nodal prices and volumes | 12 months before the run date | The earlier of the last date held and the trailing 5 days (to - 4). A run fetches 5 days again, or everything since the last date held after an outage |
+| Daily files | dispatch energy prices, dispatch reserve prices, nodal prices and volumes, cleared offers | 12 months before the run date | The earlier of the last date held and the trailing 5 days (to - 4). A run fetches 5 days again, or everything since the last date held after an outage |
 | Snapshots | network supply points | 12 months before the run date | Same as daily files. The collector also takes the newest snapshot before the start ([ADR-0006](0006-mapping-datasets-snapshots.md)) |
 | Monthly files | generation_md | 12 months before the run date (13 monthly files at most) | From the first day of the earlier of: the month of the last date held, and the month 2 months before the run month. The run month and the two before it are checked each run, because the source rewrites a month weeks after it appears |
 | No dates | generation fleet | One check, labelled with the run date | The same. It ignores the range |
