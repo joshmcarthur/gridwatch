@@ -164,3 +164,38 @@ Website content, including these datasets, is licensed under Creative Commons At
 11. The 12-month backfill is about 6.9 GB raw (more than half Nodal) and about 0.7 GB gzip; it takes about 1.2 hours on one stream. Affects #5, #13 and the hosting spike.
 12. The backfill covers the last 12 months only (owner direction). If it is extended, start the dispatch datasets no earlier than 2022-11-01: Nodal exists from 2020-09-10 and Cleared Offers from 2022-04-01, but the settlement relevance of earlier data is inferred (see 3.3). Affects #9, #12, #13.
 13. Trading days can have 46 or 50 periods (checked in energy prices and Generation_MD; other datasets unchecked), so never assume 48. Affects #6, #8, #9, #11, #12.
+
+## 7. Generator outage information
+
+Research for [issue #45](https://github.com/joshmcarthur/gridwatch/issues/45). Checked on 20 November 2026 (NZ time). This is a deferred dataset ([brief §3.3](brief.md), Phase 5). Nothing here is part of the 12-month backfill. **Measured** means I saw it directly; **Unknown** says what I tried.
+
+**Finding.** Every public outage source comes from one system: **POCP** (Planned Outage Co-ordination Process), run by Transpower as system operator. POCP holds planned and unplanned outages for generation, transmission, distribution and direct connections ([EA article](https://www.ea.govt.nz/news/eye-on-electricity/when-do-power-station-outages-occur), [POCP user guide](https://static.transpower.co.nz/public/bulk-upload/documents/UG-SD-989%20POCP%20User%20Guide.pdf)). I found no outage data in the EMI blob datasets or in WITS (not found in the [EMI datasets index](https://www.emi.ea.govt.nz/Wholesale/Datasets); WITS not checked in depth).
+
+### 7.1 Sources
+
+| Source | Content | Access | Format | History | Cadence | Licence |
+|---|---|---|---|---|---|---|
+| **EMI report [Scheduled generation outages](https://www.emi.ea.govt.nz/Wholesale/Reports/UWRCKF)** | MW lost per timestamp, **aggregated** by fuel type, island, participant or outage category. No plant or unit. | Anonymous. CSV link: `BASE/Wholesale/Download/DataReport/CSV/UWRCKF?DateFrom=yyyymmdd&DateTo=yyyymmdd&DateEffective=yyyymmdd&Show=GT` (`GT`, `GI`, `P`, `OC`). Measured: HTTP 200 and a CSV body. | CSV: `Timestamp, SeriesCode, Series, Lost megawatts`. Series codes such as `NZ_H`, `NI_H`, `CTCT`, `GEN`. | Rows exist from 2000 (27,501 lines for 2000-2013, 10,000-11,000 per year since). Future dates return planned outages to the end of 2027. `DateEffective` returns POCP "as it stood on" a past day (measured: accepted for 2025-01-05). | Not fixed. POCP is updated at any time ([report notes](https://www.emi.ea.govt.nz/Wholesale/Reports/UWRCKF)). | No dataset licence stated. Page points to the [EA copyright statement](https://www.ea.govt.nz/copyright-disclaimer-transparency/) (CC BY 4.0 for website content, see section 5). Whether that covers this CSV: unknown. |
+| **POCP website** ([Operations Customer Portal](https://customerportal.transpower.co.nz/)) | Per-outage records for each asset. Search, export, revision history. | Anonymous "Guest" access: since November 2025 no account is needed to view, export and download attachments ([user guide, rule 4](https://static.transpower.co.nz/public/bulk-upload/documents/UG-SD-989%20POCP%20User%20Guide.pdf)). I could not drive the web app from `curl`, so the export format is **unknown**. | Web app, export function. | Unknown. Revision history per outage is available in the app (user guide). | Updated hourly ([Transpower](https://transpower.co.nz/our-work/industry/our-grid/outage-planning)). | "All rights reserved" footer. No data licence found ([page](https://transpower.co.nz/system-operator/information-industry/operational-information-system/outage-planning)). |
+| **POCP Download API** | Same per-outage records as JSON. `GET https://api.transpower.co.nz/v2/so/api/pocp/data/outages` with `start`, `end`, `modified_since`, `category`, `grid_points`, `planning_status`; 5,000 rows per call. | **Needs an API key requested from Transpower** ([user guide, section 10.3](https://static.transpower.co.nz/public/bulk-upload/documents/UG-SD-989%20POCP%20User%20Guide.pdf)). Measured: HTTP 401 without a key (the guide says 403). Whether keys go to non-participants: **unknown** (not asked). | JSON. Fields: `block`, `grid_points`, `owner`, `owner_outage_id`, `category`, `planning`, `type`, `start`, `end`, `mw_loss`, `mw_remain`, `modified`, `pocp_int_id`. | Unknown. | `modified_since` filter allows incremental pulls. | Unknown. |
+| **Transpower Annual Outage Plans** ([page](https://transpower.co.nz/our-work/industry/our-grid/outage-planning)) | **Transmission** outage windows only, not generators. | Anonymous XLSX, one per year, 2022-23 to 2026-27. | XLSX. Measured on 2026-27: 2,702 rows, columns `Outage Block Name`, `Description of Work`, `Planned Start`, `Planned Finish`, `Timeframe`, `Region`, `Nature`, `Status`, `Window ID`. | 5 plans. | Yearly. | Not stated. |
+| Transpower planned-outage viewer ([plannedoutages.transpower.co.nz](https://plannedoutages.transpower.co.nz/plannedoutages/)) | Visual view of POCP. | Registration (Transpower page). May be superseded by the guest change above: unchecked. | Web only. | Unknown. | Unknown. | Unknown. |
+
+Not found: a public unplanned-outage feed. Transpower lists unplanned outages on its home page and Facebook ([page](https://transpower.co.nz/our-work/industry/our-grid/outage-planning)). Unplanned generator outages are meant to be entered into POCP within 24 hours "where possible" (user guide, rule 3). Whether outage data is in real-time ICCP or em6 feeds: unknown, I found no evidence ([Transpower live data](https://transpower.co.nz/power-system-live-data) mentions generation only).
+
+### 7.2 Mapping to the entity model (#10)
+
+| Level | POCP identifier | Entity-model match | Confidence |
+|---|---|---|---|
+| Site | `grid_points`, a three-letter site code (`SFD`) | `Site_Code` in [Generation_MD](https://emidatasets.blob.core.windows.net/publicdata/Datasets/Wholesale/Generation/Generation_MD/202610_Generation_MD.csv), and the first three letters of `POC_Code` (`SFD2201`) | High for the example. Unchecked across all 75 `Site_Code` values. |
+| Asset | `block` (`TCC_Stn`), unique per asset, free text set by the owner | No field in any EMI dataset. Must be hand-mapped to plant/unit (`Gen_Code`, `PlantName`, `UnitCode`). | **Inferred.** The API example pairs `TCC_Stn` with `SFD` and Contact Energy, and Generation_MD shows Contact's `stratford` gas plant at `SFD`. |
+| Owner | `owner` name, `org_id` UUID | `ParticipantCode` (`CTCT`) in Cleared Offers; participant codes in the EMI report. Needs a name-to-code table. | Medium |
+| Fuel | `category` is only generation, embedded generation, transmission, distribution or direct connection | Fuel is **not** in POCP records; take it from the plant mapping. The EMI report adds fuel by its own aggregation. | n/a |
+
+A site can hold several plants (`WKM2201` has `whakamaru` and `mokai`), so a site-level match does not identify the unit. Capacity effect is `mw_loss` and `mw_remain` per outage.
+
+### 7.3 Caveats
+
+- **Voluntary and revisable.** The EMI report says submission "is not mandatory" and owners can change entries at any time. The POCP guide says outages are provided "as required" under Code Schedule 8.3. I did not read the Code text to settle which is right. Treat records as the owner's plan, not verified fact.
+- **Plans move.** Only `DateEffective` (EMI) or revision history (POCP) gives what was known on a day. A daily snapshot is the only way for us to keep that history ourselves.
+- **Embedded generation and distribution outages** are in the same stream, so filter on `category`.
