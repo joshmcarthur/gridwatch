@@ -1,0 +1,680 @@
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { type DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
+import type { PublisherDataset } from "../datasets.ts";
+import { type GoldInput, goldPartitionPath } from "../gold/common.ts";
+import {
+  INPUTS as GENERATION_INPUTS,
+  TABLES as GENERATION_TABLES,
+} from "../gold/generation.ts";
+import {
+  INPUTS as PRICE_INPUTS,
+  TABLES as PRICE_TABLES,
+  REFERENCE_NODES,
+  SPREAD_PAIRS,
+} from "../gold/prices.ts";
+import type { DatasetSummary } from "../runner.ts";
+import { lit, partitionVersions } from "../silver/common.ts";
+import {
+  type CompletenessView,
+  completenessKey,
+  latestCompleteDates,
+} from "../silver/completeness.ts";
+import { periodsInTradingDate, periodToUtc } from "../trading-time.ts";
+import {
+  assertSiteDay,
+  assertSiteIndex,
+  type FuelCategory,
+  type GenerationSection,
+  type Island,
+  type PricesSection,
+  type SectionState,
+  SITE_CONTRACT_VERSION,
+  SITE_EXPORT_ID,
+  type SiteDatasetStatus,
+  type SiteDay,
+  type SiteIndex,
+  type SiteIndexDay,
+} from "./contract.ts";
+
+/**
+ * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
+ * rebuilt (ADR-0014).
+ */
+export const EXPORT_VERSION = 1;
+
+interface Section {
+  name: "generation" | "prices";
+  /** The first gold table. Its partition holds the section's `inputs_sha256`. */
+  sentinel: string;
+  inputs: readonly GoldInput[];
+}
+
+const GENERATION_SECTION: Section = {
+  name: "generation",
+  sentinel: GENERATION_TABLES[0],
+  inputs: GENERATION_INPUTS,
+};
+const PRICES_SECTION: Section = {
+  name: "prices",
+  sentinel: PRICE_TABLES[0],
+  inputs: PRICE_INPUTS,
+};
+const SECTIONS: readonly Section[] = [GENERATION_SECTION, PRICES_SECTION];
+
+/** Every silver dataset that a section reads, sorted. */
+const DATASET_IDS = [
+  ...new Set(
+    SECTIONS.flatMap((section) =>
+      section.inputs.flatMap((input) =>
+        input.completenessDataset === null ? [] : [input.completenessDataset],
+      ),
+    ),
+  ),
+].sort();
+
+/** Round half away from zero. The sign is kept, and -0 becomes 0. */
+export function round(value: number, places: number): number {
+  const factor = 10 ** places;
+  const rounded =
+    (Math.round(Math.abs(value) * factor) / factor) * Math.sign(value);
+  return rounded === 0 ? 0 : rounded;
+}
+
+const roundOrNull = (value: number | null, places: number) =>
+  value === null ? null : round(value, places);
+
+const numberOrNull = (value: unknown) =>
+  value === null || value === undefined ? null : Number(value);
+
+const datasetStatus = (
+  completeness: CompletenessView,
+  dataset: string,
+  date: string,
+): SiteDatasetStatus => {
+  const row = completeness.get(completenessKey(dataset, date));
+  if (!row)
+    return {
+      status: "missing",
+      expected_period_count: null,
+      actual_period_count: null,
+      missing_periods: [],
+      bronze_sha256s: [],
+      errors: [],
+    };
+  return {
+    status: row.status,
+    expected_period_count: row.expectedPeriodCount,
+    actual_period_count: row.actualPeriodCount,
+    missing_periods: row.missingPeriods,
+    bronze_sha256s: row.bronzeSha256s,
+    errors: row.errors,
+  };
+};
+
+/** The sentinel of a section on a date: its stamp, or null when gold has no partition. */
+interface Stamp {
+  analysis_version: number;
+  inputs_sha256: string;
+  inputs_complete: boolean;
+}
+
+async function readStamp(
+  connection: DuckDBConnection,
+  path: string,
+): Promise<Stamp | null> {
+  if (!existsSync(path)) return null;
+  const reader = await connection.runAndReadAll(
+    `SELECT any_value(analysis_version) AS analysis_version,
+       any_value(inputs_sha256) AS inputs_sha256,
+       bool_and(inputs_complete) AS inputs_complete
+     FROM read_parquet(${lit(path)})`,
+  );
+  const [row] = reader.getRowObjectsJson() as Array<{
+    analysis_version: unknown;
+    inputs_sha256: unknown;
+    inputs_complete: unknown;
+  }>;
+  if (!row || typeof row.inputs_sha256 !== "string") return null;
+  return {
+    analysis_version: Number(row.analysis_version),
+    inputs_sha256: row.inputs_sha256,
+    inputs_complete: row.inputs_complete === true,
+  };
+}
+
+/** Rows of one gold table on a date, read in the order of the query. */
+async function rowsOf(
+  connection: DuckDBConnection,
+  goldDir: string,
+  table: string,
+  date: string,
+  columns: string,
+  order: string,
+): Promise<Array<Record<string, unknown>>> {
+  const reader = await connection.runAndReadAll(
+    `SELECT ${columns} FROM read_parquet(${lit(goldPartitionPath(goldDir, table, date))})
+     ORDER BY ${order}`,
+  );
+  return reader.getRowObjectsJson() as Array<Record<string, unknown>>;
+}
+
+/** The period axis of a date. It exists even when gold has no rows. */
+function periodAxis(date: string) {
+  return Array.from({ length: periodsInTradingDate(date) }, (_, i) => ({
+    period: i + 1,
+    start_utc: periodToUtc(date, i + 1).eventStartUtc.toString(),
+  }));
+}
+
+/** The state of a section, from its stamp and its input statuses (ADR-0014). */
+function sectionState(
+  stamp: Stamp | null,
+  section: Section,
+  completeness: CompletenessView,
+  date: string,
+): SectionState {
+  if (!stamp) return "missing";
+  const inputs = section.inputs.every(
+    (input) =>
+      input.completenessDataset === null ||
+      datasetStatus(completeness, input.completenessDataset, date).status ===
+        "complete",
+  );
+  return stamp.inputs_complete && inputs ? "complete" : "incomplete";
+}
+
+const sectionDatasets = (section: Section) =>
+  section.inputs.flatMap((input) =>
+    input.completenessDataset === null ? [] : [input.completenessDataset],
+  );
+
+async function buildGeneration(
+  connection: DuckDBConnection,
+  goldDir: string,
+  date: string,
+  completeness: CompletenessView,
+  axis: SiteDay["periods"],
+): Promise<GenerationSection> {
+  const section = GENERATION_SECTION;
+  const base = {
+    silver_tables: section.inputs.map((input) => input.table),
+    gold_tables: [...GENERATION_TABLES],
+    datasets: sectionDatasets(section),
+  };
+  const stamp = await readStamp(
+    connection,
+    goldPartitionPath(goldDir, section.sentinel, date),
+  );
+  const state = sectionState(stamp, section, completeness, date);
+  if (!stamp)
+    return {
+      ...base,
+      state: "missing",
+      missing_periods: [],
+      analysis_version: null,
+      inputs_sha256: null,
+      series: [],
+      daily: [],
+      totals: null,
+    };
+
+  const periodRows = await rowsOf(
+    connection,
+    goldDir,
+    "generation_by_fuel_period",
+    date,
+    "trading_period, fuel_category, island, megawatt_hours",
+    "fuel_category, island NULLS LAST, trading_period",
+  );
+  const present = new Set(periodRows.map((row) => Number(row.trading_period)));
+  const missingPeriods = axis
+    .map((p) => p.period)
+    .filter((period) => !present.has(period));
+
+  const seriesByKey = new Map<
+    string,
+    {
+      fuel: FuelCategory;
+      island: Island | null;
+      megawatt_hours: Array<number | null>;
+    }
+  >();
+  for (const row of periodRows) {
+    const fuel = String(row.fuel_category) as FuelCategory;
+    const island = (row.island ?? null) as Island | null;
+    const key = `${fuel}|${island ?? ""}`;
+    let series = seriesByKey.get(key);
+    if (!series) {
+      series = {
+        fuel,
+        island,
+        megawatt_hours: axis.map(() => null),
+      };
+      seriesByKey.set(key, series);
+    }
+    series.megawatt_hours[Number(row.trading_period) - 1] = roundOrNull(
+      numberOrNull(row.megawatt_hours),
+      3,
+    );
+  }
+
+  const dayRows = await rowsOf(
+    connection,
+    goldDir,
+    "generation_by_fuel_day",
+    date,
+    "fuel_category, island, megawatt_hours, average_megawatts",
+    "fuel_category, island NULLS LAST",
+  );
+  let primary = 0;
+  let battery = 0;
+  const daily = dayRows.map((row) => {
+    const fuel = String(row.fuel_category) as FuelCategory;
+    const mwh = numberOrNull(row.megawatt_hours) ?? 0;
+    if (fuel === "battery") battery += mwh;
+    else primary += mwh;
+    return {
+      fuel,
+      island: (row.island ?? null) as Island | null,
+      megawatt_hours: round(mwh, 3),
+      average_megawatts: round(numberOrNull(row.average_megawatts) ?? 0, 3),
+    };
+  });
+
+  return {
+    ...base,
+    state,
+    missing_periods: missingPeriods,
+    analysis_version: stamp.analysis_version,
+    inputs_sha256: stamp.inputs_sha256,
+    series: [...seriesByKey.values()],
+    daily,
+    totals: {
+      primary_megawatt_hours: round(primary, 3),
+      battery_megawatt_hours: round(battery, 3),
+    },
+  };
+}
+
+async function buildPrices(
+  connection: DuckDBConnection,
+  goldDir: string,
+  date: string,
+  completeness: CompletenessView,
+  axis: SiteDay["periods"],
+): Promise<PricesSection> {
+  const section = PRICES_SECTION;
+  const base = {
+    silver_tables: section.inputs.map((input) => input.table),
+    gold_tables: [...PRICE_TABLES],
+    datasets: sectionDatasets(section),
+  };
+  const stamp = await readStamp(
+    connection,
+    goldPartitionPath(goldDir, section.sentinel, date),
+  );
+  const state = sectionState(stamp, section, completeness, date);
+  if (!stamp)
+    return {
+      ...base,
+      state: "missing",
+      missing_periods: [],
+      analysis_version: null,
+      inputs_sha256: null,
+      nodes: [],
+      spreads: [],
+      distribution: {
+        poc_count: [],
+        min: [],
+        p05: [],
+        p25: [],
+        median: [],
+        p75: [],
+        p95: [],
+        max: [],
+      },
+    };
+
+  const count = axis.length;
+  const periodRows = await rowsOf(
+    connection,
+    goldDir,
+    "price_periods",
+    date,
+    "point_of_connection, trading_period, price, has_proxy_price",
+    "point_of_connection, trading_period",
+  );
+  const nodes = REFERENCE_NODES.map((reference) => {
+    const price: Array<number | null> = axis.map(() => null);
+    const proxyPeriods: number[] = [];
+    for (const row of periodRows) {
+      if (row.point_of_connection !== reference.pointOfConnection) continue;
+      const period = Number(row.trading_period);
+      price[period - 1] = roundOrNull(numberOrNull(row.price), 2);
+      if (row.has_proxy_price === true) proxyPeriods.push(period);
+    }
+    return {
+      point_of_connection: reference.pointOfConnection,
+      price_region: reference.priceRegion,
+      price,
+      proxy_periods: proxyPeriods.sort((a, b) => a - b),
+    };
+  });
+
+  const dailyRows = await rowsOf(
+    connection,
+    goldDir,
+    "price_daily_summary",
+    date,
+    "point_of_connection, mean_price, min_price, max_price, periods_present, periods_expected, rows_present, inputs_complete",
+    "point_of_connection",
+  );
+  const withDaily = nodes.map((node) => {
+    const row = dailyRows.find(
+      (candidate) => candidate.point_of_connection === node.point_of_connection,
+    );
+    return {
+      ...node,
+      daily: {
+        mean_price: roundOrNull(numberOrNull(row?.mean_price), 2),
+        min_price: roundOrNull(numberOrNull(row?.min_price), 2),
+        max_price: roundOrNull(numberOrNull(row?.max_price), 2),
+        periods_present: Number(row?.periods_present ?? 0),
+        periods_expected: Number(row?.periods_expected ?? count),
+        rows_present: Number(row?.rows_present ?? 0),
+        inputs_complete: row?.inputs_complete === true,
+      },
+    };
+  });
+
+  const spreadRows = await rowsOf(
+    connection,
+    goldDir,
+    "price_spreads",
+    date,
+    "from_point_of_connection, to_point_of_connection, trading_period, spread",
+    "from_point_of_connection, to_point_of_connection, trading_period",
+  );
+  const regionOf = (poc: string) =>
+    REFERENCE_NODES.find((node) => node.pointOfConnection === poc)
+      ?.priceRegion ?? poc;
+  const spreads = SPREAD_PAIRS.map(([from, to]) => {
+    const spread: Array<number | null> = axis.map(() => null);
+    for (const row of spreadRows) {
+      if (
+        row.from_point_of_connection !== from ||
+        row.to_point_of_connection !== to
+      )
+        continue;
+      spread[Number(row.trading_period) - 1] = roundOrNull(
+        numberOrNull(row.spread),
+        2,
+      );
+    }
+    return {
+      from,
+      to,
+      from_price_region: regionOf(from),
+      to_price_region: regionOf(to),
+      spread,
+    };
+  });
+
+  const distributionRows = await rowsOf(
+    connection,
+    goldDir,
+    "price_distribution",
+    date,
+    "trading_period, poc_count, min_price, p05_price, p25_price, median_price, p75_price, p95_price, max_price",
+    "trading_period",
+  );
+  const column = (name: string) =>
+    axis.map((p) => {
+      const row = distributionRows.find(
+        (candidate) => Number(candidate.trading_period) === p.period,
+      );
+      return roundOrNull(numberOrNull(row?.[name]), 2);
+    });
+  const distribution = {
+    poc_count: axis.map((p) => {
+      const row = distributionRows.find(
+        (candidate) => Number(candidate.trading_period) === p.period,
+      );
+      return Number(row?.poc_count ?? 0);
+    }),
+    min: column("min_price"),
+    p05: column("p05_price"),
+    p25: column("p25_price"),
+    median: column("median_price"),
+    p75: column("p75_price"),
+    p95: column("p95_price"),
+    max: column("max_price"),
+  };
+
+  // A period is missing when any reference node has no price in it.
+  const missingPeriods = axis
+    .map((p) => p.period)
+    .filter((period) =>
+      withDaily.some((node) => node.price[period - 1] === null),
+    );
+
+  return {
+    ...base,
+    state,
+    missing_periods: missingPeriods,
+    analysis_version: stamp.analysis_version,
+    inputs_sha256: stamp.inputs_sha256,
+    nodes: withDaily,
+    spreads,
+    distribution,
+  };
+}
+
+/**
+ * One site day from the gold tables of a date and this run's completeness rows. Opens one
+ * in-memory DuckDB connection and reads only the sentinel and the tables of each section.
+ */
+export async function buildSiteDay(options: {
+  goldDir: string;
+  date: string;
+  completeness: CompletenessView;
+}): Promise<SiteDay> {
+  const { goldDir, date, completeness } = options;
+  const periods = periodAxis(date);
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    await connection.run("SET TimeZone = 'UTC'");
+    const generation = await buildGeneration(
+      connection,
+      goldDir,
+      date,
+      completeness,
+      periods,
+    );
+    const prices = await buildPrices(
+      connection,
+      goldDir,
+      date,
+      completeness,
+      periods,
+    );
+    const datasets = Object.fromEntries(
+      DATASET_IDS.map((id) => [id, datasetStatus(completeness, id, date)]),
+    );
+    return {
+      contract_version: SITE_CONTRACT_VERSION,
+      trading_date: date,
+      periods,
+      complete: generation.state === "complete" && prices.state === "complete",
+      datasets,
+      generation,
+      prices,
+    };
+  } finally {
+    connection.closeSync();
+  }
+}
+
+/**
+ * The held version that a build of `date` would write. It reads the same values as the day
+ * file, so a changed input or status changes it (ADR-0014).
+ */
+function wantedExportHash(
+  date: string,
+  versions: ReadonlyArray<string | undefined>,
+  completeness: CompletenessView,
+): string {
+  const lines = [
+    `export_version ${EXPORT_VERSION}`,
+    `contract ${SITE_CONTRACT_VERSION}`,
+    ...SECTIONS.map((section, i) => `${section.name} ${versions[i] ?? "none"}`),
+    ...DATASET_IDS.map(
+      (id) =>
+        `dataset ${id} ${JSON.stringify(datasetStatus(completeness, id, date))}`,
+    ),
+  ];
+  return createHash("sha256").update(lines.join("\n")).digest("hex");
+}
+
+/** Write JSON through a temporary file, so a reader never sees a partial file. */
+async function writeJson(path: string, value: unknown): Promise<string> {
+  const text = `${JSON.stringify(value)}\n`;
+  await mkdir(dirname(path), { recursive: true });
+  const temp = `${path}.tmp`;
+  try {
+    await writeFile(temp, text);
+    await rename(temp, path);
+  } finally {
+    await rm(temp, { force: true });
+  }
+  return text;
+}
+
+/**
+ * The index entries that the last run wrote. A missing or unreadable index means none, so the
+ * export rebuilds every day. A corrupt index does not block the export.
+ */
+async function readHeldIndex(path: string): Promise<Map<string, SiteIndexDay>> {
+  const held = new Map<string, SiteIndexDay>();
+  if (!existsSync(path)) return held;
+  try {
+    const index: unknown = JSON.parse(await readFile(path, "utf8"));
+    assertSiteIndex(index);
+    for (const day of index.days) held.set(day.date, day);
+  } catch {
+    // Treated as no held entries. The index is rewritten below.
+  }
+  return held;
+}
+
+/**
+ * Publish one site day file for each gold trading date, and the index (ADR-0014).
+ *
+ * A day is rebuilt when it has no held index entry or no day file, always. Otherwise it is
+ * rebuilt when its date is in `range` (or there is no range) and `force` is set or its held
+ * version differs from the wanted one. A day outside `range` is never rebuilt for a changed
+ * input, but it stays in the index. A day whose rebuild throws keeps its previous entry, and
+ * is reported in `failed`. The index is written last, and only when its bytes change.
+ */
+export async function exportSite(options: {
+  goldDir: string;
+  completeness: CompletenessView;
+  registry: readonly PublisherDataset[];
+  range?: { from: string; to: string };
+  force?: boolean;
+}): Promise<DatasetSummary> {
+  const { goldDir, completeness, registry, range, force } = options;
+  const summary: DatasetSummary = {
+    id: SITE_EXPORT_ID,
+    published: 0,
+    upToDate: 0,
+    missing: 0,
+    partial: [],
+    failed: [],
+  };
+  const siteDir = join(goldDir, "site");
+  const indexPath = join(siteDir, "index.json");
+  const versions = await Promise.all(
+    SECTIONS.map((section) =>
+      partitionVersions(
+        goldDir,
+        section.sentinel,
+        "trading_date",
+        "inputs_sha256",
+      ),
+    ),
+  );
+  const dates = [...new Set(versions.flatMap((v) => [...v.keys()]))].sort();
+  if (dates.length === 0 && !existsSync(indexPath)) return summary;
+
+  const held = await readHeldIndex(indexPath);
+  // Dates are visited in ascending order, so the map is in index order.
+  const days = new Map<string, SiteIndexDay>();
+  for (const date of dates) {
+    const wanted = wantedExportHash(
+      date,
+      versions.map((v) => v.get(date)),
+      completeness,
+    );
+    const previous = held.get(date);
+    const inRange = !range || (date >= range.from && date <= range.to);
+    const dayFile = join(siteDir, "days", `${date}.json`);
+    const rebuild =
+      !previous ||
+      !existsSync(dayFile) ||
+      (inRange && (force === true || previous.export_sha256 !== wanted));
+    if (previous && !rebuild) {
+      days.set(date, previous);
+      summary.upToDate++;
+      continue;
+    }
+    try {
+      const day = await buildSiteDay({ goldDir, date, completeness });
+      assertSiteDay(day);
+      await writeJson(dayFile, day);
+      days.set(date, {
+        date,
+        path: `days/${date}.json`,
+        complete: day.complete,
+        sections: {
+          generation: day.generation.state,
+          prices: day.prices.state,
+        },
+        export_sha256: wanted,
+      });
+      summary.published++;
+    } catch (error) {
+      summary.failed.push(`${date}: ${(error as Error).message}`);
+      if (previous) days.set(date, previous);
+    }
+  }
+
+  const entries = [...days.values()];
+  const latest = latestCompleteDates(completeness);
+  const latestSection = (name: "generation" | "prices") =>
+    entries.filter((day) => day.sections[name] === "complete").at(-1)?.date ??
+    null;
+  const index: SiteIndex = {
+    contract_version: SITE_CONTRACT_VERSION,
+    days: entries,
+    latest_complete: Object.fromEntries(
+      registry
+        .filter((dataset) => dataset.partitionRoot === undefined)
+        .map((dataset) => [dataset.id, latest.get(dataset.id) ?? null]),
+    ),
+    latest_complete_sections: {
+      generation: latestSection("generation"),
+      prices: latestSection("prices"),
+    },
+  };
+  assertSiteIndex(index);
+  const text = `${JSON.stringify(index)}\n`;
+  const onDisk = existsSync(indexPath)
+    ? await readFile(indexPath, "utf8")
+    : undefined;
+  if (onDisk !== text) await writeJson(indexPath, index);
+  return summary;
+}

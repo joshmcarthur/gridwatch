@@ -51,7 +51,7 @@ const DISPATCH: GoldInput = {
   versionColumn: "bronze_sha256",
   completenessDataset: "dispatch_energy_prices",
 };
-const INPUTS: GoldInput[] = [DISPATCH];
+export const INPUTS: GoldInput[] = [DISPATCH];
 
 /**
  * Publish the gold price tables for one trading date, from the silver dispatch energy prices

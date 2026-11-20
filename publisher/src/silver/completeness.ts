@@ -123,20 +123,28 @@ export async function readCompleteness(
   };
 }
 
-/** Latest complete trading date per dataset, in registry order. */
-export async function completenessStatusLines(
-  silverDir: string,
-  registry: readonly PublisherDataset[],
-): Promise<string[]> {
+/** The latest complete trading date of each dataset that has a complete row. */
+export function latestCompleteDates(
+  rows: CompletenessView,
+): Map<string, string> {
   const latest = new Map<string, string>();
-  const seen = new Set<string>();
-  for (const row of (await loadCompleteness(silverDir)).values()) {
-    seen.add(row.dataset);
+  for (const row of rows.values()) {
     if (row.status !== "complete") continue;
     const prev = latest.get(row.dataset);
     if (!prev || row.tradingDate > prev)
       latest.set(row.dataset, row.tradingDate);
   }
+  return latest;
+}
+
+/** Latest complete trading date per dataset, in registry order. */
+export async function completenessStatusLines(
+  silverDir: string,
+  registry: readonly PublisherDataset[],
+): Promise<string[]> {
+  const rows = await loadCompleteness(silverDir);
+  const latest = latestCompleteDates(rows);
+  const seen = new Set([...rows.values()].map((row) => row.dataset));
   const extras = [...seen]
     .filter((id) => !registry.some((dataset) => dataset.id === id))
     .sort();
