@@ -75,7 +75,7 @@ A day is **partial** (written) when one or more periods of the day have no rows.
 
 ### Validation for nodal prices and volumes
 
-A row is one 5-minute interval of one RTD case for one point of connection and one unit. `IntervalDateTime` is the interval start. The source keeps every case, so an interval can have two. Silver keeps every case too, and a reader picks one. A day is **invalid** (nothing written) when:
+A row is one 5-minute interval of one RTD case for one point of connection and one unit. `IntervalDateTime` is the interval start. The source keeps every case, so an interval can have two. Silver keeps every case too. Layers after silver keep only the latest case (latest `RunDateTime`) for each interval, because Gridwatch wants one snapshot of the day (owner decision on [#9](https://github.com/joshmcarthur/gridwatch/issues/9)). A day is **invalid** (nothing written) when:
 
 1. The file has no rows, or a row has a `TradingDate` other than the requested date.
 2. A row has a trading period outside the range of the day.

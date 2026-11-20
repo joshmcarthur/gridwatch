@@ -93,7 +93,7 @@ Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricin
 
 #### Which price dataset to use
 
-**Use Dispatch Energy Prices (3.1) for "the price at a node in a trading period".** Use Nodal Prices and Volumes (3.3) for load and generation by unit.
+**Use Dispatch Energy Prices (3.1) for "the price at a node in a trading period".** Use Nodal Prices and Volumes (3.3) for load and generation by unit. The owner accepted this for now ([#9](https://github.com/joshmcarthur/gridwatch/issues/9)).
 
 Evidence, from the files for 18 Nov 2026 (measured):
 
