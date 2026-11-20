@@ -31,6 +31,7 @@ export const TABLES = [
 
 const GENERATION: GoldInput = {
   table: "generation_md",
+  layer: "silver",
   versionColumn: "bronze_sha256",
   completenessDataset: "generation_md",
 };
@@ -41,11 +42,13 @@ export const INPUTS: GoldInput[] = [
   GENERATION,
   {
     table: "entity_plants",
+    layer: "silver",
     versionColumn: "inputs_sha256",
     completenessDataset: "entity_mappings",
   },
   {
     table: "entity_points_of_connection",
+    layer: "silver",
     versionColumn: "inputs_sha256",
     completenessDataset: "entity_mappings",
   },

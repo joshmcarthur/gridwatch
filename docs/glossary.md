@@ -38,7 +38,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Grid exit point and grid injection point.** Places where power leaves or enters the grid. The brief lists them as possible entities. No source we use names them, so the model has none. See [ADR-0008](adr/0008-entity-model.md).
 
-**Grid load (modelled).** Real-time dispatch (RTD) model load at grid exit points, net of embedded generation behind them, plus dispatchable and battery load. It is not metered consumption. Gold sums it from Nodal Prices and Volumes, for each island and trading period. See [ADR-0018](adr/0018-energy-balance.md) and [sources 3.3](sources.md#33-nodal-prices-and-volumes).
+**Grid load (modelled).** Real-time dispatch (RTD) model load at grid exit points, net of embedded generation behind them, plus dispatchable and battery load. It is not metered consumption. Gold holds it in `grid_load_period` and `grid_load_day`, from Nodal Prices and Volumes joined to the entity points of connection, for each island and trading period. See [ADR-0018](adr/0018-energy-balance.md) and [sources 3.3](sources.md#33-nodal-prices-and-volumes).
 
 **HVDC.** The high-voltage direct current link between the North and South Islands. Its terminals are at Benmore (`BEN2201`) in the South Island and Haywards (`HAY2201`) in the North Island. These two POCs are the only ones in the reserve price files. The metered flow at both ends is in HVDC_Flows ([sources 3.7](sources.md#37-hvdc-flows), [ADR-0016](adr/0016-hvdc-flows.md)). The brief lists "how does the HVDC link work" as a topic to explain.
 
@@ -127,7 +127,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Entity.** A thing that appears in several datasets under different IDs, such as a POC, plant, unit or participant. See [ADR-0008](adr/0008-entity-model.md).
 
-**Energy-balance residual.** For an island and a period: generation plus HVDC import, minus grid load (modelled). Gold keeps it as a column and never adjusts it. It holds what the three sources do not explain: transmission losses, generation that Generation_MD omits or zero-fills (for example Matahina), the same energy under two point-of-connection codes, embedded generation counted twice, and the gap between RTD model load and metered generation. See [ADR-0018](adr/0018-energy-balance.md).
+**Energy-balance residual.** For an island and a period: generation plus HVDC import, minus grid load (modelled). Gold keeps it as a column and never adjusts it. It holds what the three sources do not explain: transmission losses, Generation_MD omission and zero-fill, definition differences, embedded generation counted twice, calibration, and the gap between RTD model load and metered generation. The plant list is the [sources 3.5 coverage table](sources.md#35-generation_md) (issue #99 / PR #101). See [ADR-0018](adr/0018-energy-balance.md).
 
 **`event_start_utc` and `event_end_utc`.** The UTC start (included) and end (excluded) of a trading period or dispatch interval. They are unambiguous across the daylight saving change. See [ADR-0003](adr/0003-time-column-naming.md).
 

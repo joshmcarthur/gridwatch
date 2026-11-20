@@ -1,5 +1,6 @@
 import { energyBalance } from "./gold/energy-balance.ts";
 import { generation } from "./gold/generation.ts";
+import { gridLoad } from "./gold/grid-load.ts";
 import { hvdc } from "./gold/hvdc.ts";
 import { prices } from "./gold/prices.ts";
 import { reserves } from "./gold/reserves.ts";
@@ -67,7 +68,8 @@ export interface PublisherDataset {
 
 /**
  * The datasets the runner publishes. A new silver dataset adds one entry here and one in
- * `collector/src/datasets.ts`. A gold table adds one entry at the end (ADR-0011).
+ * `collector/src/datasets.ts`. A gold table adds one entry after silver, and after any gold
+ * table it reads (ADR-0011).
  */
 export const datasets: PublisherDataset[] = [
   {
@@ -126,11 +128,12 @@ export const datasets: PublisherDataset[] = [
     publish: ({ silverDir, date }) =>
       publishEntityMappings({ silverDir, date }),
   },
-  // Gold runs after silver in the same run (ADR-0011). It reads the silver above.
+  // Gold runs after silver in the same run (ADR-0011). Registry order is the DAG.
   generation,
   prices,
   reserves,
   hvdc,
-  // After the gold tables it reads: it takes generation and HVDC gold as inputs (ADR-0018).
+  gridLoad,
+  // After the gold tables it reads: generation, HVDC and grid load (ADR-0011, ADR-0018).
   energyBalance,
 ];

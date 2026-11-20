@@ -21,31 +21,77 @@ import { periodsInTradingDate } from "../trading-time.ts";
  * the rest.
  */
 
-/** A silver table that a gold table reads, and the column that holds its version. */
-export interface GoldInput {
+/** The two islands. Gold tables that split by island use this list, not a string fallback. */
+export const ISLANDS = ["NI", "SI"] as const;
+export type Island = (typeof ISLANDS)[number];
+
+/** SQL string literals for the two islands, in order. Exhaustive over `ISLANDS`. */
+export function islandLiterals(): string[] {
+  return ISLANDS.map((island) => {
+    switch (island) {
+      case "NI":
+        return "'NI'";
+      case "SI":
+        return "'SI'";
+      default: {
+        const unreachable: never = island;
+        return unreachable;
+      }
+    }
+  });
+}
+
+/** `(VALUES ('NI'), ('SI'))`, for a `CROSS JOIN` of every island. */
+export const islandsValuesSql = () =>
+  `(VALUES ${islandLiterals()
+    .map((literal) => `(${literal})`)
+    .join(", ")})`;
+
+/**
+ * An input table of a gold module (ADR-0011). `layer` is required. A `gold` input is read from
+ * `goldDir`; its `versionColumn` and `completenessDataset` are fixed because gold has no
+ * `_completeness` row and its `inputs_sha256` already holds the status of its own inputs. Registry
+ * order is the DAG: a gold table that reads gold must come after that gold table in `datasets`.
+ */
+export type GoldInput = GoldSilverInput | GoldGoldInput;
+
+interface GoldInputBase {
   /** The table folder, in silver or in gold (see `layer`), for example `generation_md`. */
   table: string;
-  /**
-   * The layer that holds the table. Default `silver`. A `gold` input is read from `goldDir`.
-   * It must use `versionColumn: "inputs_sha256"` and `completenessDataset: null`: gold has no
-   * `_completeness` row (ADR-0011), and its `inputs_sha256` already holds the status of its own
-   * inputs. A gold table that reads gold must come after that gold table in the registry
-   * (ADR-0018).
-   */
-  layer?: "silver" | "gold";
+}
+
+/** A silver input. `completenessDataset` is null when the table has no `_completeness` row. */
+export interface GoldSilverInput extends GoldInputBase {
+  layer: "silver";
   /** `bronze_sha256` for a dataset with a bronze file, `inputs_sha256` for a derived table. */
   versionColumn: VersionColumn;
-  /**
-   * The `_completeness` dataset ID of this input (ADR-0010, ADR-0011). Two tables of one
-   * dataset share it, as the entity tables share `entity_mappings`. Use `null` for an input
-   * that has no row: it counts as complete.
-   */
   completenessDataset: string | null;
 }
 
+/** A gold input. The type enforces `inputs_sha256` and no `_completeness` row. */
+export interface GoldGoldInput extends GoldInputBase {
+  layer: "gold";
+  versionColumn: "inputs_sha256";
+  completenessDataset: null;
+}
+
 /** The directory that holds the partitions of an input. */
-const inputRoot = (silverDir: string, goldDir: string, input: GoldInput) =>
-  input.layer === "gold" ? goldDir : silverDir;
+const inputRoot = (
+  silverDir: string,
+  goldDir: string,
+  input: GoldInput,
+): string => {
+  switch (input.layer) {
+    case "gold":
+      return goldDir;
+    case "silver":
+      return silverDir;
+    default: {
+      const unreachable: never = input;
+      return unreachable;
+    }
+  }
+};
 
 /** The `_completeness` status of an input on a date. No row counts as `missing`. */
 const inputStatus = (
@@ -84,9 +130,10 @@ export const silverPartitionPath = (
 
 /**
  * The `inputs_sha256` value. A SHA-256 over the analysis version and, for each input, its
- * partition version and its `_completeness` status, named by table. It changes when an input is
- * rebuilt from new bronze data, when an input changes status, and when the analysis version is
- * bumped. It does not change with the git SHA.
+ * partition version and its `_completeness` status, named by table. A gold input contributes
+ * `complete` as its status (it has no `_completeness` row). It changes when an input is rebuilt,
+ * when a silver input changes status, and when the analysis version is bumped. It does not change
+ * with the git SHA.
  */
 export function fingerprint(
   analysisVersion: number,

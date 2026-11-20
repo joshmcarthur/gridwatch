@@ -48,6 +48,7 @@ export const TABLES = [
 
 const DISPATCH: GoldInput = {
   table: "dispatch_energy_prices",
+  layer: "silver",
   versionColumn: "bronze_sha256",
   completenessDataset: "dispatch_energy_prices",
 };

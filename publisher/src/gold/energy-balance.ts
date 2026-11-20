@@ -8,9 +8,11 @@ import {
   goldDataset,
   goldPartitionPath,
   goldStamp,
+  ISLANDS,
   inputFingerprint,
   inputStatusesComplete,
-  silverPartitionPath,
+  islandLiterals,
+  islandsValuesSql,
   writeGoldTables,
 } from "./common.ts";
 
@@ -23,7 +25,6 @@ export const ANALYSIS_VERSION = 1;
 /** The gold tables of this module. The first is the sentinel: the runner reads it and it is written last. */
 export const TABLES = ["energy_balance_period", "energy_balance_day"] as const;
 
-/** Two gold inputs (ADR-0018). They have no `_completeness` row, and their fingerprints carry their own inputs. */
 const GENERATION: GoldInput = {
   table: "generation_by_fuel_period",
   layer: "gold",
@@ -36,31 +37,41 @@ const HVDC: GoldInput = {
   versionColumn: "inputs_sha256",
   completenessDataset: null,
 };
-const NODAL: GoldInput = {
-  table: "nodal_prices_and_volumes",
-  versionColumn: "bronze_sha256",
-  completenessDataset: "nodal_prices_and_volumes",
-};
-const POINTS_OF_CONNECTION: GoldInput = {
-  table: "entity_points_of_connection",
+const LOAD: GoldInput = {
+  table: "grid_load_period",
+  layer: "gold",
   versionColumn: "inputs_sha256",
-  completenessDataset: "entity_mappings",
+  completenessDataset: null,
 };
-export const INPUTS: GoldInput[] = [
-  GENERATION,
-  HVDC,
-  NODAL,
-  POINTS_OF_CONNECTION,
-];
+export const INPUTS: GoldInput[] = [GENERATION, HVDC, LOAD];
 
 /** The residual of an island: generation + HVDC import - load. Null when any term is null. */
 const RESIDUAL = "generation_mwh + hvdc_import_mwh - load_mwh";
 const PERCENT = "residual_mwh / nullif(load_mwh, 0) * 100";
 
+/** Energy the island receives over the link. Exhaustive over `ISLANDS`; no `ELSE`. */
+const hvdcImportSql = (islandExpr: string) =>
+  `CASE ${ISLANDS.map((island) => {
+    switch (island) {
+      case "NI":
+        return `WHEN ${islandExpr} = 'NI' THEN h.north_island_received_mwh`;
+      case "SI":
+        return `WHEN ${islandExpr} = 'SI' THEN -h.south_island_sent_mwh`;
+      default: {
+        const unreachable: never = island;
+        return unreachable;
+      }
+    }
+  }).join(" ")} END`;
+
 /**
  * Publish the energy balance of each island for one trading date (ADR-0018):
  * `<goldDir>/energy_balance_period/trading_date=<date>/data.parquet` and
  * `<goldDir>/energy_balance_day/trading_date=<date>/data.parquet` (ADR-0011).
+ *
+ * Inputs are three gold tables: `generation_by_fuel_period`, `hvdc_transfer_period` and
+ * `grid_load_period`. The registry order is the DAG (ADR-0011). This module joins those tables
+ * and subtracts. It does not read silver.
  *
  * Every period and island has a row. The island is `NI` or `SI`. The terms, all in MWh:
  * - `generation_mwh`: `generation_by_fuel_period` summed over the fuels of the island, battery
@@ -70,32 +81,23 @@ const PERCENT = "residual_mwh / nullif(load_mwh, 0) * 100";
  *   directions. The link loss is `-(NI import + SI import)`, which equals `losses_mwh` of
  *   `hvdc_transfer_period`. So the NI residual and the SI residual add up to national generation,
  *   minus load, minus link losses.
- * - `load_mwh`: grid load (modelled), not metered consumption. It is the sum of `load_megawatts`
- *   over ALL nodal rows of the island: point of connection rows and unit rows (the unit rows carry
- *   battery and dispatchable load). For each 5-minute interval the latest RTD case is used. The
- *   case is chosen by `event_start_utc` (UTC, never local time, because the repeated hour of a
- *   DST-end day shares local times), then by `source_run_at` and `case_id`, both descending.
- *   The period load is the mean of the interval MW over the intervals that exist, times 0.5 hours.
- *   Every period is 30 minutes, also on a DST day. A period is not required to have 6 intervals,
- *   because the source omits some. A period with no interval has null load.
- * - The island of load is `island` of `entity_points_of_connection`. A point of connection that is
- *   not in that table takes the `Island` string of the nodal row (`North Island` or
- *   `South Island`).
+ * - `load_mwh` and `load_intervals`: grid load (modelled) from `grid_load_period`. Not metered
+ *   consumption. Null when the island has no load in the period. It is not 0.
  * - `residual_mwh` = generation + HVDC import - load. Null when any term is null. It is never
- *   adjusted, clamped or spread. It holds transmission losses, the gap between RTD model load and metered
- *   generation, generation that Generation_MD omits and RTD dispatches, and embedded generation
- *   that is counted twice. `residual_pct_of_load` is the residual over the load, in percent.
+ *   adjusted, clamped or spread. It holds transmission losses, the gap between RTD model load and
+ *   metered generation, generation that Generation_MD omits and RTD dispatches, and embedded
+ *   generation that is counted twice. `residual_pct_of_load` is the residual over the load, in
+ *   percent.
  *
  * The day table sums the periods. A day term is the sum only when every period has the term
  * (46, 48 or 50 periods). Otherwise it is null, because a partial sum would give a false residual.
  * The day residual is built from the day terms.
  *
  * `inputs_complete` of a period row is true only when all of these hold:
- * - every generation row of the period has `inputs_complete`, and the HVDC row has it;
- * - the `_completeness` status of `nodal_prices_and_volumes` and `entity_mappings` is `complete`;
- * - the period has at least one RTD interval;
- * - no energy lacks an island (load with no island, or generation with a null island). That energy
- *   goes to neither row and flags every row of the date;
+ * - every generation row of the period has `inputs_complete`, and the HVDC and grid-load rows
+ *   have it;
+ * - no generation lacks an island. That energy goes to neither row and flags every row of the
+ *   date;
  * - the residual is not null.
  * The day row is true only when every period row of the island is true.
  *
@@ -111,8 +113,7 @@ export async function publishEnergyBalance(
   const files = {
     generation: goldPartitionPath(goldDir, GENERATION.table, date),
     hvdc: goldPartitionPath(goldDir, HVDC.table, date),
-    nodal: silverPartitionPath(silverDir, NODAL.table, date),
-    poc: silverPartitionPath(silverDir, POINTS_OF_CONNECTION.table, date),
+    load: goldPartitionPath(goldDir, LOAD.table, date),
   };
   if (!Object.values(files).every((file) => existsSync(file)))
     return { date, status: "missing" };
@@ -124,52 +125,18 @@ export async function publishEnergyBalance(
     await connection.run("SET TimeZone = 'UTC'");
     await connection.run("SET threads = 1");
 
-    // The latest RTD case of each interval, then the load of each island and interval.
-    await connection.run(
-      `CREATE TEMP TABLE nodal_rows AS
-       SELECT n.trading_period, n.event_start_utc, n.load_megawatts,
-         coalesce(poc.island,
-           CASE n.island WHEN 'North Island' THEN 'NI' WHEN 'South Island' THEN 'SI' END) AS island
-       FROM read_parquet(${lit(files.nodal)}) n
-       JOIN (
-         SELECT event_start_utc, case_id FROM (
-           SELECT DISTINCT event_start_utc, source_run_at, case_id
-           FROM read_parquet(${lit(files.nodal)}) WHERE case_type = 'RTD')
-         QUALIFY row_number() OVER (
-           PARTITION BY event_start_utc
-           ORDER BY source_run_at DESC NULLS LAST, case_id DESC) = 1
-       ) latest ON latest.event_start_utc = n.event_start_utc AND latest.case_id = n.case_id
-       LEFT JOIN read_parquet(${lit(files.poc)}) poc ON poc.poc_id = n.point_of_connection
-       WHERE n.case_type = 'RTD'`,
-    );
-    await connection.run(
-      `CREATE TEMP TABLE load_by_period AS
-       SELECT trading_period, island, avg(mw) * 0.5 AS load_mwh, count(*) AS load_intervals
-       FROM (
-         SELECT i.trading_period, i.event_start_utc, isl.island,
-           coalesce(sum(r.load_megawatts), 0) AS mw
-         FROM (SELECT DISTINCT trading_period, event_start_utc FROM nodal_rows) i
-         CROSS JOIN (VALUES ('NI'), ('SI')) isl(island)
-         LEFT JOIN nodal_rows r
-           ON r.event_start_utc = i.event_start_utc AND r.island = isl.island
-         GROUP BY i.trading_period, i.event_start_utc, isl.island)
-       GROUP BY trading_period, island`,
-    );
     await connection.run(
       `CREATE TEMP TABLE generation_by_period AS
        SELECT trading_period, island, sum(megawatt_hours) AS generation_mwh
-       FROM read_parquet(${lit(files.generation)}) WHERE island IN ('NI', 'SI')
+       FROM read_parquet(${lit(files.generation)}) WHERE island IN (${islandLiterals().join(", ")})
        GROUP BY trading_period, island`,
     );
 
-    // Energy with no island goes to neither row. It flags the date.
+    // Energy with no island goes to neither row. It flags the date. Load mapping is on grid_load.
     const [unmapped] = (
       await connection.runAndReadAll(
-        `SELECT
-           (SELECT count(*) FROM nodal_rows
-            WHERE island IS NULL AND coalesce(load_megawatts, 0) <> 0)
-           + (SELECT count(*) FROM read_parquet(${lit(files.generation)})
-              WHERE island IS NULL AND coalesce(megawatt_hours, 0) <> 0) AS n`,
+        `SELECT count(*) AS n FROM read_parquet(${lit(files.generation)})
+         WHERE island IS NULL AND coalesce(megawatt_hours, 0) <> 0`,
       )
     ).getRowObjectsJson() as Array<{ n: string }>;
     const islandsOk = Number(unmapped?.n) === 0;
@@ -186,7 +153,7 @@ export async function publishEnergyBalance(
       view,
       date,
     );
-    // One row for each period and island. `terms_ok` is the upstream flags and the interval rule.
+    const importSql = hvdcImportSql("isl.island");
     await connection.run(
       `CREATE TEMP TABLE balance AS
        SELECT trading_date, trading_period, event_start_utc, event_end_utc, island,
@@ -197,13 +164,12 @@ export async function publishEnergyBalance(
        FROM (
          SELECT DATE ${lit(date)} AS trading_date, s.trading_period, s.event_start_utc,
            s.event_end_utc, isl.island, g.generation_mwh,
-           CASE isl.island WHEN 'NI' THEN h.north_island_received_mwh
-             ELSE -h.south_island_sent_mwh END AS hvdc_import_mwh,
+           ${importSql} AS hvdc_import_mwh,
            l.load_mwh, coalesce(l.load_intervals, 0)::INTEGER AS load_intervals,
            coalesce(gk.ok, false) AND coalesce(h.inputs_complete, false)
-             AND coalesce(l.load_intervals, 0) > 0 AS terms_ok
+             AND coalesce(l.inputs_complete, false) AS terms_ok
          FROM (VALUES ${spans}) s(trading_period, event_start_utc, event_end_utc)
-         CROSS JOIN (VALUES ('NI'), ('SI')) isl(island)
+         CROSS JOIN ${islandsValuesSql()} isl(island)
          LEFT JOIN generation_by_period g
            ON g.trading_period = s.trading_period AND g.island = isl.island
          LEFT JOIN (
@@ -211,7 +177,7 @@ export async function publishEnergyBalance(
            FROM read_parquet(${lit(files.generation)}) GROUP BY trading_period
          ) gk ON gk.trading_period = s.trading_period
          LEFT JOIN read_parquet(${lit(files.hvdc)}) h ON h.trading_period = s.trading_period
-         LEFT JOIN load_by_period l
+         LEFT JOIN read_parquet(${lit(files.load)}) l
            ON l.trading_period = s.trading_period AND l.island = isl.island)`,
     );
 
