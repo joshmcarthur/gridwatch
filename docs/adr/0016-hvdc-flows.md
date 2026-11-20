@@ -7,7 +7,7 @@
 
 Inter-island transfer is a key quantity for regional prices and for the Sankey ([#19](https://github.com/joshmcarthur/gridwatch/issues/19), [#23](https://github.com/joshmcarthur/gridwatch/issues/23)). The initial datasets do not give it. `BEN2201` and `HAY2201` have prices but no volumes in Nodal Prices and Volumes. An island residual (nodal generation minus load) is 60 to 90 MW off the published transfer on the days checked (#19 comment, 20 Nov 2026). The metered source is EMI `Wholesale/Metered_data/HVDC_Flows`, one CSV per month, with half-hour kWh at both HVDC terminals ([sources 3.7](../sources.md#37-hvdc-flows)).
 
-The owner question on adding `HVDC_Flows` to the collector was unanswered when this work started. The overnight loop proceeded on the recorded recommendation (add `HVDC_Flows`, with the monthly shape of Generation_MD). The owner confirms or objects at merge.
+The owner approved adding `HVDC_Flows` on 2026-11-21 (issue #19).
 
 ## Decision
 
