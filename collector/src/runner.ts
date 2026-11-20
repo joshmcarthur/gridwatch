@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 import { readManifest } from "./archive.ts";
-import { type CollectorDataset, datasets } from "./datasets.ts";
+import { type CollectorDataset, type DateRange, datasets } from "./datasets.ts";
 
 export interface RunOptions {
   bronzeDir: string;
@@ -18,8 +18,7 @@ export interface RunOptions {
 
 export interface DatasetSummary {
   id: string;
-  from: string;
-  to: string;
+  ranges: DateRange[];
   new: number;
   changed: number;
   unchanged: number;
@@ -43,40 +42,39 @@ export async function runCollect(
   const summaries: DatasetSummary[] = [];
   for (const dataset of registry) {
     if (options.only && !options.only.includes(dataset.id)) continue;
-    const last = manifest
-      .filter((r) => r.dataset === dataset.id)
-      .flatMap((r) => r.trading_dates)
-      .reduce<string | undefined>((a, b) => (a && a > b ? a : b), undefined);
-    const to = options.range?.to ?? yesterday;
-    const from =
-      options.range?.from ??
-      // Guard against a clock behind the manifest.
-      [dataset.defaultFrom(last, to, today), to].sort()[0] ??
-      to;
+    const held = new Set(
+      manifest
+        .filter((r) => r.dataset === dataset.id)
+        .flatMap((r) => r.trading_dates),
+    );
+    const ranges = options.range
+      ? [options.range]
+      : dataset.defaultRanges(held, yesterday, today);
     const summary: DatasetSummary = {
       id: dataset.id,
-      from,
-      to,
+      ranges,
       new: 0,
       changed: 0,
       unchanged: 0,
       notListed: 0,
       failed: [],
     };
-    try {
-      const result = await dataset.collect({
-        bronzeDir: options.bronzeDir,
-        from,
-        to,
-        today,
-        baseUrl: options.baseUrl,
-        fetch: options.fetch,
-      });
-      for (const record of result.records) summary[record.status]++;
-      summary.notListed = result.notListed;
-      summary.failed = result.failed;
-    } catch (error) {
-      summary.failed.push((error as Error).message);
+    for (const { from, to } of ranges) {
+      try {
+        const result = await dataset.collect({
+          bronzeDir: options.bronzeDir,
+          from,
+          to,
+          today,
+          baseUrl: options.baseUrl,
+          fetch: options.fetch,
+        });
+        for (const record of result.records) summary[record.status]++;
+        summary.notListed += result.notListed;
+        summary.failed.push(...result.failed);
+      } catch (error) {
+        summary.failed.push(`${from}..${to}: ${(error as Error).message}`);
+      }
     }
     summaries.push(summary);
   }
@@ -89,7 +87,7 @@ export const hasFailures = (summaries: DatasetSummary[]) =>
 export function printSummary(summaries: DatasetSummary[]): void {
   for (const s of summaries) {
     console.log(
-      `${s.id} ${s.from}..${s.to}: new ${s.new}, changed ${s.changed}, unchanged ${s.unchanged}, not listed ${s.notListed}${s.failed.length > 0 ? `, FAILED ${s.failed.length}` : ""}`,
+      `${s.id} ${s.ranges.map((r) => `${r.from}..${r.to}`).join(", ")}: new ${s.new}, changed ${s.changed}, unchanged ${s.unchanged}, not listed ${s.notListed}${s.failed.length > 0 ? `, FAILED ${s.failed.length}` : ""}`,
     );
     for (const message of s.failed) console.error(`  ${s.id}: ${message}`);
   }
@@ -121,13 +119,14 @@ export function parseRunArgs(
       help: { type: "boolean" },
     },
   });
-  if (values.to && !values.from) throw new TypeError("--to needs --from");
+  if (values.to !== undefined && values.from === undefined)
+    throw new TypeError("--to needs --from");
   for (const id of values.dataset ?? []) {
     if (!registry.some((d) => d.id === id))
       throw new TypeError(`Unknown dataset ${id}`);
   }
   let range: RunOptions["range"];
-  if (values.from) {
+  if (values.from !== undefined) {
     const yesterday = Temporal.PlainDate.from(today)
       .subtract({ days: 1 })
       .toString();

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { readManifest } from "./archive.ts";
 import { type CollectorDataset, datasets } from "./datasets.ts";
+import { eachDate } from "./date-range.ts";
 import {
   type DatasetSummary,
   hasFailures,
@@ -102,8 +103,7 @@ test("the first run collects every dataset and a second run stores nothing new",
   const first = await run();
   expect(hasFailures(first)).toBe(false);
   expect(byId(first, "dispatch_energy_prices")).toMatchObject({
-    from: "2025-11-20", // 12 months before the run date
-    to: "2026-11-19",
+    ranges: [{ from: "2025-11-20", to: "2026-11-19" }], // 12 months before the run date
     new: 3,
   });
   expect(byId(first, "nodal_prices_and_volumes").new).toBe(1);
@@ -117,11 +117,8 @@ test("the first run collects every dataset and a second run stores nothing new",
   for (const s of second) {
     expect([s.id, s.new, s.changed]).toEqual([s.id, 0, 0]);
   }
-  // The trailing window fetched again, so the files were checked and found unchanged.
-  expect(byId(second, "dispatch_energy_prices")).toMatchObject({
-    from: "2026-11-15", // last run (19th) minus the trailing 5 days
-    unchanged: 3,
-  });
+  // Dates with no record are tried again, so the files were checked and found unchanged.
+  expect(byId(second, "dispatch_energy_prices").unchanged).toBe(3);
   expect(await bronzeFiles()).toEqual(filesAfterFirst);
   const records = await readManifest(bronzeDir);
   expect(records.filter((r) => r.status === "new")).toHaveLength(7);
@@ -174,19 +171,18 @@ test("--dataset limits the run and an explicit range replaces the default", asyn
   });
   expect(summaries.map((s) => s.id)).toEqual(["dispatch_energy_prices"]);
   expect(summaries[0]).toMatchObject({
-    from: "2026-11-18",
-    to: "2026-11-19",
+    ranges: [{ from: "2026-11-18", to: "2026-11-19" }],
     new: 2,
   });
 });
 
-/** Fake registry entries that record the range they get, with the real range rules. */
+/** Fake registry entries that record the ranges they get, with the real range rules. */
 function spies() {
-  const seen: Record<string, { from: string; to: string }> = {};
+  const seen: Record<string, Array<{ from: string; to: string }>> = {};
   const registry: CollectorDataset[] = datasets.map((d) => ({
     ...d,
     collect: async ({ from, to }) => {
-      seen[d.id] = { from, to };
+      seen[d.id] = [...(seen[d.id] ?? []), { from, to }];
       return { records: [], notListed: 0, failed: [] };
     },
   }));
@@ -199,43 +195,107 @@ test("default range, first run: 12 months before the injected run date", async (
   for (const id of [
     "dispatch_energy_prices",
     "nodal_prices_and_volumes",
-    "generation_md",
     "network_supply_points",
   ]) {
-    expect(seen[id], id).toEqual({ from: "2027-02-28", to: "2028-02-28" });
+    expect(seen[id], id).toEqual([{ from: "2027-02-28", to: "2028-02-28" }]);
   }
+  // Monthly files cover whole months.
+  expect(seen.generation_md).toEqual([
+    { from: "2027-02-01", to: "2028-02-28" },
+  ]);
+  expect(seen.generation_fleet).toEqual([
+    { from: "2028-02-28", to: "2028-02-28" },
+  ]);
 });
 
-test("default range, later runs, for each dataset kind", async () => {
-  const rule = (id: string) => {
-    const dataset = datasets.find((d) => d.id === id);
-    if (!dataset) throw new Error(id);
-    return dataset.defaultFrom;
-  };
-  // Daily files and snapshots. To is yesterday (19 Nov). The window is 15 to 19 Nov.
+/** The default ranges of a dataset for a held set of dates. To is 19 Nov 2026. */
+function ranges(id: string, held: string[]) {
+  const dataset = datasets.find((d) => d.id === id);
+  if (!dataset) throw new Error(id);
+  return dataset.defaultRanges(new Set(held), "2026-11-19", TODAY);
+}
+/** Every day from 20 Nov 2025 to 19 Nov 2026, less `except`. */
+const everyDay = (except: string[] = []) =>
+  eachDate("2025-11-20", "2026-11-19").filter((d) => !except.includes(d));
+
+test("default ranges, daily files: the trailing 5 days, and any date of the window with no record", () => {
+  expect(ranges("dispatch_energy_prices", everyDay())).toEqual([
+    { from: "2026-11-15", to: "2026-11-19" },
+  ]);
+  // A failed day in the middle of the held range is fetched again.
+  expect(ranges("nodal_prices_and_volumes", everyDay(["2026-03-02"]))).toEqual([
+    { from: "2026-03-02", to: "2026-03-02" },
+    { from: "2026-11-15", to: "2026-11-19" },
+  ]);
+  // A gap that touches the trailing window joins it.
   expect(
-    rule("dispatch_energy_prices")("2026-11-19", "2026-11-19", TODAY),
-  ).toBe("2026-11-15");
+    ranges("cleared_offers", everyDay(["2026-11-13", "2026-11-14"])),
+  ).toEqual([{ from: "2026-11-13", to: "2026-11-19" }]);
+  // The collector was off for a while.
   expect(
-    rule("dispatch_energy_prices")("2026-11-18", "2026-11-19", TODAY),
-  ).toBe("2026-11-15");
-  // The collector was off for a while. Start at the last date held.
+    ranges("dispatch_energy_prices", eachDate("2025-11-20", "2026-11-01")),
+  ).toEqual([{ from: "2026-11-02", to: "2026-11-19" }]);
+  // A short targeted run on empty data does not stop the later backfill.
   expect(
-    rule("nodal_prices_and_volumes")("2026-11-01", "2026-11-19", TODAY),
-  ).toBe("2026-11-01");
-  expect(rule("network_supply_points")("2026-11-05", "2026-11-19", TODAY)).toBe(
-    "2026-11-05",
-  );
-  // Monthly files: the run month and the two before it, or older if the last month held is older.
-  expect(rule("generation_md")("2026-11-30", "2026-11-19", TODAY)).toBe(
-    "2026-09-01",
-  );
-  expect(rule("generation_md")("2026-10-31", "2026-11-19", TODAY)).toBe(
-    "2026-09-01",
-  );
-  expect(rule("generation_md")("2026-06-30", "2026-11-19", TODAY)).toBe(
-    "2026-06-01",
-  );
+    ranges("dispatch_energy_prices", ["2026-11-15", "2026-11-16"]),
+  ).toEqual([{ from: "2025-11-20", to: "2026-11-19" }]);
+});
+
+test("default ranges, monthly files: the run month and 2 before it, and any month of the window with no record", () => {
+  const months = [
+    "2025-11",
+    "2025-12",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06",
+    "2026-07",
+    "2026-08",
+    "2026-09",
+    "2026-10",
+  ];
+  const held = (except: string[] = []) =>
+    months.filter((m) => !except.includes(m)).map((m) => `${m}-15`);
+  expect(ranges("generation_md", held())).toEqual([
+    { from: "2026-09-01", to: "2026-11-19" },
+  ]);
+  // A month with no record in the middle of the window is fetched again.
+  expect(ranges("generation_md", held(["2026-03"]))).toEqual([
+    { from: "2026-03-01", to: "2026-03-31" },
+    { from: "2026-09-01", to: "2026-11-19" },
+  ]);
+  // Neighbouring months make one range.
+  expect(ranges("generation_md", held(["2026-02", "2026-03"]))).toEqual([
+    { from: "2026-02-01", to: "2026-03-31" },
+    { from: "2026-09-01", to: "2026-11-19" },
+  ]);
+});
+
+test("the fleet file is checked once", () => {
+  expect(ranges("generation_fleet", ["2026-11-19"])).toEqual([
+    { from: "2026-11-19", to: "2026-11-19" },
+  ]);
+});
+
+test("a day that failed in the middle of the held range is fetched again by the next default run", async () => {
+  files.set(dispatch("2026-10-01"), "d1001");
+  const original = fakeFetch;
+  const failing: typeof fetch = (input, init) =>
+    String(input).includes("20261001_Dispatch")
+      ? Promise.resolve(new Response("", { status: 403 }))
+      : original(input, init);
+  const first = await run({ fetch: failing });
+  expect(byId(first, "dispatch_energy_prices").failed).toEqual([
+    "2026-10-01: HTTP 403",
+  ]);
+  const second = await run();
+  expect(hasFailures(second)).toBe(false);
+  expect(byId(second, "dispatch_energy_prices")).toMatchObject({
+    new: 1,
+    unchanged: 3,
+  });
 });
 
 test("parseRunArgs", () => {
@@ -256,4 +316,5 @@ test("parseRunArgs", () => {
     parseRunArgs(["--from", "2026-11-05", "--to", "2026-11-01"], TODAY),
   ).toThrow("after");
   expect(() => parseRunArgs(["--from", "2026-13-01"], TODAY)).toThrow();
+  expect(() => parseRunArgs(["--from", ""], TODAY)).toThrow();
 });

@@ -1,4 +1,5 @@
 import type { ManifestRecord } from "./archive.ts";
+import { eachDate } from "./date-range.ts";
 import { collectClearedOffers } from "./electricity-authority/cleared-offers.ts";
 import { collectDispatchEnergyPrices } from "./electricity-authority/dispatch-energy-prices.ts";
 import { collectDispatchReservePrices } from "./electricity-authority/dispatch-reserve-prices.ts";
@@ -38,14 +39,23 @@ export interface CollectOutcome {
   failed: string[];
 }
 
+export interface DateRange {
+  from: string;
+  to: string;
+}
+
 export interface CollectorDataset {
   /** The dataset ID. It is the same in the manifest and the bronze folder. */
   id: string;
   /**
-   * First date of the default range. `last` is the newest trading date in the manifest for
-   * this dataset, or undefined on the first run. `to` is yesterday in NZ.
+   * The ranges the default mode collects. `held` is every trading date the manifest lists
+   * for this dataset. `to` is yesterday in NZ. The ranges are sorted and do not overlap.
    */
-  defaultFrom(last: string | undefined, to: string, today: string): string;
+  defaultRanges(
+    held: ReadonlySet<string>,
+    to: string,
+    today: string,
+  ): DateRange[];
   collect(context: CollectContext): Promise<CollectOutcome>;
 }
 
@@ -54,24 +64,71 @@ const backfillStart = (today: string) =>
     .subtract({ months: BACKFILL_MONTHS })
     .toString();
 
-const earlier = (a: string, b: string) => (a < b ? a : b);
+export const earlier = (a: string, b: string) => (a < b ? a : b);
 
-/** Daily files and snapshots: the last five days, or everything since the last run if older. */
-function dailyFrom(last: string | undefined, to: string, today: string) {
-  if (!last) return backfillStart(today);
-  const trailing = Temporal.PlainDate.from(to)
-    .subtract({ days: TRAILING_DAYS - 1 })
-    .toString();
-  return earlier(last, trailing);
+/** Sorted, unique dates to contiguous ranges. */
+function toRanges(dates: string[]): DateRange[] {
+  const ranges: DateRange[] = [];
+  for (const date of [...new Set(dates)].sort()) {
+    const last = ranges.at(-1);
+    if (
+      last &&
+      Temporal.PlainDate.from(last.to).add({ days: 1 }).toString() === date
+    )
+      last.to = date;
+    else ranges.push({ from: date, to: date });
+  }
+  return ranges;
 }
 
-/** Monthly files: the first day of the oldest month to refresh. */
-function monthlyFrom(last: string | undefined, _to: string, today: string) {
-  if (!last) return backfillStart(today);
-  const settled = Temporal.PlainDate.from(today)
-    .subtract({ months: MONTHLY_REFRESH_MONTHS })
+/**
+ * Daily files and snapshots: the trailing 5 days, and every date of the 12-month window that
+ * has no manifest record. A failed day, or a gap from a short targeted run, is fetched again.
+ * A date the source never published costs one folder listing, because unlisted dates are
+ * counted and not fetched.
+ */
+function dailyRanges(held: ReadonlySet<string>, to: string, today: string) {
+  const wanted = eachDate(backfillStart(today), to).filter((d) => !held.has(d));
+  const trailingStart = Temporal.PlainDate.from(to)
+    .subtract({ days: TRAILING_DAYS - 1 })
     .toString();
-  return `${earlier(last, settled).slice(0, 7)}-01`;
+  wanted.push(...eachDate(trailingStart, to));
+  return toRanges(wanted);
+}
+
+/**
+ * Monthly files: the run month and the 2 months before it, and every month of the 12-month
+ * window that has no manifest record. A range covers whole months, up to `to`.
+ */
+function monthlyRanges(held: ReadonlySet<string>, to: string, today: string) {
+  const heldMonths = new Set([...held].map((d) => d.slice(0, 7)));
+  const lastMonth = to.slice(0, 7);
+  const refreshFrom = Temporal.PlainDate.from(today)
+    .subtract({ months: MONTHLY_REFRESH_MONTHS })
+    .toString()
+    .slice(0, 7);
+  const wanted: string[] = [];
+  for (
+    let month = Temporal.PlainYearMonth.from(backfillStart(today).slice(0, 7));
+    month.toString() <= lastMonth;
+    month = month.add({ months: 1 })
+  ) {
+    const text = month.toString();
+    if (!heldMonths.has(text) || text >= refreshFrom) wanted.push(text);
+  }
+  const ranges: DateRange[] = [];
+  for (const month of wanted) {
+    const last = ranges.at(-1);
+    const next = Temporal.PlainYearMonth.from(month);
+    if (last && last.to.slice(0, 7) === next.subtract({ months: 1 }).toString())
+      last.to = earlier(`${month}-${next.daysInMonth}`, to);
+    else
+      ranges.push({
+        from: `${month}-01`,
+        to: earlier(`${month}-${next.daysInMonth}`, to),
+      });
+  }
+  return ranges;
 }
 
 /** Adapt a dated collector result. `missing` and `failed` use dates or months as labels. */
@@ -94,38 +151,38 @@ function outcome(result: {
 export const datasets: CollectorDataset[] = [
   {
     id: "dispatch_energy_prices",
-    defaultFrom: dailyFrom,
+    defaultRanges: dailyRanges,
     collect: (context) => collectDispatchEnergyPrices(context).then(outcome),
   },
   {
     id: "dispatch_reserve_prices",
-    defaultFrom: dailyFrom,
+    defaultRanges: dailyRanges,
     collect: (context) => collectDispatchReservePrices(context).then(outcome),
   },
   {
     id: "nodal_prices_and_volumes",
-    defaultFrom: dailyFrom,
+    defaultRanges: dailyRanges,
     collect: (context) => collectNodalPricesAndVolumes(context).then(outcome),
   },
   {
     id: "cleared_offers",
-    defaultFrom: dailyFrom,
+    defaultRanges: dailyRanges,
     collect: (context) => collectClearedOffers(context).then(outcome),
   },
   {
     id: "generation_md",
-    defaultFrom: monthlyFrom,
+    defaultRanges: monthlyRanges,
     collect: (context) => collectGenerationMd(context).then(outcome),
   },
   {
     id: "network_supply_points",
-    defaultFrom: dailyFrom,
+    defaultRanges: dailyRanges,
     collect: (context) => collectNetworkSupplyPoints(context).then(outcome),
   },
   {
     // One current file with no dates. It ignores the range and is labelled with the run date.
     id: "generation_fleet",
-    defaultFrom: (_last, to) => to,
+    defaultRanges: (_held, to) => [{ from: to, to }],
     collect: async ({ today, ...context }) => ({
       records: [await collectGenerationFleet({ ...context, date: today })],
       notListed: 0,
