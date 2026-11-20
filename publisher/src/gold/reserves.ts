@@ -101,6 +101,7 @@ export async function publishReserves(
 
     const inputsSha256 = await inputFingerprint(
       silverDir,
+      goldDir,
       ANALYSIS_VERSION,
       INPUTS,
       completeness,

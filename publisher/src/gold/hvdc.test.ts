@@ -305,7 +305,7 @@ test("the rows carry the analysis version and the fingerprint of the input", asy
   await buildSilver();
   await publish("2026-10-31");
   const wanted = (
-    await hvdc.wantedVersions?.(silverDir, completenessView())
+    await hvdc.wantedVersions?.(silverDir, completenessView(), goldDir)
   )?.get("2026-10-31");
   for (const table of TABLES) {
     const rows = await query(

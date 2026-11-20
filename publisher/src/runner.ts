@@ -73,7 +73,7 @@ export async function runPublish(
     summaries.push(summary);
     try {
       const wanted = dataset.wantedVersions
-        ? await dataset.wantedVersions(silverDir, completeness)
+        ? await dataset.wantedVersions(silverDir, completeness, goldDir)
         : await bronzeVersions(bronzeDir, dataset.id);
       const held = options.force
         ? new Map<string, string>()

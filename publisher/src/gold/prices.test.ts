@@ -334,7 +334,9 @@ test("inputs_sha256 follows the bronze version and the analysis version", async 
   expect(await shaOf()).toBe(expected);
   expect(expected).not.toBe(first);
   expect(
-    (await prices.wantedVersions?.(silverDir, completenessView()))?.get(DATE),
+    (
+      await prices.wantedVersions?.(silverDir, completenessView(), goldDir)
+    )?.get(DATE),
   ).toBe(expected);
   for (const table of TABLES)
     for (const row of await readGold(table))

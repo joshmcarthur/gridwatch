@@ -88,6 +88,7 @@ export async function publishGoldPrices(
     await connection.run("SET threads = 1");
     const inputsSha256 = await inputFingerprint(
       silverDir,
+      goldDir,
       ANALYSIS_VERSION,
       INPUTS,
       completeness,
