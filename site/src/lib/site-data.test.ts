@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { formatTradingDate, loadSiteIndex } from "./site-data.ts";
+import { formatTradingDate, loadSiteDay, loadSiteIndex } from "./site-data.ts";
 
 const validIndex = {
   contract_version: 1,
@@ -66,6 +66,49 @@ test("loadSiteIndex throws when gold is not a SiteIndex", async () => {
   );
   process.env.DATA_ROOT = dataRoot;
   expect(() => loadSiteIndex()).toThrow();
+});
+
+test("loadSiteDay reads the fixture day when gold is absent", () => {
+  process.env.DATA_ROOT = dataRoot;
+  const day = loadSiteDay("2026-09-27");
+  expect(day.trading_date).toBe("2026-09-27");
+  expect(day.complete).toBe(true);
+});
+
+test("loadSiteDay throws when the date is not in the index", () => {
+  process.env.DATA_ROOT = dataRoot;
+  expect(() => loadSiteDay("1999-01-01")).toThrow(/1999-01-01/);
+});
+
+test("loadSiteDay reads a gold day when DATA_ROOT has a matching file", async () => {
+  const fixture = await readFile(
+    new URL("../../fixtures/days/2026-09-27.json", import.meta.url),
+    "utf8",
+  );
+  await mkdir(join(dataRoot, "gold/site/days"), { recursive: true });
+  await writeFile(
+    join(dataRoot, "gold/site/index.json"),
+    JSON.stringify({
+      contract_version: 1,
+      days: [
+        {
+          date: "2026-09-27",
+          path: "days/2026-09-27.json",
+          complete: true,
+          sections: { generation: "complete", prices: "complete" },
+          export_sha256: "a",
+        },
+      ],
+      latest_complete: {},
+      latest_complete_sections: {
+        generation: "2026-09-27",
+        prices: "2026-09-27",
+      },
+    }),
+  );
+  await writeFile(join(dataRoot, "gold/site/days/2026-09-27.json"), fixture);
+  process.env.DATA_ROOT = dataRoot;
+  expect(loadSiteDay("2026-09-27").trading_date).toBe("2026-09-27");
 });
 
 test("loadSiteIndex does not load gold from a cwd-relative data path", async () => {

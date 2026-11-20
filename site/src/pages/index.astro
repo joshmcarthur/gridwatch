@@ -1,10 +1,12 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { dailyPath } from "../lib/daily-page";
 import { formatTradingDate, loadSiteIndex } from "../lib/site-data";
 
 const index = loadSiteIndex();
 const generationDate = index.latest_complete_sections.generation;
 const pricesDate = index.latest_complete_sections.prices;
+const sampleDay = index.days.at(-1);
 ---
 
 <Layout
@@ -16,7 +18,19 @@ const pricesDate = index.latest_complete_sections.prices;
     <p>
       Gridwatch turns public market data into plain explanations of what
       happened on the New Zealand electricity system. This is a placeholder
-      homepage. Daily pages and charts are not on this build.
+      homepage. Charts are not on this build yet.
+      {
+        sampleDay ? (
+          <>
+            {" "}
+            Sample day:{" "}
+            <a href={dailyPath(sampleDay.date)}>
+              {formatTradingDate(sampleDay.date)}
+            </a>
+            .
+          </>
+        ) : null
+      }
     </p>
   </section>
 
