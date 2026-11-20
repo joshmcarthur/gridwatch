@@ -6,6 +6,7 @@
     "start": "node src/main.ts",
     "publish:dispatch-energy-prices": "node src/silver/dispatch-energy-prices.cli.ts",
     "publish:dispatch-reserve-prices": "node src/silver/dispatch-reserve-prices.cli.ts",
+    "publish:cleared-offers": "node src/silver/cleared-offers.cli.ts",
     "publish:network-supply-points": "node src/silver/network-supply-points.cli.ts",
     "publish:generation-fleet": "node src/silver/generation-fleet.cli.ts",
     "publish:nodal-prices-and-volumes": "node src/silver/nodal-prices-and-volumes.cli.ts",

@@ -6,6 +6,7 @@
     "start": "node src/main.ts",
     "collect:dispatch-energy-prices": "node src/electricity-authority/dispatch-energy-prices.cli.ts",
     "collect:dispatch-reserve-prices": "node src/electricity-authority/dispatch-reserve-prices.cli.ts",
+    "collect:cleared-offers": "node src/electricity-authority/cleared-offers.cli.ts",
     "collect:network-supply-points": "node src/electricity-authority/network-supply-points.cli.ts",
     "collect:generation-fleet": "node src/electricity-authority/generation-fleet.cli.ts",
     "collect:nodal-prices-and-volumes": "node src/electricity-authority/nodal-prices-and-volumes.cli.ts",
