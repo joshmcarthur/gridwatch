@@ -1,4 +1,13 @@
-import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import {
+  appendFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
@@ -13,6 +22,7 @@ import {
   completenessKey,
   saveCompleteness,
 } from "../silver/completeness.ts";
+import { periodsInTradingDate } from "../trading-time.ts";
 import {
   assertSiteDay,
   assertSiteIndex,
@@ -964,4 +974,134 @@ test("the runner exports on each run, rebuilds only the days that changed, and h
   expect(await run({ only: ["site_days"] })).toEqual([
     expect.objectContaining({ id: "site_days", upToDate: 2 }),
   ]);
+});
+
+/** Store `csv` in bronze the way the collector does, and add its manifest record. */
+async function archive(
+  bronzeDir: string,
+  dataset: string,
+  fileName: string,
+  dates: string[],
+  csv: string,
+) {
+  const sha256 = createHash("sha256").update(csv).digest("hex");
+  const path = `${dataset}/${sha256}/${fileName}`;
+  await mkdir(join(bronzeDir, dataset, sha256), { recursive: true });
+  await writeFile(join(bronzeDir, path), csv);
+  await appendFile(
+    join(bronzeDir, "manifest.jsonl"),
+    `${JSON.stringify({
+      dataset,
+      status: "new",
+      retrieved_at: "2026-11-20T00:00:01.000Z",
+      sha256,
+      path,
+      trading_dates: dates,
+    })}\n`,
+  );
+}
+
+/**
+ * A dispatch energy prices file for one date, with the three reference nodes. Each period has one
+ * row, published 10 seconds after the period starts. OTA is 80 + period, HAY 70 + period and BEN
+ * 60 + period.
+ */
+function syntheticDispatch(date: string): string {
+  const start =
+    Temporal.PlainDate.from(date).toZonedDateTime("Pacific/Auckland");
+  const rows = Array.from({ length: periodsInTradingDate(date) }, (_, i) => {
+    const period = i + 1;
+    const published = start
+      .add({ minutes: i * 30, seconds: 10 })
+      .toString({ fractionalSecondDigits: 3, timeZoneName: "never" });
+    return [
+      [date, period, published, "OTA2201", "NI", "N", 80 + period],
+      [date, period, published, "HAY2201", "NI", "N", 70 + period],
+      [date, period, published, "BEN2201", "SI", "N", 60 + period],
+    ].map((row) => row.join(","));
+  }).flat();
+  return [
+    "TradingDate,TradingPeriod,PublishDateTime,PointOfConnection,Island,IsProxyPriceFlag,DollarsPerMegawattHour",
+    ...rows,
+  ].join("\n");
+}
+
+const siteFixtures = join(
+  import.meta.dirname,
+  "..",
+  "..",
+  "..",
+  "site",
+  "fixtures",
+);
+const FIXTURE_DAY = join(siteFixtures, "days", "2026-09-27.json");
+const FIXTURE_INDEX = join(siteFixtures, "index.json");
+
+test("the committed sample day matches the exporter end to end, on real generation and synthetic prices", {
+  timeout: 60_000,
+}, async () => {
+  const bronzeDir = join(root, "bronze");
+  const silverDir = join(root, "silver");
+  const fixtureDir = join(import.meta.dirname, "..", "silver", "fixtures");
+  const generation = await readFile(
+    join(fixtureDir, "generation-md", "202609_Generation_MD.csv"),
+    "utf8",
+  );
+  const nsp = await readFile(
+    join(
+      fixtureDir,
+      "network-supply-points",
+      "20260106_NetworkSupplyPointsTable.csv",
+    ),
+    "utf8",
+  );
+  await archive(
+    bronzeDir,
+    "generation_md",
+    "202609_Generation_MD.csv",
+    ["2026-09-27"],
+    generation,
+  );
+  await archive(
+    bronzeDir,
+    "network_supply_points",
+    "20260106_NetworkSupplyPointsTable.csv",
+    ["2026-01-06"],
+    nsp,
+  );
+  await archive(
+    bronzeDir,
+    "dispatch_energy_prices",
+    "20260927_DispatchEnergyPrices.csv",
+    ["2026-09-27"],
+    syntheticDispatch("2026-09-27"),
+  );
+
+  // No range: a range would drop the 2026-01-06 network snapshot.
+  await runPublish({ bronzeDir, silverDir, goldDir });
+  const day = await readFile(
+    join(goldDir, "site", "days", "2026-09-27.json"),
+    "utf8",
+  );
+  const index = await readFile(join(goldDir, "site", "index.json"), "utf8");
+
+  if (process.env.UPDATE_SITE_FIXTURES) {
+    await mkdir(join(siteFixtures, "days"), { recursive: true });
+    await writeFile(FIXTURE_DAY, day);
+    await writeFile(FIXTURE_INDEX, index);
+  }
+  expect(day).toBe(await readFile(FIXTURE_DAY, "utf8"));
+  expect(index).toBe(await readFile(FIXTURE_INDEX, "utf8"));
+
+  // Hand-calculated anchors.
+  const built: unknown = JSON.parse(day);
+  assertSiteDay(built);
+  expect(built.periods).toHaveLength(46);
+  const [ota, hay] = built.prices.nodes;
+  expect(ota?.price[0]).toBe(81);
+  expect(hay?.price[0]).toBe(71);
+  const otaBen = built.prices.spreads.find(
+    (s) => s.from === "OTA2201" && s.to === "BEN2201",
+  );
+  expect(otaBen?.spread.every((value) => value === 20)).toBe(true);
 });
