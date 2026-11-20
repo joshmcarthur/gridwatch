@@ -10,6 +10,8 @@ import {
   generationMix,
   generationMixSummary,
   generationMixTable,
+  type MixPoint,
+  mixPointTitle,
 } from "./generation-mix.ts";
 
 const fixtureUnknown: unknown = fixtureJson;
@@ -53,27 +55,33 @@ function cells(count: number, set: Record<number, number | null>) {
   );
 }
 
+function valuedPoint(point: MixPoint | undefined) {
+  if (!point || point.kind === "gap") {
+    throw new Error("expected a valued period");
+  }
+  return point;
+}
+
 test("fixture period 1 splits hydro and wind into average MW", () => {
   const mix = generationMix(fixture);
   if (!mix) throw new Error("expected a mix");
-  const first = mix.points[0];
-  if (!first) throw new Error("expected a first period");
+  const first = valuedPoint(mix.points[0]);
   expect(mix.layers.map((layer) => layer.label)).toEqual([
     "Hydro",
     "Wind",
     "Solar",
   ]);
+  expect(first.kind).toBe("complete");
   expect(first.megawatts.hydro).toBeCloseTo(16.66, 3);
   expect(first.megawatts.wind).toBeCloseTo(136.226, 3);
   expect(first.primary).toBeCloseTo(152.886, 3);
-  expect(first.title).toContain("Wind 136.2 MW (89.1%)");
+  expect(mixPointTitle(first, mix.layers)).toContain("Wind 136.2 MW (89.1%)");
 });
 
 test("battery is shown apart and is not in the primary total", () => {
   const mix = generationMix(fixture);
   if (!mix) throw new Error("expected a mix");
-  const period15 = mix.points[14];
-  if (!period15) throw new Error("expected period 15");
+  const period15 = valuedPoint(mix.points[14]);
   expect(period15.megawatts.battery).toBeCloseTo(10.288, 3);
   expect(period15.primary).toBeCloseTo(79.848, 3);
   expect(mix.layers.map((layer) => layer.label)).not.toContain("Battery");
@@ -87,7 +95,7 @@ test("hydro average over the day matches the daily summary", () => {
   );
   if (!hydroDaily) throw new Error("expected a hydro daily row");
   const total = mix.points.reduce(
-    (sum, point) => sum + (point.megawatts.hydro ?? 0),
+    (sum, point) => (point.kind === "gap" ? sum : sum + point.megawatts.hydro),
     0,
   );
   expect(total / mix.points.length).toBeCloseTo(
@@ -125,23 +133,37 @@ test("two islands are summed, and a null in one island keeps the other", () => {
   });
   const mix = generationMix(day);
   if (!mix) throw new Error("expected a mix");
-  const [first, second, third, gap] = mix.points;
-  if (!first || !second || !third || !gap) throw new Error("expected periods");
+  const [firstRaw, secondRaw, thirdRaw, gap] = mix.points;
+  const first = valuedPoint(firstRaw);
+  const second = valuedPoint(secondRaw);
+  const third = valuedPoint(thirdRaw);
+  if (!gap) throw new Error("expected periods");
 
+  expect(first.kind).toBe("complete");
   expect(first.megawatts.hydro).toBeCloseTo(2, 6);
   expect(second.megawatts.hydro).toBeCloseTo(8, 6);
-  expect(first.incomplete).toBe(false);
 
+  expect(third.kind).toBe("incomplete");
   expect(third.megawatts.hydro).toBe(0);
-  expect(third.incomplete).toBe(true);
+  expect(mixPointTitle(third, mix.layers)).toContain(
+    "Some plant data missing, counted as 0",
+  );
 
-  expect(gap.gap).toBe(true);
-  expect(gap.megawatts.hydro).toBeNull();
-  expect(gap.primary).toBeNull();
-  expect(gap.incomplete).toBe(false);
+  expect(gap.kind).toBe("gap");
+  expect(gap).not.toHaveProperty("megawatts");
+  expect(gap).not.toHaveProperty("primary");
+  expect(mixPointTitle(gap, mix.layers)).toBe(
+    `${gap.time} · No generation numbers for this period`,
+  );
 
   expect(first.primary).toBeCloseTo(12, 6);
   expect(first.megawatts.battery).toBeCloseTo(2, 6);
+
+  const gapArea = mix.areas.find(
+    (area) => area.start.getTime() === gap.start.getTime(),
+  );
+  expect(gapArea?.base).toBeNull();
+  expect(gapArea?.top).toBeNull();
 });
 
 test("unmapped is a stacked layer and counts in the primary total", () => {
@@ -160,7 +182,7 @@ test("unmapped is a stacked layer and counts in the primary total", () => {
   expect(mix.layers).toEqual([
     { fuel: "unmapped", label: "Not yet matched to a plant" },
   ]);
-  expect(mix.points[0]?.primary).toBeCloseTo(8, 6);
+  expect(valuedPoint(mix.points[0]).primary).toBeCloseTo(8, 6);
 });
 
 test("a fuel that is all zero is dropped from the stack", () => {
@@ -228,6 +250,9 @@ test("a day with only battery has no layers, and its share text is empty", () =>
   const mix = generationMix(day);
   if (!mix) throw new Error("expected a mix");
   expect(mix.layers).toEqual([]);
+  expect(generationMixSummary(mix)).toBe(
+    "No fuel made power in the periods that have data.",
+  );
   const table = generationMixTable(mix);
   expect(table.headers.at(-1)).toBe(BATTERY_HEADER);
   expect(table.rows[0]?.[1]).toBe("0.0 MW");

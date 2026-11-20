@@ -162,7 +162,7 @@ export function completenessNotice(day: CompletenessSource): {
 function generationHeadline(day: HeadlineSource): string {
   const totals = day.generation.totals;
   if (day.generation.state === "missing" || totals === null) {
-    return "We do not have generation numbers for this day.";
+    return "Generation numbers for this day are missing.";
   }
   const made = energyFormat.format(totals.primary_megawatt_hours);
   const battery = energyFormat.format(totals.battery_megawatt_hours);
