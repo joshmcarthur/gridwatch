@@ -38,7 +38,7 @@ Dispatch energy prices ([#6](https://github.com/joshmcarthur/gridwatch/issues/6)
 - **No `processed_at` in silver.** It would change on every run. Silver stays repeatable. ADR-0003 carries a matching amendment. Gold may use `processed_at`.
 - **Layout.** `silver/<dataset>/trading_date=YYYY-MM-DD/data.parquet`. `writeParquetAtomically` writes a `.tmp` file and renames it. An invalid day writes nothing and leaves an older partition as it was.
 - **Repeatable.** The same bronze version gives the same Parquet bytes. The `ORDER BY` must be a total order, so it must end with the unique key. Test this with a byte comparison.
-- **Validation** returns `ok`, `missing` (no bronze file) or `invalid` (with messages). The CLI reports invalid days, finishes the range and exits 1. Check that no row falls outside the expected set. A join can drop such rows without a sign.
+- **Validation** returns `complete`, `partial` (missing periods listed), `missing` (no bronze file) or `invalid` (with messages). An invalid day writes nothing. A partial day (some expected trading periods have no rows) writes the rows that exist, because the source sometimes omits periods (the owner decided this on #6: "Publish as partial"). The CLI prints `<date>: PARTIAL <rows> rows, missing periods 24,25` and still exits 0. It reports invalid days, finishes the range and exits 1. Silver has no completeness column or sidecar. Completeness tracking ([#14](https://github.com/joshmcarthur/gridwatch/issues/14)) compares expected and actual periods in silver. Check that no row falls outside the expected set. A join can drop such rows without a sign.
 - **Collector errors.** A failed day goes in `failed`. The run continues with the next day.
 - **Querying.** `SELECT … FROM read_parquet('data/silver/<dataset>/**/*.parquet', hive_partitioning = true)`. The file also holds `trading_date`, so the query works with or without the option.
 - **Dates.** The CLI takes a range and defaults to yesterday. The backfill runner picks the range (12 months back from the run date, computed at run time).
@@ -53,19 +53,21 @@ Replace `<dataset>` with the dataset ID in `snake_case` for constants and in `ke
 4. Copy `collector/src/electricity-authority/dispatch-energy-prices.test.ts` and change the names, folder and file names.
 5. Add `"collect:<kebab>": "node src/electricity-authority/<kebab>.cli.ts"` to `collector/package.json`.
 6. Copy `publisher/src/silver/dispatch-energy-prices.ts` and `.cli.ts`. Change `DATASET` and the function names. Rewrite the `CREATE TEMP TABLE` casts for the new columns, using the ADR-0003 column names. Rewrite the validation query and its error messages. Write the validation rule in the doc comment above the function. Rewrite the final `SELECT` and keep a total `ORDER BY`.
-7. Copy `publisher/src/silver/dispatch-energy-prices.test.ts`. Change the names, the expected row counts and the expected UTC times. Keep these tests: normal day, DST day, identical bytes on a second run, missing, one invalid case for each validation check, newer bronze version wins, invalid day keeps the older partition.
+7. Copy `publisher/src/silver/dispatch-energy-prices.test.ts`. Change the names, the expected row counts and the expected UTC times. Keep these tests: normal day, DST day, identical bytes on a second run, partial day (missing periods are listed and the other rows are written), missing, one invalid case for each validation check, newer bronze version wins, invalid day keeps the older partition.
 8. Add `"publish:<kebab>": "node src/silver/<kebab>.cli.ts"` to `publisher/package.json`.
 9. Run `npm ci && npm run lint && npm run typecheck && npm test`. Use `npm run format` to fix formatting. On a machine with an older Node, run each command through `mise exec node@26 --`.
 10. Run both CLIs for one recent day into a temporary `DATA_ROOT` and compare the row counts with the source file: `DATA_ROOT=$(mktemp -d) npm run collect:<kebab> -w collector` then `npm run publish:<kebab> -w publisher`.
 
 ### Validation for dispatch energy prices
 
-The source publishes prices at irregular times, about 278 `PublishDateTime` values a day, not 288 regular intervals. A count of 5-minute intervals does not fit. A day is valid when:
+The source publishes prices at irregular times, about 278 `PublishDateTime` values a day, not 288 regular intervals. A count of 5-minute intervals does not fit. A day is **invalid** (nothing written) when:
 
-1. The file has rows, and every `TradingDate` equals the requested date.
-2. Every trading period of the day is present (46, 48 or 50, from `periodsInTradingDate`), and no row has a period outside that range.
-3. The key `(TradingPeriod, PublishDateTime, PointOfConnection)` has no duplicates.
-4. Every period, time, point of connection and price parses. A price is a finite number. `IsProxyPriceFlag` is `Y` or `N`.
+1. The file has no rows, or a row has a `TradingDate` other than the requested date.
+2. A row has a trading period outside the range of the day (1 to 46, 48 or 50, from `periodsInTradingDate`).
+3. The key `(TradingPeriod, PublishDateTime, PointOfConnection)` has duplicates.
+4. A period, time, point of connection or price does not parse, a price is not finite, or `IsProxyPriceFlag` is not `Y` or `N`.
+
+A day is **partial** (written) when one or more periods of the day have no rows. Otherwise it is **complete**.
 
 ### Silver columns, dispatch energy prices
 

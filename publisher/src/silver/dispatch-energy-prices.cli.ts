@@ -13,7 +13,11 @@ for (const date of eachDate(from, to)) {
     silverDir: silver,
     date,
   });
-  if (result.status === "ok") console.log(`${date}: ${result.rows} rows`);
+  if (result.status === "complete") console.log(`${date}: ${result.rows} rows`);
+  else if (result.status === "partial")
+    console.log(
+      `${date}: PARTIAL ${result.rows} rows, missing periods ${result.missingPeriods.join(",")}`,
+    );
   else if (result.status === "missing") console.log(`${date}: no bronze file`);
   else {
     invalid++;

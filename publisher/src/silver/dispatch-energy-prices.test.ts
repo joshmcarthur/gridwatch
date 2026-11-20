@@ -88,8 +88,8 @@ test("publishes a normal 48-period day with UTC times and provenance", async () 
     await fixture("2026-11-18"),
   );
   const result = await publish("2026-11-18");
-  expect(result).toMatchObject({ status: "ok", rows: 576 });
-  if (result.status !== "ok") return;
+  expect(result).toMatchObject({ status: "complete", rows: 576 });
+  if (result.status !== "complete") return;
   expect(result.path).toBe(
     join(silverDir, DATASET, "trading_date=2026-11-18", "data.parquet"),
   );
@@ -117,8 +117,8 @@ test("publishes a normal 48-period day with UTC times and provenance", async () 
 test("publishes a 46-period DST day", async () => {
   await archive("2026-09-27", await fixture("2026-09-27"));
   const result = await publish("2026-09-27");
-  expect(result).toMatchObject({ status: "ok", rows: 544 });
-  if (result.status !== "ok") return;
+  expect(result).toMatchObject({ status: "complete", rows: 544 });
+  if (result.status !== "complete") return;
   const [row] = await query(
     result.path,
     `SELECT count(DISTINCT trading_period) AS periods,
@@ -136,10 +136,32 @@ test("publishes a 46-period DST day", async () => {
 test("publishing the same day again gives identical bytes", async () => {
   await archive("2026-11-18", await fixture("2026-11-18"));
   const first = await publish("2026-11-18");
-  if (first.status !== "ok") throw new Error("expected ok");
+  if (first.status !== "complete") throw new Error("expected ok");
   const before = await readFile(first.path);
   await publish("2026-11-18");
   expect(await readFile(first.path)).toEqual(before);
+});
+
+test("publishes a day with missing periods as partial", async () => {
+  const lines = (await fixture("2026-11-18")).trimEnd().split("\n");
+  const kept = lines.filter(
+    (l) => !l.startsWith("2026-11-18,24,") && !l.startsWith("2026-11-18,25,"),
+  );
+  await archive("2026-11-18", `${kept.join("\n")}\n`);
+  const result = await publish("2026-11-18");
+  expect(result).toMatchObject({
+    status: "partial",
+    rows: kept.length - 1,
+    missingPeriods: [24, 25],
+  });
+  if (result.status !== "partial") return;
+  const [row] = await query(
+    result.path,
+    `SELECT count(*) AS n, count(DISTINCT trading_period) AS periods,
+            count(*) FILTER (WHERE trading_period IN (24, 25)) AS gap
+     FROM read_parquet($FILE)`,
+  );
+  expect(row).toEqual({ n: String(kept.length - 1), periods: "46", gap: "0" });
 });
 
 test("reports a day with no bronze file as missing", async () => {
@@ -150,11 +172,6 @@ test("reports a day with no bronze file as missing", async () => {
 });
 
 test.each([
-  [
-    "a missing period",
-    (lines: string[]) => lines.filter((l) => !l.startsWith("2026-11-18,5,")),
-    "47 of 48 trading periods present",
-  ],
   [
     "a duplicate key",
     (lines: string[]) => [...lines, lines[1] as string],
@@ -215,7 +232,7 @@ test("uses the version with the newer manifest record", async () => {
     "2026-11-20T00:00:00.000Z",
   );
   const result = await publish("2026-11-18");
-  if (result.status !== "ok") throw new Error("expected ok");
+  if (result.status !== "complete") throw new Error("expected ok");
   const [row] = await query(
     result.path,
     "SELECT any_value(bronze_sha256) AS sha, max(dollars_per_megawatt_hour) AS top FROM read_parquet($FILE)",
@@ -227,7 +244,7 @@ test("an invalid day leaves the older partition untouched", async () => {
   const lines = (await fixture("2026-11-18")).trimEnd().split("\n");
   await archive("2026-11-18", `${lines.join("\n")}\n`);
   const first = await publish("2026-11-18");
-  if (first.status !== "ok") throw new Error("expected ok");
+  if (first.status !== "complete") throw new Error("expected ok");
   const before = await readFile(first.path);
   await archive(
     "2026-11-18",

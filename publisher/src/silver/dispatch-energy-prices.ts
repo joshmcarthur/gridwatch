@@ -17,10 +17,11 @@ export const DATASET = "dispatch_energy_prices";
  * A day that fails validation writes nothing and any earlier partition stays as it was.
  * There is no `processed_at` column: it would change on every run (ADR-0003, ADR-0005).
  *
- * Valid day: the file has rows for this date only; every trading period 1..N is present
- * and none outside it (publish times are irregular, so we do not count intervals); the key
- * (period, publish time, point of connection) is unique; every value parses and the proxy
- * flag is Y or N.
+ * Invalid day (nothing written): no rows; a row for another date; a period outside 1..N;
+ * a duplicate key (period, publish time, point of connection); a value that does not parse
+ * or a non-finite price; a proxy flag that is not Y or N. Publish times are irregular, so
+ * we do not count intervals.
+ * Partial day (written): one or more periods 1..N have no rows. The result lists them.
  */
 export async function publishDispatchEnergyPrices(options: {
   bronzeDir: string;
@@ -63,10 +64,10 @@ export async function publishDispatchEnergyPrices(options: {
            count(*) FILTER (WHERE proxy_flag IS DISTINCT FROM 'Y' AND proxy_flag IS DISTINCT FROM 'N') AS bad_flags,
            count(*) FILTER (WHERE trading_period NOT BETWEEN 1 AND ${periods}) AS bad_periods,
            count(*) - count(DISTINCT (trading_period, source_published_at, point_of_connection)) AS duplicates,
-           count(DISTINCT trading_period) FILTER (WHERE trading_period BETWEEN 1 AND ${periods}) AS periods_present
+           list(DISTINCT trading_period) FILTER (WHERE trading_period BETWEEN 1 AND ${periods}) AS present
          FROM prices`,
       )
-    ).getRowObjectsJson() as Array<Record<string, string>>;
+    ).getRowObjectsJson() as Array<Record<string, unknown>>;
     const n = (key: string) => Number(check?.[key]);
     const errors: string[] = [];
     if (n("rows") === 0) errors.push("no rows");
@@ -85,10 +86,6 @@ export async function publishDispatchEnergyPrices(options: {
         `${n("bad_periods")} rows have a trading period outside 1 to ${periods}`,
       );
     if (n("duplicates") > 0) errors.push(`${n("duplicates")} duplicate keys`);
-    if (n("periods_present") !== periods)
-      errors.push(
-        `${n("periods_present")} of ${periods} trading periods present`,
-      );
     if (errors.length > 0) return { date, status: "invalid", errors };
 
     // Map each period to its UTC span with the time model.
@@ -118,7 +115,16 @@ export async function publishDispatchEnergyPrices(options: {
        ORDER BY p.trading_period, p.source_published_at, p.point_of_connection`,
       path,
     );
-    return { date, status: "ok", rows: n("rows"), path };
+    // Missing periods do not make a day invalid. The partition holds the rows that exist.
+    const present = new Set(((check?.present ?? []) as unknown[]).map(Number));
+    const missingPeriods = Array.from(
+      { length: periods },
+      (_, i) => i + 1,
+    ).filter((period) => !present.has(period));
+    const rows = n("rows");
+    return missingPeriods.length === 0
+      ? { date, status: "complete", rows, path }
+      : { date, status: "partial", rows, path, missingPeriods };
   } finally {
     connection.closeSync();
   }

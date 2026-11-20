@@ -3,7 +3,15 @@ import { basename, dirname, join } from "node:path";
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 export type PublishResult =
-  | { date: string; status: "ok"; rows: number; path: string }
+  | { date: string; status: "complete"; rows: number; path: string }
+  /** Some expected trading periods have no rows. The partition holds the rows that exist. */
+  | {
+      date: string;
+      status: "partial";
+      rows: number;
+      path: string;
+      missingPeriods: number[];
+    }
   | { date: string; status: "missing" }
   | { date: string; status: "invalid"; errors: string[] };
 
