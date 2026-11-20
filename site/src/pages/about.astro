@@ -1,0 +1,47 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+  title="About Gridwatch"
+  description="Independent of the Electricity Authority. Built from public EMI data."
+>
+  <article class="prose">
+    <h1>About Gridwatch</h1>
+    <p>
+      Gridwatch is an independent site about the New Zealand electricity market,
+      put together from the Electricity Authority's public EMI files. The
+      Authority doesn't run this, and neither does the grid operator.
+    </p>
+    <p>
+      It's for people who want to know what the market did, without working in
+      it. When prices jump we don't treat that as a scandal or a win; we stick
+      to what the numbers show.
+    </p>
+    <p>This isn't a feed for running the power system.</p>
+  </article>
+</Layout>
+
+<style>
+  .prose {
+    max-width: var(--measure-prose);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: var(--text-display);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--text-body);
+    line-height: 1.55;
+    color: var(--color-ink-muted);
+  }
+</style>
