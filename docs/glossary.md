@@ -36,11 +36,15 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Grid exit point and grid injection point.** Places where power leaves or enters the grid. The brief lists them as possible entities. No source we use names them, so the model has none. See [ADR-0008](adr/0008-entity-model.md).
 
+**Grid load (modelled).** Real-time dispatch (RTD) model load at grid exit points, net of embedded generation behind them, plus dispatchable and battery load. It is not metered consumption. Gold sums it from Nodal Prices and Volumes, for each island and trading period. See [ADR-0018](adr/0018-energy-balance.md) and [sources 3.3](sources.md#33-nodal-prices-and-volumes).
+
 **HVDC.** The high-voltage direct current link between the North and South Islands. Its terminals are at Benmore (`BEN2201`) in the South Island and Haywards (`HAY2201`) in the North Island. These two POCs are the only ones in the reserve price files. The metered flow at both ends is in HVDC_Flows ([sources 3.7](sources.md#37-hvdc-flows), [ADR-0016](adr/0016-hvdc-flows.md)). The brief lists "how does the HVDC link work" as a topic to explain.
 
 **Offtake and injection.** The two directions of metered HVDC flow at a terminal. Offtake (`X`) is energy taken from the AC grid into the link. Injection (`I`) is energy put from the link into the AC grid. Each terminal has both.
 
 **Link losses.** The energy that enters the link and does not leave it. Gold takes it as Benmore offtake plus Haywards offtake, minus Benmore injection and Haywards injection ([ADR-0016](adr/0016-hvdc-flows.md)).
+
+**HVDC import.** The energy that an island receives over the HVDC link in a period, in MWh. For the North Island it is the energy received at Haywards. For the South Island it is minus the energy sent at Benmore. The sign is right in both directions, and the two islands' imports add up to minus the link losses. See [ADR-0018](adr/0018-energy-balance.md).
 
 **Northward and southward.** The two directions of transfer across the HVDC link. Northward means from the South Island to the North Island. Gold reports the sign of the transfer as positive when it is northward, measured at Haywards. The direction is `none` when the two ends disagree or the link is idle.
 
@@ -116,6 +120,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 **Complete, partial, missing and invalid.** The result of publishing a day. Complete: all expected periods have rows. Partial: some periods have no rows, and silver holds the rows that exist. Missing: no data for the date. Invalid: a check failed, and nothing is written. See [ADR-0005](adr/0005-dataset-pattern.md).
 
 **Entity.** A thing that appears in several datasets under different IDs, such as a POC, plant, unit or participant. See [ADR-0008](adr/0008-entity-model.md).
+
+**Energy-balance residual.** For an island and a period: generation plus HVDC import, minus grid load (modelled). Gold keeps it as a column and never adjusts it. It holds what the three sources do not explain: AC losses, the gap between RTD model load and metered generation, generation that Generation_MD omits, and embedded generation counted twice. See [ADR-0018](adr/0018-energy-balance.md).
 
 **`event_start_utc` and `event_end_utc`.** The UTC start (included) and end (excluded) of a trading period or dispatch interval. They are unambiguous across the daylight saving change. See [ADR-0003](adr/0003-time-column-naming.md).
 
