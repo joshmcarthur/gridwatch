@@ -5,6 +5,8 @@
   "scripts": {
     "start": "node src/main.ts",
     "collect:dispatch-energy-prices": "node src/electricity-authority/dispatch-energy-prices.cli.ts",
+    "collect:network-supply-points": "node src/electricity-authority/network-supply-points.cli.ts",
+    "collect:generation-fleet": "node src/electricity-authority/generation-fleet.cli.ts",
     "typecheck": "tsc -p ."
   }
 }
