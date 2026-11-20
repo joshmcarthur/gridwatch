@@ -36,7 +36,13 @@ A date that throws keeps any previous row. The run reports the failure. It does 
 
 `publisher status` prints the latest `complete` date for each dataset. A dataset with none prints `none`.
 
-`readCompleteness(silverDir, dataset, date)` is the read helper. Gold should call it from `inputsComplete` instead of counting periods in the silver files. That function is on the gold branch (issue #16) and is not on this branch.
+Gold reads this run's rows, in memory. `runPublish` loads the table once at the start and passes a read-only view of the map to each gold `publish` and `wantedVersions`. Silver datasets run before gold, so the view already holds their rows from this run. Gold does not read the file from disk, because the file may be a run behind. `readCompleteness(silverDir, registry, dataset, date)` is the disk read helper. It takes the registry as an argument, because `completeness.ts` must not import `datasets.ts`, which imports gold.
+
+The runner saves the table after each silver dataset, not only at the end. A run that crashes keeps the rows of the datasets that finished. Gold has no rows in this table.
+
+Two runs that overlap, for example a cron run and a backfill, each hold their own copy of the map and each rewrite the whole file. The last writer wins, and the other run's new rows are lost until a later run records them again. A skipped date with no row is filled again, and an `invalid` day is recorded again on its next publish, so the table heals. This is acceptable for a single cron host.
+
+The entity mapping tables have no row in this table: they have no trading periods and no publish status of their own for a day. Gold counts an entity table as `complete` for a date when its partition exists.
 
 ## Rationale
 
@@ -51,7 +57,7 @@ Thermo-nuclear plan review: Approve. The row is written from `PublishResult` ins
 ## Consequences
 
 - A reader can see that the newest bronze version failed validation. The fact partition can still be the older complete day ([ADR-0005](0005-dataset-pattern.md)).
-- Gold refuses a day that is not `complete`, or it marks the output incomplete. It uses `readCompleteness`. It does not count periods again.
+- Gold marks an output incomplete when an input day is not `complete` ([ADR-0011](0011-gold-table-pattern.md)). It reads the in-memory rows of the run.
 - `source_published_at` stays null until `PublishResult` carries a day-level time.
 - Deleting `silver/_completeness/data.parquet` does not republish fact partitions. The next run rebuilds the rows from the partitions it skipped, and from the publish results of the dates it publishes. An `invalid` day is recorded again only when publish returns `invalid`, which the runner already retries ([ADR-0009](0009-runner-default-mode.md)).
 - The 22-day gap and a lagged Generation_MD day do not appear as rows. They read as `missing`.
