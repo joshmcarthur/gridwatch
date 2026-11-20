@@ -112,7 +112,14 @@ export async function publishGeneration(
       periodCheck.complete && inputStatusesComplete(view, INPUTS, date);
     const stamp = goldStamp(
       ANALYSIS_VERSION,
-      await inputFingerprint(silverDir, ANALYSIS_VERSION, INPUTS, view, date),
+      await inputFingerprint(
+        silverDir,
+        goldDir,
+        ANALYSIS_VERSION,
+        INPUTS,
+        view,
+        date,
+      ),
       complete ? "true" : "false",
     );
 

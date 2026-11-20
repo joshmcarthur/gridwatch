@@ -23,8 +23,16 @@ import { periodsInTradingDate } from "../trading-time.ts";
 
 /** A silver table that a gold table reads, and the column that holds its version. */
 export interface GoldInput {
-  /** The silver folder, for example `generation_md`. */
+  /** The table folder, in silver or in gold (see `layer`), for example `generation_md`. */
   table: string;
+  /**
+   * The layer that holds the table. Default `silver`. A `gold` input is read from `goldDir`.
+   * It must use `versionColumn: "inputs_sha256"` and `completenessDataset: null`: gold has no
+   * `_completeness` row (ADR-0011), and its `inputs_sha256` already holds the status of its own
+   * inputs. A gold table that reads gold must come after that gold table in the registry
+   * (ADR-0018).
+   */
+  layer?: "silver" | "gold";
   /** `bronze_sha256` for a dataset with a bronze file, `inputs_sha256` for a derived table. */
   versionColumn: VersionColumn;
   /**
@@ -34,6 +42,10 @@ export interface GoldInput {
    */
   completenessDataset: string | null;
 }
+
+/** The directory that holds the partitions of an input. */
+const inputRoot = (silverDir: string, goldDir: string, input: GoldInput) =>
+  input.layer === "gold" ? goldDir : silverDir;
 
 /** The `_completeness` status of an input on a date. No row counts as `missing`. */
 const inputStatus = (
@@ -116,12 +128,12 @@ const dateFingerprint = (
   );
 
 /**
- * The fingerprint that a build would write, for each date on which every input has a silver
- * partition. The runner compares it with the value that gold holds (ADR-0009, ADR-0011).
+ * The fingerprint that a build would write, for each date on which every input has a partition. The runner compares it with the value that gold holds (ADR-0009, ADR-0011).
  * It reads each input table once, not once for each date.
  */
 export async function wantedFingerprints(
   silverDir: string,
+  goldDir: string,
   analysisVersion: number,
   inputs: readonly GoldInput[],
   completeness: CompletenessView,
@@ -129,7 +141,7 @@ export async function wantedFingerprints(
   const versions = await Promise.all(
     inputs.map((input) =>
       partitionVersions(
-        silverDir,
+        inputRoot(silverDir, goldDir, input),
         input.table,
         "trading_date",
         input.versionColumn,
@@ -157,6 +169,7 @@ export async function wantedFingerprints(
  */
 export async function inputFingerprint(
   silverDir: string,
+  goldDir: string,
   analysisVersion: number,
   inputs: readonly GoldInput[],
   completeness: CompletenessView,
@@ -168,7 +181,7 @@ export async function inputFingerprint(
       input,
       (
         await partitionVersions(
-          silverDir,
+          inputRoot(silverDir, goldDir, input),
           input.table,
           "trading_date",
           input.versionColumn,
@@ -236,9 +249,10 @@ export function goldDataset(options: {
     partitionKey: "trading_date",
     versionColumn: "inputs_sha256",
     partitionRoot: ({ goldDir }) => goldDir,
-    wantedVersions: (silverDir, completeness) =>
+    wantedVersions: (silverDir, completeness, goldDir) =>
       wantedFingerprints(
         silverDir,
+        goldDir,
         options.analysisVersion,
         options.inputs,
         completeness,

@@ -44,10 +44,14 @@ export interface PublisherDataset {
    * Snapshots and entity mappings leave this unset.
    */
   countsTradingPeriods?: boolean;
-  /** The version each date should hold, from silver. Default: the manifest (bronze). */
+  /**
+   * The version each date should hold, from silver and, for a gold table that reads gold, from
+   * `goldDir`. Default: the manifest (bronze).
+   */
   wantedVersions?(
     silverDir: string,
     completeness: CompletenessView,
+    goldDir: string,
   ): Promise<Map<string, string>>;
   /** Publish the partition of one date. */
   publish(options: {

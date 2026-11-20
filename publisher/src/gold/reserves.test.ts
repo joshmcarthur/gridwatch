@@ -392,7 +392,7 @@ test("rows carry the analysis version, the fingerprint and the completeness flag
   });
   expect(result.status).toBe("complete");
   const wanted = (
-    await reserves.wantedVersions?.(silverDir, completenessView())
+    await reserves.wantedVersions?.(silverDir, completenessView(), goldDir)
   )?.get(DATE);
   for (const table of TABLES) {
     const rows = await readGold(table);

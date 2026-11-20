@@ -144,6 +144,7 @@ export async function publishHvdc(
 
     const fingerprint = await inputFingerprint(
       silverDir,
+      goldDir,
       ANALYSIS_VERSION,
       INPUTS,
       view,
