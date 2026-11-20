@@ -45,6 +45,8 @@ Two one-shot jobs bring `data/` up to date. Run the collector, then the publishe
 docker compose run --rm collector && docker compose run --rm publisher && docker compose run --rm site-build
 ```
 
+The jobs run as `HOST_UID:HOST_GID` (default 1000:1000) so `data/` and `site-out/` belong to you. Set both to your user if it is not 1000: `export HOST_UID=$(id -u) HOST_GID=$(id -g)`.
+
 - **First run.** Each dataset backfills the last 12 months, computed from the run date. This is about 7 GB and about 1.2 hours ([`docs/sources.md`](docs/sources.md) section 4). Make sure the disk has room. `docker compose up` runs the same jobs.
 - **Later runs.** The collector fetches the trailing 5 days, and any date or month of the 12-month window that it does not hold (a failed day, or a gap). The monthly datasets (Generation_MD and HVDC_Flows) are checked again for the last 3 months. The publisher publishes the days that are new or whose bronze file changed. A run with nothing new changes nothing.
 - **A range.** `--from YYYY-MM-DD --to YYYY-MM-DD` replaces the default range. `--dataset <id>` limits the run (repeat it for more). The publisher also takes `--force` to publish up-to-date days again. Older data is never deleted.
