@@ -2,6 +2,10 @@ import { publishClearedOffers } from "./silver/cleared-offers.ts";
 import type { PublishResult } from "./silver/common.ts";
 import { publishDispatchEnergyPrices } from "./silver/dispatch-energy-prices.ts";
 import { publishDispatchReservePrices } from "./silver/dispatch-reserve-prices.ts";
+import {
+  entityWantedVersions,
+  publishEntityMappings,
+} from "./silver/entity-mappings.ts";
 import { publishGenerationFleet } from "./silver/generation-fleet.ts";
 import { publishGenerationMd } from "./silver/generation-md.ts";
 import { publishNetworkSupplyPoints } from "./silver/network-supply-points.ts";
@@ -12,6 +16,18 @@ export interface PublisherDataset {
   id: string;
   /** The partition folder is `<partitionKey>=YYYY-MM-DD`. */
   partitionKey: "trading_date" | "snapshot_date";
+  /**
+   * The silver folder that holds the partitions, when it differs from `id`. The entity mappings
+   * write several tables, and the runner reads the first.
+   */
+  table?: string;
+  /**
+   * The column that holds the input version of a silver row. Default `bronze_sha256`. A dataset
+   * with no bronze file of its own uses a fingerprint of its silver inputs.
+   */
+  versionColumn?: string;
+  /** The version each date should hold, from silver. Default: the manifest (bronze). */
+  wantedVersions?(silverDir: string): Promise<Map<string, string>>;
   /** Publish the silver partition of one date. */
   publish(options: {
     bronzeDir: string;
@@ -59,5 +75,15 @@ export const datasets: PublisherDataset[] = [
     id: "generation_fleet",
     partitionKey: "snapshot_date",
     publish: publishGenerationFleet,
+  },
+  // Last: it reads the silver of the datasets above (ADR-0008).
+  {
+    id: "entity_mappings",
+    table: "entity_points_of_connection",
+    versionColumn: "inputs_sha256",
+    partitionKey: "trading_date",
+    wantedVersions: entityWantedVersions,
+    publish: ({ silverDir, date }) =>
+      publishEntityMappings({ silverDir, date }),
   },
 ];

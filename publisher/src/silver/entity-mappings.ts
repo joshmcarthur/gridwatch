@@ -55,6 +55,114 @@ async function partitions(silverDir: string, dataset: string) {
 const files = (list: ReadonlyArray<readonly [string, string]>) =>
   `[${list.map(([, file]) => lit(file)).join(", ")}]`;
 
+type Partition = readonly [date: string, file: string];
+
+/** Every silver partition that the entity mappings read, oldest first. */
+async function loadPartitions(silverDir: string) {
+  return {
+    nsp: await partitions(silverDir, "network_supply_points"),
+    fleet: await partitions(silverDir, "generation_fleet"),
+    dispatch: await partitions(silverDir, "dispatch_energy_prices"),
+    generation: await partitions(silverDir, "generation_md"),
+    nodal: await partitions(silverDir, "nodal_prices_and_volumes"),
+  };
+}
+
+/**
+ * The partitions that one date reads (see `publishEntityMappings`). Undefined when there is no
+ * NSP snapshot on or before the date.
+ */
+function pickInputs(
+  all: Awaited<ReturnType<typeof loadPartitions>>,
+  date: string,
+) {
+  const nsp = all.nsp.findLast(([snapshot]) => snapshot <= date);
+  if (!nsp) return undefined;
+  const upTo = (list: Partition[]) => list.filter(([d]) => d <= date);
+  const dispatch = upTo(all.dispatch);
+  const generation = upTo(all.generation);
+  return {
+    nsp,
+    fleet: all.fleet.findLast(([snapshot]) => snapshot <= date) ?? all.fleet[0],
+    dispatch,
+    generation,
+    nodalDay: all.nodal.filter(([d]) => d === date),
+    dispatchDay: dispatch.filter(([d]) => d === date),
+    generationDay: generation.filter(([d]) => d === date),
+  };
+}
+
+const inputFiles = (picked: NonNullable<ReturnType<typeof pickInputs>>) => [
+  picked.nsp,
+  ...(picked.fleet ? [picked.fleet] : []),
+  ...picked.dispatch,
+  ...picked.generation,
+  ...picked.nodalDay,
+];
+
+/** The `inputs_sha256` value: the bronze version behind each input partition, by path. */
+function fingerprint(
+  silverDir: string,
+  inputs: Partition[],
+  shaOf: Map<string, string>,
+): string {
+  return createHash("sha256")
+    .update(
+      inputs
+        .map(([, file]) => `${relative(silverDir, file)} ${shaOf.get(file)}`)
+        .sort()
+        .join("\n"),
+    )
+    .digest("hex");
+}
+
+/**
+ * The `inputs_sha256` that a build would write, for each date that has dispatch, nodal or
+ * Generation_MD silver and an NSP snapshot. The runner compares it with the stored value
+ * (ADR-0008, ADR-0009). It reads each input partition once, not once for each date.
+ */
+export async function entityWantedVersions(
+  silverDir: string,
+): Promise<Map<string, string>> {
+  const all = await loadPartitions(silverDir);
+  const wanted = new Map<string, string>();
+  const everything = [
+    ...all.nsp,
+    ...all.fleet,
+    ...all.dispatch,
+    ...all.generation,
+    ...all.nodal,
+  ];
+  if (everything.length === 0) return wanted;
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    const reader = await connection.runAndReadAll(
+      `SELECT DISTINCT filename, bronze_sha256
+       FROM read_parquet(${files(everything)}, filename = true, union_by_name = true)
+       ORDER BY filename, bronze_sha256`,
+    );
+    const shaOf = new Map(
+      (
+        reader.getRowObjectsJson() as Array<{
+          filename: string;
+          bronze_sha256: string;
+        }>
+      ).map((v) => [v.filename, v.bronze_sha256]),
+    );
+    const dates = new Set(
+      [...all.dispatch, ...all.generation, ...all.nodal].map(([d]) => d),
+    );
+    for (const date of [...dates].sort()) {
+      const picked = pickInputs(all, date);
+      if (picked)
+        wanted.set(date, fingerprint(silverDir, inputFiles(picked), shaOf));
+    }
+  } finally {
+    connection.closeSync();
+  }
+  return wanted;
+}
+
 /**
  * Publish the entity mapping tables for one trading date, one partition per table:
  * `<silverDir>/<table>/trading_date=<date>/data.parquet`. The tables hold the mapping that
@@ -84,27 +192,17 @@ export async function publishEntityMappings(options: {
 }): Promise<EntityMappingsResult> {
   const { silverDir, date } = options;
   const day = `DATE ${lit(date)}`;
-  const nsp = (await partitions(silverDir, "network_supply_points")).findLast(
-    ([snapshot]) => snapshot <= date,
-  );
-  if (!nsp) return { date, status: "missing" };
-  const fleets = await partitions(silverDir, "generation_fleet");
-  const fleet = fleets.findLast(([snapshot]) => snapshot <= date) ?? fleets[0];
-  const dispatch = (
-    await partitions(silverDir, "dispatch_energy_prices")
-  ).filter(([tradingDate]) => tradingDate <= date);
-  const generation = (await partitions(silverDir, "generation_md")).filter(
-    ([tradingDate]) => tradingDate <= date,
-  );
-  const sameDay = async (dataset: string) =>
-    (await partitions(silverDir, dataset)).filter(
-      ([tradingDate]) => tradingDate === date,
-    );
-  const nodalDay = await sameDay("nodal_prices_and_volumes");
-  const dispatchDay = dispatch.filter(([tradingDate]) => tradingDate === date);
-  const generationDay = generation.filter(
-    ([tradingDate]) => tradingDate === date,
-  );
+  const picked = pickInputs(await loadPartitions(silverDir), date);
+  if (!picked) return { date, status: "missing" };
+  const {
+    nsp,
+    fleet,
+    dispatch,
+    generation,
+    nodalDay,
+    dispatchDay,
+    generationDay,
+  } = picked;
 
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
@@ -355,29 +453,19 @@ export async function publishEntityMappings(options: {
       );
     }
 
-    // The fingerprint of the inputs: every bronze version behind the partitions read.
-    const inputs = [
-      nsp,
-      ...(fleet ? [fleet] : []),
-      ...dispatch,
-      ...generation,
-      ...nodalDay,
-    ];
+    const inputs = inputFiles(picked);
     const versions = await found(
       `SELECT DISTINCT filename, bronze_sha256
        FROM read_parquet(${files(inputs)}, filename = true, union_by_name = true)
        ORDER BY filename, bronze_sha256`,
     );
-    const inputsSha256 = createHash("sha256")
-      .update(
-        versions
-          .map(
-            (v) =>
-              `${relative(silverDir, String(v.filename))} ${v.bronze_sha256}`,
-          )
-          .join("\n"),
-      )
-      .digest("hex");
+    const inputsSha256 = fingerprint(
+      silverDir,
+      inputs,
+      new Map(
+        versions.map((v) => [String(v.filename), String(v.bronze_sha256)]),
+      ),
+    );
     const stamp = `${day} AS trading_date, ${lit(inputsSha256)} AS inputs_sha256`;
     const selects: Record<(typeof TABLES)[number], string> = {
       entity_points_of_connection: `SELECT ${stamp}, poc_id, substr(poc_id, 1, 3) AS site_id,

@@ -272,3 +272,60 @@ test("parseRunArgs", () => {
   expect(() => parseRunArgs(["--from", ""], today)).toThrow();
   expect(() => parseRunArgs(["--dataset", "nope"], today)).toThrow("Unknown");
 });
+
+test("entity mappings build last, settle, and rebuild when an input partition changes", async () => {
+  const nsp = await readFile(
+    join(
+      import.meta.dirname,
+      "silver",
+      "fixtures",
+      "network-supply-points",
+      "20260106_NetworkSupplyPointsTable.csv",
+    ),
+    "utf8",
+  );
+  await archive("network_supply_points", ["2026-01-06"], nsp);
+  await archive(DISPATCH, ["2026-09-27"], await fixture("2026-09-27"));
+  await archive(DISPATCH, ["2026-11-18"], await fixture("2026-11-18"));
+  const entity = (summaries: DatasetSummary[]) =>
+    summaryOf(summaries, "entity_mappings");
+  const table = (date: string) =>
+    join(
+      silverDir,
+      "entity_points_of_connection",
+      `trading_date=${date}`,
+      "data.parquet",
+    );
+
+  const first = await run();
+  expect(first.at(-1)?.id).toBe("entity_mappings");
+  expect(entity(first)).toMatchObject({
+    published: 2,
+    upToDate: 0,
+    failed: [],
+  });
+
+  // Nothing changed: nothing is written, and unmapped identifiers are not a failure.
+  const mtime = (await stat(table("2026-11-18"))).mtimeMs;
+  const second = await run();
+  expect(hasFailures(second)).toBe(false);
+  expect(entity(second)).toMatchObject({ published: 0, upToDate: 2 });
+  expect((await stat(table("2026-11-18"))).mtimeMs).toBe(mtime);
+
+  // The source rewrote the 18 Nov dispatch file. 27 Sep reads no later dispatch day, so only
+  // 18 Nov rebuilds.
+  const csv = await fixture("2026-11-18");
+  await archive(
+    DISPATCH,
+    ["2026-11-18"],
+    csv.replace(/(\d+\.\d+)(\r?\n)/, (_m, p, eol) => `${Number(p) + 1}${eol}`),
+  );
+  const third = await run();
+  expect(summaryOf(third, DISPATCH)).toMatchObject({ published: 1 });
+  expect(entity(third)).toMatchObject({
+    published: 1,
+    upToDate: 1,
+    failed: [],
+  });
+  expect(entity(await run())).toMatchObject({ published: 0, upToDate: 2 });
+});
