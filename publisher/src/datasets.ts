@@ -21,7 +21,7 @@ export interface PublisherDataset {
   id: string;
   /** The partition folder is `<partitionKey>=YYYY-MM-DD`. */
   partitionKey: PartitionKey;
-  /** The directory that holds this dataset's partitions. Default: the silver directory. A gold table holds them in gold (ADR-0010). */
+  /** The directory that holds this dataset's partitions. Default: the silver directory. A gold table holds them in gold (ADR-0011). */
   partitionRoot?(dirs: { silverDir: string; goldDir: string }): string;
   /**
    * The silver folder that holds the partitions, when it differs from `id`. The entity mappings
@@ -52,7 +52,7 @@ export interface PublisherDataset {
 
 /**
  * The datasets the runner publishes. A new silver dataset adds one entry here and one in
- * `collector/src/datasets.ts`. A gold table adds one entry at the end (ADR-0010).
+ * `collector/src/datasets.ts`. A gold table adds one entry at the end (ADR-0011).
  */
 export const datasets: PublisherDataset[] = [
   {
@@ -105,6 +105,6 @@ export const datasets: PublisherDataset[] = [
     publish: ({ silverDir, date }) =>
       publishEntityMappings({ silverDir, date }),
   },
-  // Gold runs after silver in the same run (ADR-0010). It reads the silver above.
+  // Gold runs after silver in the same run (ADR-0011). It reads the silver above.
   generation,
 ];

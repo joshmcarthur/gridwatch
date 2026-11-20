@@ -12,7 +12,7 @@ import {
 export interface RunOptions {
   bronzeDir: string;
   silverDir: string;
-  /** Where gold tables are written (ADR-0010). Silver datasets do not use it. */
+  /** Where gold tables are written (ADR-0011). Silver datasets do not use it. */
   goldDir: string;
   /** Publish only dates in this range (inclusive). Default: every date in the manifest. */
   range?: { from: string; to: string };
@@ -45,7 +45,7 @@ const isGold = (dataset: PublisherDataset) =>
 /**
  * Publish every dataset, in registry order (silver first, then gold). A date is published when its
  * partition is missing or holds a different input version than wanted: the newest bronze
- * version for silver, the silver fingerprint for gold (ADR-0010). Completeness rows are silver
+ * version for silver, the silver fingerprint for gold (ADR-0011). Completeness rows are silver
  * only (ADR-0010). A run that publishes nothing, and already has a completeness row for each
  * skipped silver date, writes nothing. A failing dataset or date does not stop the others.
  */

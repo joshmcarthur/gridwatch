@@ -12,7 +12,7 @@ import {
 import { periodsInTradingDate } from "../trading-time.ts";
 
 /**
- * Helpers shared by the gold tables (ADR-0010). A gold module exports `ANALYSIS_VERSION`, a
+ * Helpers shared by the gold tables (ADR-0011). A gold module exports `ANALYSIS_VERSION`, a
  * `<name>WantedVersions` function and a `publish<Name>` function, and uses these helpers for
  * the rest.
  */
@@ -60,7 +60,7 @@ export function fingerprint(
 
 /**
  * The fingerprint that a build would write, for each date on which every input has a silver
- * partition. The runner compares it with the value that gold holds (ADR-0009, ADR-0010).
+ * partition. The runner compares it with the value that gold holds (ADR-0009, ADR-0011).
  * It reads each input table once, not once for each date.
  */
 export async function wantedFingerprints(
@@ -86,7 +86,12 @@ export async function wantedFingerprints(
       date,
       fingerprint(
         analysisVersion,
-        inputs.map((input, i) => [input.table, versions[i]?.get(date) ?? ""]),
+        inputs.map((input, i) => {
+          const version = versions[i]?.get(date);
+          if (version === undefined)
+            throw new Error(`${input.table} has no version for ${date}`);
+          return [input.table, version];
+        }),
       ),
     );
   }
@@ -126,7 +131,7 @@ export async function inputFingerprint(
  * Write every table of a date. Each is written to a `.tmp` file first. The files are then
  * renamed, and the sentinel table (the first, the one the runner reads) is renamed last. A
  * failure while writing leaves every partition as it was. A crash between renames leaves the
- * old sentinel, so the date stays out of date and the next run builds it again (ADR-0010).
+ * old sentinel, so the date stays out of date and the next run builds it again (ADR-0011).
  */
 export async function writeGoldTables(
   connection: DuckDBConnection,
@@ -180,10 +185,10 @@ export function goldDataset(options: {
 }
 
 /**
- * Is every input complete for the date? Today the answer comes from the silver data: each input
- * file must have rows in every expected trading period (46, 48 or 50, from `periodsInTradingDate`).
- * Pass only inputs that have a `trading_period` column. Issue #14 builds a completeness table
- * in silver. When it does, this function is the one place to change (ADR-0010).
+ * Is every input complete for the date? Each input file must have rows in every expected trading
+ * period (46, 48 or 50, from `periodsInTradingDate`). Pass only inputs that have a `trading_period`
+ * column. This does not read `silver/_completeness` (ADR-0010): `completeness.ts` imports the
+ * dataset registry, and gold already sits in that registry. Gold flags from the period count.
  */
 export async function inputsComplete(
   connection: DuckDBConnection,

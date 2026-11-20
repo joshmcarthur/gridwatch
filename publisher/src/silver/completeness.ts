@@ -136,7 +136,11 @@ export async function completenessStatusLines(
   const extras = [...seen]
     .filter((id) => !registry.some((dataset) => dataset.id === id))
     .sort();
-  return [...registry.map((dataset) => dataset.id), ...extras].map(
+  // Gold sets partitionRoot and is not a row in this table (ADR-0011).
+  const silverIds = registry
+    .filter((dataset) => dataset.partitionRoot === undefined)
+    .map((dataset) => dataset.id);
+  return [...silverIds, ...extras].map(
     (id) => `${id}: latest complete ${latest.get(id) ?? "none"}`,
   );
 }

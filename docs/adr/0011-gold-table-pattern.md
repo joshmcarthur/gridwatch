@@ -1,4 +1,4 @@
-# ADR-0010: Pattern for gold tables
+# ADR-0011: Pattern for gold tables
 
 - Status: Accepted
 - Date: 2026-11-20
@@ -12,7 +12,7 @@ Gold generation ([#16](https://github.com/joshmcarthur/gridwatch/issues/16)) is 
 ### Layout
 
 - Code is in `publisher/src/gold/`. `common.ts` holds the shared helpers. Each table module (for example `generation.ts`) holds its SQL and its own `ANALYSIS_VERSION`.
-- Output is Parquet at `<DATA_ROOT>/gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. It uses `writeParquetAtomically` from silver. The `ORDER BY` is total, and a gold module sets `SET threads = 1` when it sums floating-point values, so the same inputs give the same bytes.
+- Output is Parquet at `<DATA_ROOT>/gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. `writeGoldTables` copies each table to a `.tmp` file, then renames them, with the sentinel last. It does not call `writeParquetAtomically`, because that helper renames one file at a time. The `ORDER BY` is total, and a gold module sets `SET threads = 1` when it sums floating-point values, so the same inputs give the same bytes.
 - A module can write more than one table for a date. The module lists its tables in `TABLES`. The first is the sentinel table: the runner reads the held version from it. `writeGoldTables` writes every table to a `.tmp` file, then renames them, and the sentinel table is written last. A failure while writing changes no partition. A crash between renames leaves the old sentinel, so the date is built again on the next run.
 - Time columns follow [ADR-0003](0003-time-column-naming.md). A table keeps `trading_date` and `trading_period` from silver, and `event_start_utc` and `event_end_utc` when it has a period. A day table has `trading_date` only.
 - Gold may have `processed_at`, but our tables do not. It would change the bytes on every run.
@@ -41,9 +41,11 @@ A run with nothing new writes nothing. `--force` rebuilds the selected dates. Go
 
 Rows are written for incomplete inputs, with `inputs_complete = false`. We chose this over writing no rows. A reader can still see the data that exists, and a chart can mark the day. This matches silver, which writes partial days ([ADR-0005](0005-dataset-pattern.md)).
 
-Completeness tracking ([#14](https://github.com/joshmcarthur/gridwatch/issues/14)) is not built yet. For now `inputsComplete` in `gold/common.ts` counts the trading periods in the silver input against the expected number (`periodsInTradingDate`: 46, 48 or 50). An input is complete when it has rows in every period. When #14 adds the `silver/_completeness` table, only this function changes. The gold tables and their columns stay the same.
+The silver completeness table ([ADR-0010](0010-completeness.md)) is written from each silver `PublishResult`. Gold datasets are not rows in that table: a gold partition lives under `gold/`, and `fillHeldCompleteness` reads `silverDir`. The runner skips completeness for any dataset that sets `partitionRoot`.
 
-The runner shows an incomplete day as `PARTIAL`, with the missing periods, in the run summary. The summary lists gold datasets with the silver datasets.
+`inputsComplete` in `gold/common.ts` still counts trading periods in the silver input files (`periodsInTradingDate`: 46, 48 or 50). It does not import `readCompleteness`, because `completeness.ts` imports the dataset registry and gold already sits in that registry. An input is complete when it has rows in every period. Gold flags incomplete rows. The gold tables and their columns stay the same if a later change reads the completeness table.
+
+The runner shows an incomplete gold day as `PARTIAL`, with the missing periods, in the run summary. The summary lists gold datasets with the silver datasets.
 
 ### Generation tables ([#16](https://github.com/joshmcarthur/gridwatch/issues/16))
 

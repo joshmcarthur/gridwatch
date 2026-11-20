@@ -108,13 +108,13 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **`event_start_utc` and `event_end_utc`.** The UTC start (included) and end (excluded) of a trading period or dispatch interval. They are unambiguous across the daylight saving change. See [ADR-0003](adr/0003-time-column-naming.md).
 
-**Gold.** Derived and presentation data: analytical tables and the site JSON. Tables are Parquet partitions at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md) and [ADR-0010](adr/0010-gold-table-pattern.md).
+**Gold.** Derived and presentation data: analytical tables and the site JSON. Tables are Parquet partitions at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md) and [ADR-0011](adr/0011-gold-table-pattern.md).
 
-**`analysis_version`.** An integer in every gold row. Each gold module has a constant of this name, and a person bumps it when the logic changes. The runner then rebuilds the gold tables. See [ADR-0010](adr/0010-gold-table-pattern.md).
+**`analysis_version`.** An integer in every gold row. Each gold module has a constant of this name, and a person bumps it when the logic changes. The runner then rebuilds the gold tables. See [ADR-0011](adr/0011-gold-table-pattern.md).
 
-**`inputs_complete`.** A boolean in every gold row. It is true only when every silver input has rows in every expected trading period. Gold flags incomplete rows and does not drop them. See [ADR-0010](adr/0010-gold-table-pattern.md).
+**`inputs_complete`.** A boolean in every gold row. It is true only when every silver input has rows in every expected trading period. Gold flags incomplete rows and does not drop them. See [ADR-0011](adr/0011-gold-table-pattern.md).
 
-**`inputs_sha256`.** A column in every entity table and every gold table. It is a hash of the version of each silver input that built the table (and, in gold, the `analysis_version`). The runner rebuilds a date when it changes. See [ADR-0008](adr/0008-entity-model.md) and [ADR-0010](adr/0010-gold-table-pattern.md).
+**`inputs_sha256`.** A column in every entity table and every gold table. It is a hash of the version of each silver input that built the table (and, in gold, the `analysis_version`). The runner rebuilds a date when it changes. See [ADR-0008](adr/0008-entity-model.md) and [ADR-0011](adr/0011-gold-table-pattern.md).
 
 **Manifest.** The append-only file `manifest.jsonl`. It records every download with its hash and the trading dates it covers. See [ADR-0004](adr/0004-bronze-archive-and-manifest.md).
 

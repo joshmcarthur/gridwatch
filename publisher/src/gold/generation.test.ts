@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  rename,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -251,10 +252,9 @@ test("unmapped plants, battery and incomplete days are kept and flagged", async 
      UNION ALL SELECT 'BBB0111', 'NI', 'sha-e'`,
   );
   const result = await publishGeneration({ silverDir, goldDir, date });
-  expect(result).toMatchObject({ status: "partial" });
-  expect(
-    (result as { missingPeriods: number[] }).missingPeriods.slice(0, 3),
-  ).toEqual([3, 4, 5]);
+  expect(result.status).toBe("partial");
+  if (result.status !== "partial") throw new Error("expected partial");
+  expect(result.missingPeriods.slice(0, 3)).toEqual([3, 4, 5]);
   expect(
     await query(
       `SELECT fuel_category, island, megawatt_hours, inputs_complete
@@ -325,7 +325,6 @@ test("the runner builds gold, skips it when silver is unchanged and rebuilds it 
   } finally {
     connection.closeSync();
   }
-  const { rename } = await import("node:fs/promises");
   await rename(`${file}.new`, file);
   expect(await run()).toMatchObject({ published: 1, upToDate: 2 });
 });

@@ -15,7 +15,7 @@ import {
 
 /**
  * Bump by hand when the logic of any table in this file changes. The runner then rebuilds every
- * date (ADR-0010).
+ * date (ADR-0011).
  */
 export const ANALYSIS_VERSION = 1;
 
@@ -41,7 +41,7 @@ const INPUTS: GoldInput[] = [
 
 /**
  * Publish the generation gold tables for one trading date, one partition for each table in
- * `TABLES`: `<goldDir>/<table>/trading_date=<date>/data.parquet` (ADR-0010).
+ * `TABLES`: `<goldDir>/<table>/trading_date=<date>/data.parquet` (ADR-0011).
  *
  * Inputs: Generation_MD silver for the date (kWh for each unit and trading period) and the
  * entity mapping tables for the date: `entity_plants` (plant and fuel category) and
@@ -76,13 +76,18 @@ export async function publishGeneration(options: {
   date: string;
 }): Promise<PublishResult> {
   const { silverDir, goldDir, date } = options;
-  const files = Object.fromEntries(
-    INPUTS.map((input) => [
-      input.table,
-      silverPartitionPath(silverDir, input.table, date),
-    ]),
-  ) as Record<string, string>;
-  if (!Object.values(files).every((file) => existsSync(file)))
+  const generationMd = silverPartitionPath(silverDir, GENERATION.table, date);
+  const plants = silverPartitionPath(silverDir, "entity_plants", date);
+  const pointsOfConnection = silverPartitionPath(
+    silverDir,
+    "entity_points_of_connection",
+    date,
+  );
+  if (
+    ![generationMd, plants, pointsOfConnection].every((file) =>
+      existsSync(file),
+    )
+  )
     return { date, status: "missing" };
 
   const periods = periodsInTradingDate(date);
@@ -90,9 +95,7 @@ export async function publishGeneration(options: {
   try {
     await connection.run("SET TimeZone = 'UTC'");
     await connection.run("SET threads = 1");
-    const completeness = await inputsComplete(connection, date, [
-      files.generation_md as string,
-    ]);
+    const completeness = await inputsComplete(connection, date, [generationMd]);
     const stamp = goldStamp(
       ANALYSIS_VERSION,
       await inputFingerprint(silverDir, ANALYSIS_VERSION, INPUTS, date),
@@ -108,10 +111,10 @@ export async function publishGeneration(options: {
          coalesce(p.fuel_category, 'unmapped') AS fuel_category,
          poc.island,
          g.kilowatt_hours / 1000.0 AS megawatt_hours
-       FROM read_parquet(${lit(files.generation_md as string)}) g
-       LEFT JOIN read_parquet(${lit(files.entity_plants as string)}) p
+       FROM read_parquet(${lit(generationMd)}) g
+       LEFT JOIN read_parquet(${lit(plants)}) p
          ON p.plant_id = g.site_code || '/' || lower(g.gen_code)
-       LEFT JOIN read_parquet(${lit(files.entity_points_of_connection as string)}) poc
+       LEFT JOIN read_parquet(${lit(pointsOfConnection)}) poc
          ON poc.poc_id = g.point_of_connection`,
     );
 
