@@ -1,19 +1,17 @@
 services:
   collector:
     build: .
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     entrypoint: ["node", "collector/src/main.ts"]
     volumes:
       - ./data:/data
   publisher:
     build: .
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     entrypoint: ["node", "publisher/src/main.ts"]
     volumes:
       - ./data:/data
   site-build:
     build: .
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    profiles: ["publish"]
     entrypoint: ["node", "site/publish.ts"]
     volumes:
       - ./data:/data:ro
