@@ -306,6 +306,7 @@ test("entity mappings build last, settle, and rebuild when an input partition ch
     "entity_mappings",
     "gold_generation",
     "gold_prices",
+    "gold_reserves",
   ]);
   expect(entity(first)).toMatchObject({
     published: 2,
