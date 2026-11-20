@@ -218,6 +218,38 @@ test("a range limits the dates, and force publishes them again", async () => {
   );
 });
 
+test("an empty partition folder from a failed first write does not block the dataset", async () => {
+  await archive(DISPATCH, ["2026-11-18"], await fixture("2026-11-18"));
+  await mkdir(join(silverDir, DISPATCH, "trading_date=2026-11-18"), {
+    recursive: true,
+  });
+  const summary = summaryOf(await run(only(DISPATCH)), DISPATCH);
+  expect(summary).toMatchObject({ published: 1, failed: [] });
+  expect(existsSync(partition("2026-11-18"))).toBe(true);
+});
+
+test("a partial day is reported with the CLI line", async () => {
+  await archive("part", ["2026-11-18"], "x");
+  const registry: PublisherDataset[] = [
+    {
+      id: "part",
+      partitionKey: "trading_date",
+      publish: async ({ date }) => ({
+        date,
+        status: "partial",
+        rows: 10,
+        path: "p",
+        missingPeriods: [24, 25],
+      }),
+    },
+  ];
+  const [summary] = await run({ registry });
+  expect(summary?.published).toBe(1);
+  expect(summary?.partial).toEqual([
+    "2026-11-18: PARTIAL 10 rows, missing periods 24,25",
+  ]);
+});
+
 test("parseRunArgs", () => {
   const today = "2026-11-20";
   expect(parseRunArgs([], today)).toEqual({
@@ -237,5 +269,6 @@ test("parseRunArgs", () => {
     only: [DISPATCH],
   });
   expect(() => parseRunArgs(["--to", "2026-11-01"], today)).toThrow("--from");
+  expect(() => parseRunArgs(["--from", ""], today)).toThrow();
   expect(() => parseRunArgs(["--dataset", "nope"], today)).toThrow("Unknown");
 });

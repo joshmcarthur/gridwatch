@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { DuckDBInstance } from "@duckdb/node-api";
@@ -25,6 +26,8 @@ export interface DatasetSummary {
   upToDate: number;
   /** Dates with a bronze file but no data for that date. */
   missing: number;
+  /** One line for each partial day, as the dataset CLIs print it. */
+  partial: string[];
   /** One message for each date that is invalid or threw. */
   failed: string[];
 }
@@ -41,15 +44,27 @@ async function silverVersions(
 ): Promise<Map<string, string>> {
   const versions = new Map<string, string>();
   const dir = join(silverDir, dataset.id);
-  if (!existsSync(dir)) return versions;
+  // A folder without `data.parquet` is not a partition. A failed first write leaves one.
+  const folders = await readdir(dir, { withFileTypes: true }).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    },
+  );
+  const files = folders
+    .filter(
+      (f) => f.isDirectory() && f.name.startsWith(`${dataset.partitionKey}=`),
+    )
+    .map((f) => join(dir, f.name, "data.parquet"))
+    .filter((file) => existsSync(file));
+  if (files.length === 0) return versions;
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
-    const glob = join(dir, `${dataset.partitionKey}=*`, "data.parquet");
     const reader = await connection.runAndReadAll(
       `SELECT DISTINCT
          regexp_extract(filename, '${dataset.partitionKey}=(\\d{4}-\\d{2}-\\d{2})', 1) AS date,
          bronze_sha256
-       FROM read_parquet(${lit(glob)}, filename = true)`,
+       FROM read_parquet([${files.map(lit).join(", ")}], filename = true)`,
     );
     for (const row of reader.getRowObjectsJson() as Array<{
       date: string;
@@ -79,6 +94,7 @@ export async function runPublish(
       published: 0,
       upToDate: 0,
       missing: 0,
+      partial: [],
       failed: [],
     };
     summaries.push(summary);
@@ -100,7 +116,13 @@ export async function runPublish(
           if (result.status === "missing") summary.missing++;
           else if (result.status === "invalid")
             summary.failed.push(`${date}: INVALID ${result.errors.join("; ")}`);
-          else summary.published++;
+          else {
+            summary.published++;
+            if (result.status === "partial")
+              summary.partial.push(
+                `${date}: PARTIAL ${result.rows} rows, missing periods ${result.missingPeriods.join(",")}`,
+              );
+          }
         } catch (error) {
           summary.failed.push(`${date}: ${(error as Error).message}`);
         }
@@ -120,6 +142,7 @@ export function printSummary(summaries: DatasetSummary[]): void {
     console.log(
       `${s.id}: published ${s.published}, up to date ${s.upToDate}, no data ${s.missing}${s.failed.length > 0 ? `, FAILED ${s.failed.length}` : ""}`,
     );
+    for (const line of s.partial) console.log(`  ${s.id}: ${line}`);
     for (const message of s.failed) console.error(`  ${s.id}: ${message}`);
   }
   const failed = summaries.filter((s) => s.failed.length > 0);
@@ -151,13 +174,14 @@ export function parseRunArgs(
       help: { type: "boolean" },
     },
   });
-  if (values.to && !values.from) throw new TypeError("--to needs --from");
+  if (values.to !== undefined && values.from === undefined)
+    throw new TypeError("--to needs --from");
   for (const id of values.dataset ?? []) {
     if (!registry.some((d) => d.id === id))
       throw new TypeError(`Unknown dataset ${id}`);
   }
   let range: RunOptions["range"];
-  if (values.from) {
+  if (values.from !== undefined) {
     // PlainDate.from throws a RangeError for a bad date.
     const from = Temporal.PlainDate.from(values.from).toString();
     const to = Temporal.PlainDate.from(values.to ?? today).toString();
