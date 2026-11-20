@@ -66,7 +66,7 @@ const DIRECTION = (southIslandSent: string, northIslandReceived: string) =>
  * `periodsInTradingDate`). A period that silver lacks has null energies and direction `none`,
  * and is flagged (ADR-0011: write and flag). The day table has one row, the sums of the periods.
  * Energy columns of a day with missing periods sum only the periods that exist, and the flag
- * is false.
+ * is false. `average_megawatts` of such a day is null, because the hours covered are not known.
  *
  * `inputs_complete` is true only when all of these hold:
  * - the `hvdc_flows` `_completeness` status is `complete` for the date (ADR-0010, ADR-0011);
@@ -171,7 +171,7 @@ export async function publishHvdc(
       hvdc_transfer_day: `SELECT trading_date,
           benmore_offtake_mwh, benmore_injection_mwh, haywards_offtake_mwh, haywards_injection_mwh,
           south_island_sent_mwh, north_island_received_mwh, losses_mwh,
-          north_island_received_mwh / (${periods} / 2.0) AS average_megawatts,
+          ${missingPeriods.length === 0 ? `north_island_received_mwh / (${periods} / 2.0)` : "CAST(NULL AS DOUBLE)"} AS average_megawatts,
           ${DIRECTION("south_island_sent_mwh", "north_island_received_mwh")} AS direction,
           ${dayStamp}
         FROM (

@@ -7,6 +7,8 @@
 
 Inter-island transfer is a key quantity for regional prices and for the Sankey ([#19](https://github.com/joshmcarthur/gridwatch/issues/19), [#23](https://github.com/joshmcarthur/gridwatch/issues/23)). The initial datasets do not give it. `BEN2201` and `HAY2201` have prices but no volumes in Nodal Prices and Volumes. An island residual (nodal generation minus load) is 60 to 90 MW off the published transfer on the days checked (#19 comment, 20 Nov 2026). The metered source is EMI `Wholesale/Metered_data/HVDC_Flows`, one CSV per month, with half-hour kWh at both HVDC terminals ([sources 3.7](../sources.md#37-hvdc-flows)).
 
+The owner question on adding `HVDC_Flows` to the collector was unanswered when this work started. The overnight loop proceeded on the recorded recommendation (add `HVDC_Flows`, with the monthly shape of Generation_MD). The owner confirms or objects at merge.
+
 ## Decision
 
 **Dataset.** The dataset ID is `hvdc_flows`. Files are `Datasets/Wholesale/Metered_data/HVDC_Flows/yyyymm_HVDC_flows.csv`. The collector follows the monthly pattern of [ADR-0007](0007-generation-md-monthly-files.md) with the month lag of Generation_MD. The runner needs no change.
@@ -24,7 +26,7 @@ The period table has these columns: `benmore_offtake_mwh`, `benmore_injection_mw
 - `south_island_sent_mwh` = (Benmore `X` - Benmore `I`) / 1000.
 - `north_island_received_mwh` = (Haywards `I` - Haywards `X`) / 1000.
 - `losses_mwh` = (Benmore `X` + Haywards `X` - Benmore `I` - Haywards `I`) / 1000.
-- `average_megawatts` = north received x 2 for a period. For a day it is north received divided by the hours of the day (periods / 2: 23, 24 or 25). It is signed.
+- `average_megawatts` = north received x 2 for a period. For a day it is north received divided by the hours of the day (periods / 2: 23, 24 or 25). It is signed. A day with a missing period has a null day average, because the hours covered are not known. Its energy columns still sum the periods that exist.
 - `direction` is `north` when both nets are above zero, `south` when both are below zero, and `none` otherwise. That covers idle periods and periods where the two ends disagree. The day uses the same rule on the day sums.
 
 **Completeness.** Gold writes rows for incomplete inputs and flags them (ADR-0011). The period table has a row for every expected period (46, 48 or 50). A period that silver lacks has null energies and direction `none`. `inputs_complete` is true only when all of these hold:

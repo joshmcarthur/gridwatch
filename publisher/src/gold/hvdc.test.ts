@@ -344,3 +344,21 @@ test("the runner builds gold, skips it when silver is unchanged and rebuilds it 
     upToDate: DATES.length - 1,
   });
 });
+
+test("the day average is null when a period is missing, and the energy sums still count the periods that exist", async () => {
+  await buildSilver();
+  await rewriteSilver(
+    "2026-10-31",
+    (file) =>
+      `SELECT * FROM read_parquet('${file}')
+     WHERE NOT (trading_period = 3 AND point_of_connection = 'BEN2201' AND flow_direction = 'X')`,
+  );
+  await publish("2026-10-31");
+  const [day] = await query(
+    `SELECT * FROM ${gold("hvdc_transfer_day", "2026-10-31")}`,
+  );
+  expect(day?.average_megawatts).toBeNull();
+  // Haywards has all 48 periods, so its sum is unchanged.
+  expect(Number(day?.north_island_received_mwh)).toBeCloseTo(17887.647, 6);
+  expect(day?.inputs_complete).toBe(false);
+});
