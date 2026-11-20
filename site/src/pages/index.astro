@@ -11,7 +11,7 @@ const pricesDate = index.latest_complete_sections.prices;
   title="Gridwatch NZ"
   description="An independent observatory for the New Zealand electricity market."
 >
-  <section class="intro">
+  <section class="prose">
     <h1>The grid as a country, not a spreadsheet.</h1>
     <p>
       Gridwatch turns public market data into plain explanations of what
@@ -45,28 +45,8 @@ const pricesDate = index.latest_complete_sections.prices;
 </Layout>
 
 <style>
-  .intro {
-    max-width: var(--measure-prose);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
+  .prose {
     margin-bottom: var(--space-6);
-  }
-
-  h1 {
-    margin: 0;
-    font-size: var(--text-display);
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    line-height: 1.05;
-  }
-
-  .intro p,
-  .card p {
-    margin: 0;
-    font-size: var(--text-body);
-    line-height: 1.55;
-    color: var(--color-ink-muted);
   }
 
   .card {
@@ -77,13 +57,6 @@ const pricesDate = index.latest_complete_sections.prices;
     flex-direction: column;
     gap: var(--space-4);
     max-width: var(--measure-prose);
-  }
-
-  h2 {
-    margin: 0;
-    font-size: var(--text-heading);
-    font-weight: 700;
-    line-height: 1.25;
   }
 
   dl {

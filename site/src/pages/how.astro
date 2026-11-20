@@ -1,0 +1,349 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+  title="How we do this"
+  description="How Gridwatch turns public electricity files into a daily website."
+>
+  <article>
+    <div class="prose">
+      <h1>How we do this</h1>
+      <p>
+        The numbers on this site come from files the Electricity Authority
+        publishes. The Authority is the public body that runs New Zealand's
+        wholesale electricity market: the trading layer between power stations
+        and the retailers who send you a bill. It puts those files on a
+        catalogue called Electricity Market Information, or EMI, and on a public
+        file store behind that catalogue. Gridwatch downloads the files from
+        that store.
+      </p>
+    </div>
+
+    <figure class="diagram">
+      <figcaption>What Gridwatch downloads</figcaption>
+      <p>
+        Seven kinds of file, all from that store. Four of them feed the daily
+        pages; the other three are downloaded and tidied, then left for later.
+      </p>
+      <div class="source-groups">
+        <section>
+          <h2>Used for the daily pages</h2>
+          <ul class="sources">
+            <li>
+              <strong>Generation output</strong>
+              <p>
+                Metered energy from each plant, in kilowatt-hours per half hour.
+                One file covers a calendar month. This is what the generation
+                numbers on the site are built from.
+              </p>
+            </li>
+            <li>
+              <strong>Dispatch energy prices</strong>
+              <p>
+                The wholesale price at each named place on the grid, in dollars
+                per megawatt-hour. One file per trading day, which is a calendar
+                day in New Zealand time.
+              </p>
+            </li>
+            <li>
+              <strong>Generation fleet</strong>
+              <p>
+                Which plants exist, what they burn, and who runs them. Gridwatch
+                uses this to group generation by fuel.
+              </p>
+            </li>
+            <li>
+              <strong>Network supply points</strong>
+              <p>
+                Where local networks connect to the grid. Gridwatch uses this to
+                put a plant on the North Island or the South Island.
+              </p>
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>Downloaded, not on the pages yet</h2>
+          <ul class="sources">
+            <li>
+              <strong>Dispatch reserve prices</strong>
+              <p>
+                What the market paid for spare capacity, in case a plant trips.
+                Downloaded and tidied, but not on the daily pages yet.
+              </p>
+            </li>
+            <li>
+              <strong>Nodal prices and volumes</strong>
+              <p>
+                Load and generation at each place on the grid, in five-minute
+                slices. Downloaded and tidied. The pages use dispatch energy
+                prices for the price at a place, not this file.
+              </p>
+            </li>
+            <li>
+              <strong>Cleared offers</strong>
+              <p>
+                How much each plant was accepted to generate or to hold as
+                reserve. Downloaded and tidied, not shown yet.
+              </p>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </figure>
+
+    <div class="prose">
+      <h2>What happens to the files</h2>
+      <p>
+        After a trading day finishes, Gridwatch downloads yesterday's files,
+        tidies them, and builds ordinary web pages from a day that has already
+        ended. There is no live feed, so a price spike that is still going on
+        won't be here yet.
+      </p>
+      <p>
+        The work has three stages, labelled bronze, silver, and gold. Those
+        names only say how raw the data still is.
+      </p>
+    </div>
+
+    <figure class="diagram">
+      <figcaption>From an EMI file to a page</figcaption>
+      <ol class="pipeline">
+        <li class="pipeline-step layer-bronze">
+          <span class="layer-chip">Bronze</span>
+          <strong>Download</strong>
+          <p>
+            Fetch each file from the Authority's store and keep it unchanged.
+          </p>
+        </li>
+        <li class="pipeline-step layer-silver">
+          <span class="layer-chip">Silver</span>
+          <strong>Tidy</strong>
+          <p>
+            Check the file and line up dates and names, including when the
+            clocks change. Join the plant list so later steps know fuel and
+            island.
+          </p>
+        </li>
+        <li class="pipeline-step layer-gold">
+          <span class="layer-chip">Gold</span>
+          <strong>Summarise</strong>
+          <p>
+            Build generation by fuel and plant, and prices at Ōtāhuhu, Haywards,
+            and Benmore.
+          </p>
+        </li>
+        <li class="pipeline-step">
+          <span class="layer-chip layer-chip-site">Site</span>
+          <strong>Publish</strong>
+          <p>
+            Write one file per trading day for the website (gold/site), then
+            turn those files into ordinary web pages.
+          </p>
+        </li>
+      </ol>
+    </figure>
+
+    <div class="layers">
+      <section class="layer layer-bronze">
+        <span class="layer-chip">Bronze</span>
+        <h2>The original download</h2>
+        <p>
+          Bronze is the file exactly as the Authority published it, plus a
+          download log that records which version arrived. Gridwatch doesn't
+          edit these files. If the Authority overwrites a day later, the old
+          copy stays as well as the new one.
+        </p>
+      </section>
+      <section class="layer layer-silver">
+        <span class="layer-chip">Silver</span>
+        <h2>The same records, made consistent</h2>
+        <p>
+          Silver is bronze after a check: dates and names lined up, with the
+          original codes kept. A day whose file fails the check is left out
+          rather than guessed. A day that is only partly there is kept, with the
+          missing half-hours marked.
+        </p>
+      </section>
+      <section class="layer layer-gold">
+        <span class="layer-chip">Gold</span>
+        <h2>The numbers on the site</h2>
+        <p>
+          Gold is built from silver, not from the original spreadsheets. The
+          website reads only the gold files made for it: one per trading day,
+          in a folder called gold/site, plus a short index of which days exist.
+          Those files hold generation and prices for a day that has already
+          finished.
+        </p>
+      </section>
+    </div>
+
+    <div class="prose">
+      <p>
+        Once a day, after the Authority has put yesterday's files up (usually
+        the next morning), Gridwatch rebuilds the pages from those gold files.
+      </p>
+      <p>
+        Gridwatch stops at what already happened. Tomorrow's prices aren't in
+        these files.
+      </p>
+    </div>
+  </article>
+</Layout>
+
+<style>
+  article {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-width: 0;
+  }
+
+  .source-groups {
+    display: grid;
+    gap: var(--space-5);
+  }
+
+  .source-groups h2 {
+    font-size: var(--text-label);
+    margin-bottom: var(--space-3);
+  }
+
+  .sources {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .sources li,
+  .pipeline-step,
+  .layer {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    hyphens: none;
+    min-width: 0;
+  }
+
+  .sources strong,
+  .pipeline-step strong {
+    font-size: var(--text-label);
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+
+  .sources p,
+  .pipeline-step p {
+    font-size: var(--text-label);
+    line-height: 1.5;
+  }
+
+  .pipeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .pipeline-step,
+  .layer {
+    border-left: 4px solid var(--color-brand);
+  }
+
+  .layer-bronze {
+    border-left-color: var(--color-layer-bronze);
+  }
+
+  .layer-silver {
+    border-left-color: var(--color-layer-silver);
+  }
+
+  .layer-gold {
+    border-left-color: var(--color-layer-gold);
+  }
+
+  .layer-chip {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: var(--space-2);
+    background: var(--color-card);
+    border: 1px solid var(--color-rule);
+    border-radius: 999px;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-caption);
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--color-ink);
+  }
+
+  .layer-chip::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--color-brand);
+  }
+
+  .layer-bronze > .layer-chip {
+    border-color: var(--color-layer-bronze);
+  }
+
+  .layer-bronze > .layer-chip::before {
+    background: var(--color-layer-bronze);
+  }
+
+  .layer-silver > .layer-chip {
+    border-color: var(--color-layer-silver);
+  }
+
+  .layer-silver > .layer-chip::before {
+    background: var(--color-layer-silver);
+  }
+
+  .layer-gold > .layer-chip {
+    border-color: var(--color-layer-gold);
+  }
+
+  .layer-gold > .layer-chip::before {
+    background: var(--color-layer-gold);
+  }
+
+  .layer-chip-site::before {
+    background: var(--color-brand);
+  }
+
+  .layers {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  @media (min-width: 48rem) {
+    .source-groups {
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-5);
+    }
+
+    .pipeline {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .layers {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 70rem) {
+    .pipeline {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+</style>
