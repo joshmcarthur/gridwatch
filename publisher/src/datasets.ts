@@ -1,4 +1,5 @@
 import { generation } from "./gold/generation.ts";
+import { hvdc } from "./gold/hvdc.ts";
 import { prices } from "./gold/prices.ts";
 import { reserves } from "./gold/reserves.ts";
 import { publishClearedOffers } from "./silver/cleared-offers.ts";
@@ -124,4 +125,5 @@ export const datasets: PublisherDataset[] = [
   generation,
   prices,
   reserves,
+  hvdc,
 ];
