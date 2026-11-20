@@ -31,3 +31,16 @@ The Landscape design rules for data colour say that battery is storage. It shoul
 - Desktop axis text is large (about 20px) because the SVG scales up to its cap. Reducing the cap changes the desktop size, not the phone size.
 - Battery is not visible in the chart until #92 is done. That departs from the design rule until then.
 - A later interactive feature needs a new decision. This ADR does not allow client JavaScript for charts.
+
+## Amendment (#28): price charts
+
+Amended 2026-11-21. The price chart is the second figure on the daily page. These points extend the decisions above. They do not change them.
+
+- **Two SVGs in one figure.** The price chart has two SVGs: period prices, and spreads. Each has its own axes, title and summary (`price-chart-*` and `price-spread-chart-*` ids). The spreads never share an axis with prices. A spread of about 10 would be flat on a price axis near 100. Both SVGs sit in one `ChartFigure`, with one legend, one caption and one numbers table.
+- **Shared frame.** `ChartFigure.astro` is the only figure frame. `chart-svg.ts` writes the SVG title, summary and `role="img"`. Styles are scoped to each component. There is no global chart stylesheet, because global table styles would reach every table on the site.
+- **Colour and dash for more than one node per island.** North Island is Tarn and South Island is amber. OTA2201 and HAY2201 are both North Island, so both are Tarn. OTA2201 is solid and HAY2201 is dashed. BEN2201 is solid amber. Spread lines use ink, not island colour: HAY-BEN is solid and OTA-HAY is dashed in muted ink.
+- **OTA-BEN is not drawn.** It is the sum of the other two spreads. The table and the hover text show it, taken from the contract.
+- **Y domain from period prices.** The price axis covers the plotted period prices, with zero included. It does not use `daily.max_price`, which is a raw row price ([ADR-0012](0012-gold-prices.md)). A short spike shows in the highest-price sentence and the table, not as the top of the axis.
+- **Gaps.** A null price breaks only its own node line. A valid period whose neighbours are both null gets a dot, because a line draws nothing for a single point. A proxy period gets an open marker.
+
+Consequence: a daily page with prices adds two SVGs. Each figure has one table, so the numbers are not repeated per SVG.
