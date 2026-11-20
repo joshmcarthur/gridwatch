@@ -1,0 +1,64 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+  title="How we do this"
+  description="How Gridwatch turns public electricity files into a daily website."
+>
+  <article class="prose">
+    <h1>How we do this</h1>
+    <p>
+      The numbers on this site come from files published by the Electricity
+      Authority, the public body in charge of New Zealand's electricity market.
+      The Authority puts them on a site called Electricity Market Information,
+      or EMI. Those files say who generated power, and what it sold for, in the
+      wholesale market: the trading layer between power stations and the
+      retailers who send you a bill.
+    </p>
+    <p>
+      We download those files and tidy them, then build the pages from a day
+      that has already finished.
+    </p>
+    <p>
+      We keep three stages of the data, labelled bronze, silver, and gold.
+      Bronze is the original download, kept exactly as it was published. Silver
+      is those same records with the dates and names made consistent. Gold is
+      the numbers we actually put on the site, such as daily generation and
+      prices, built from that silver data.
+    </p>
+    <p>
+      Once a day we generate ordinary web pages from those gold files and
+      publish them. There isn't a live connection to the market, so if a price
+      spike is still happening, it won't be here yet.
+    </p>
+    <p>
+      We stop at what already happened. Tomorrow's prices aren't in these files,
+      and you shouldn't use the site to operate the high-voltage network.
+    </p>
+  </article>
+</Layout>
+
+<style>
+  .prose {
+    max-width: var(--measure-prose);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: var(--text-display);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--text-body);
+    line-height: 1.55;
+    color: var(--color-ink-muted);
+  }
+</style>
