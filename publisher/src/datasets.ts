@@ -1,4 +1,5 @@
 import { generation } from "./gold/generation.ts";
+import { prices } from "./gold/prices.ts";
 import { publishClearedOffers } from "./silver/cleared-offers.ts";
 import type {
   PartitionKey,
@@ -107,4 +108,5 @@ export const datasets: PublisherDataset[] = [
   },
   // Gold runs after silver in the same run (ADR-0011). It reads the silver above.
   generation,
+  prices,
 ];
