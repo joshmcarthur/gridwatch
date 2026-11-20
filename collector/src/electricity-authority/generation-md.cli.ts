@@ -3,16 +3,13 @@ import { parseDateRange } from "../date-range.ts";
 import { collectGenerationMd } from "./generation-md.ts";
 
 // npm run collect:generation-md -- [--from YYYY-MM-DD] [--to YYYY-MM-DD]
-// Without --from, the run starts 12 months before --to (owner decision on #8).
+// Each run archives the monthly files that overlap the range.
 // Exit code 1 if any download failed.
-const range = parseDateRange();
-const from = process.argv.includes("--from")
-  ? range.from
-  : Temporal.PlainDate.from(range.to).subtract({ months: 12 }).toString();
+const { from, to } = parseDateRange();
 const { records, missing, failed } = await collectGenerationMd({
   bronzeDir: dataPaths().bronze,
   from,
-  to: range.to,
+  to,
 });
 const count = (status: string) =>
   records.filter((r) => r.status === status).length;

@@ -197,17 +197,45 @@ test("accepts the lower-case date header of older files", async () => {
   });
 });
 
-test("publishes a day with a blank period as partial", async () => {
+test("marks a day with a blank cell for one unit as invalid", async () => {
   const lines = await linesOf("202604");
-  const day = rowsFor(lines, "2026-04-01");
-  const blanked = lines.map((l) => (day.includes(l) ? setCell(l, 5, "") : l));
-  await archive("202604", toCsv(blanked));
+  const index = lines.findIndex((l) => l.split(",")[6] === "2026-04-01");
+  const mutated = lines.map((l, i) => (i === index ? setCell(l, 5, "") : l));
+  await archive("202604", toCsv(mutated));
   const result = await publish("2026-04-01");
   expect(result).toMatchObject({
-    status: "partial",
-    rows: 288 - 6,
-    missingPeriods: [5],
+    status: "invalid",
+    errors: ["1 blank cells inside trading periods 1 to 48"],
   });
+  expect(existsSync(join(silverDir, DATASET))).toBe(false);
+});
+
+test("reports a day with every cell blank as missing and writes nothing", async () => {
+  const lines = await linesOf("202604");
+  const day = rowsFor(lines, "2026-04-01");
+  const blanked = lines.map((l) =>
+    day.includes(l) ? l.split(",").slice(0, 7).join(",") + ",".repeat(50) : l,
+  );
+  await archive("202604", toCsv(blanked));
+  expect(await publish("2026-04-01")).toEqual({
+    date: "2026-04-01",
+    status: "missing",
+  });
+  expect(existsSync(join(silverDir, DATASET))).toBe(false);
+});
+
+test("marks a day with an unparseable period column as invalid", async () => {
+  const lines = await linesOf("202604");
+  const extra = lines.map((l, i) =>
+    i === 0 ? `${l},TP99999999999` : `${l},${i === 1 ? "5" : ""}`,
+  );
+  await archive("202604", toCsv(extra));
+  const result = await publish("2026-04-01");
+  expect(result).toMatchObject({ status: "invalid" });
+  if (result.status === "invalid")
+    expect(result.errors).toContain(
+      "1 values are outside trading periods 1 to 48",
+    );
 });
 
 test("reports a day with no bronze file as missing", async () => {

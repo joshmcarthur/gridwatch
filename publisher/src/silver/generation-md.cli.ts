@@ -3,16 +3,12 @@ import { eachDate, parseDateRange } from "../date-range.ts";
 import { publishGenerationMd } from "./generation-md.ts";
 
 // npm run publish:generation-md -- [--from YYYY-MM-DD] [--to YYYY-MM-DD]
-// Without --from, the run starts 12 months before --to (owner decision on #8).
 // Exit code 1 if any day is invalid.
-const range = parseDateRange();
-const from = process.argv.includes("--from")
-  ? range.from
-  : Temporal.PlainDate.from(range.to).subtract({ months: 12 }).toString();
+const { from, to } = parseDateRange();
 const { bronze, silver } = dataPaths();
 let invalid = 0;
 let missing = 0;
-for (const date of eachDate(from, range.to)) {
+for (const date of eachDate(from, to)) {
   const result = await publishGenerationMd({
     bronzeDir: bronze,
     silverDir: silver,

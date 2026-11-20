@@ -37,8 +37,8 @@ function datesOfMonth(month: string): string[] {
 /**
  * Archive the monthly files that overlap the trading dates `from` to `to` (inclusive) into
  * bronze. The manifest `trading_dates` lists every date of the month, so `findBronze` works
- * for each day. The file may hold fewer days, because the source can publish a month part
- * way. The publisher reports those days as missing (ADR-0007).
+ * for each day. Live files hold every day of their month. If a file ever lacks a date, the
+ * publisher reports that date as missing (ADR-0007).
  */
 export async function collectGenerationMd(
   options: CollectOptions,

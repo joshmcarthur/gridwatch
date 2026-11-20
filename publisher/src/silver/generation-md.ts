@@ -15,21 +15,24 @@ export const DATASET = "generation_md";
  * `<silverDir>/generation_md/trading_date=<date>/data.parquet`.
  *
  * The bronze file holds a whole month in wide form (`TP1`..`TP50`). Silver is long: one row
- * per unit and trading period, in kWh. Blank cells write no row. The header case of the date
+ * per unit and trading period, in kWh. A blank cell writes no row. The header case of the date
  * column does not matter (DuckDB matches names without case).
  *
  * A day that fails validation writes nothing and any earlier partition stays as it was.
  * There is no `processed_at` column: it would change on every run (ADR-0003, ADR-0005).
  *
- * Missing (nothing written): the file has no rows for this date. The source can publish a
- * month part way, and the collector lists every date of the month (ADR-0007).
+ * Missing (nothing written): no bronze file; or the file has no rows for this date, or every
+ * cell of the date is blank. Live data shows whole months only (every file holds all its
+ * days), so this is a defence against a month published part way or a revised file that drops
+ * a date. The collector lists every date of the month (ADR-0007).
  * Invalid day (nothing written): the file has no rows at all; a trading date that does not
  * parse; a blank site, point of connection, network or generation code; a duplicate
- * (site, point of connection, network, generation code) unit; a non-empty value outside the
- * periods of the day (TP47+ on a 46-period day, TP49+ on a 48-period day); a value that is
- * not a finite number.
- * Partial day (written): one or more periods 1..N have no value for any unit. The result
- * lists them.
+ * (site, point of connection, network, generation code) unit; a value that is not a finite
+ * number; a non-empty value outside the periods of the day (TP47+ on a 46-period day, TP49+
+ * on a 48-period day) or in a column whose number does not parse; a blank cell inside the
+ * periods of the day. The source writes 0 for no generation, so a blank is missing data.
+ * Expected cells are units x periods.
+ * A day is never partial: every expected cell has a value, or the day is invalid or missing.
  */
 export async function publishGenerationMd(options: {
   bronzeDir: string;
@@ -107,14 +110,18 @@ export async function publishGenerationMd(options: {
                OR network_code IS NULL OR gen_code IS NULL) AS no_ids,
            (SELECT count(*) - count(DISTINCT (site_code, point_of_connection, network_code, gen_code))
              FROM units) AS duplicates,
-           count(*) FILTER (WHERE trading_period NOT BETWEEN 1 AND ${periods}) AS bad_periods,
+           (SELECT count(*) FROM units) AS units,
+           count(*) FILTER (WHERE trading_period NOT BETWEEN 1 AND ${periods}
+             OR trading_period IS NULL) AS bad_periods,
+           count(*) FILTER (WHERE trading_period BETWEEN 1 AND ${periods}) AS in_period,
            count(*) FILTER (WHERE kilowatt_hours IS NULL OR NOT isfinite(kilowatt_hours)) AS bad_values,
-           list(DISTINCT trading_period) FILTER (WHERE trading_period BETWEEN 1 AND ${periods}) AS present,
            count(*) AS cells
          FROM cells`,
       )
     ).getRowObjectsJson() as Array<Record<string, unknown>>;
     const n = (key: string) => Number(check?.[key]);
+    // Every cell of the date is blank: the source has no data for it.
+    if (n("cells") === 0) return { date, status: "missing" };
     const errors: string[] = [];
     if (n("no_ids") > 0)
       errors.push(
@@ -127,6 +134,11 @@ export async function publishGenerationMd(options: {
       );
     if (n("bad_values") > 0)
       errors.push(`${n("bad_values")} values are not finite numbers`);
+    const blanks = n("units") * periods - n("in_period");
+    if (blanks > 0)
+      errors.push(
+        `${blanks} blank cells inside trading periods 1 to ${periods}`,
+      );
     if (errors.length > 0) return { date, status: "invalid", errors };
 
     // Map each period to its UTC span with the time model.
@@ -156,16 +168,7 @@ export async function publishGenerationMd(options: {
        ORDER BY c.trading_period, c.site_code, c.point_of_connection, c.network_code, c.gen_code`,
       path,
     );
-    // Missing periods do not make a day invalid. The partition holds the rows that exist.
-    const present = new Set(((check?.present ?? []) as unknown[]).map(Number));
-    const missingPeriods = Array.from(
-      { length: periods },
-      (_, i) => i + 1,
-    ).filter((period) => !present.has(period));
-    const rows = n("cells");
-    return missingPeriods.length === 0
-      ? { date, status: "complete", rows, path }
-      : { date, status: "partial", rows, path, missingPeriods };
+    return { date, status: "complete", rows: n("cells"), path };
   } finally {
     connection.closeSync();
   }
