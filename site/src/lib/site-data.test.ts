@@ -30,7 +30,14 @@ beforeEach(async () => {
 afterEach(async () => {
   if (previousDataRoot === undefined) delete process.env.DATA_ROOT;
   else process.env.DATA_ROOT = previousDataRoot;
+  delete process.env.SITE_REQUIRE_GOLD;
   await rm(dataRoot, { recursive: true, force: true });
+});
+
+test("loadSiteIndex throws when SITE_REQUIRE_GOLD is set and gold is absent", () => {
+  process.env.DATA_ROOT = dataRoot;
+  process.env.SITE_REQUIRE_GOLD = "1";
+  expect(() => loadSiteIndex()).toThrow(/SITE_REQUIRE_GOLD=1/);
 });
 
 test("formatTradingDate throws when the date is not a calendar date", () => {
