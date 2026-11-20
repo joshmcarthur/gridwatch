@@ -1,4 +1,5 @@
 ---
+import GenerationMixChart from "../../../../components/GenerationMixChart.astro";
 import Layout from "../../../../layouts/Layout.astro";
 import {
   CHART_SLOTS,
@@ -52,6 +53,11 @@ const months = monthGroups(index);
     >
       <h2 id="completeness-heading">How complete is this day?</h2>
       {notice.paragraphs.map((paragraph) => <p>{paragraph}</p>)}
+    </section>
+
+    <section class="slot" aria-labelledby="generation-mix">
+      <h2 id="generation-mix">What made the power</h2>
+      <GenerationMixChart day={day} />
     </section>
 
     {

@@ -76,7 +76,7 @@ test("battery is shown apart and is not in the primary total", () => {
   if (!period15) throw new Error("expected period 15");
   expect(period15.battery).toBeCloseTo(10.288, 3);
   expect(period15.primary).toBeCloseTo(79.848, 3);
-  expect(mix.layers.some((layer) => layer.fuel === "battery")).toBe(false);
+  expect(mix.layers.map((layer) => layer.label)).not.toContain("Battery");
 });
 
 test("hydro average over the day matches the daily summary", () => {

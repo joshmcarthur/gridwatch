@@ -29,11 +29,6 @@ const PRICE_REGIONS: Record<string, string> = {
 
 export const CHART_SLOTS = [
   {
-    id: "generation-mix",
-    title: "What made the power",
-    body: "A chart of what kind of fuel made the electricity through the day will sit here. It is not drawn yet.",
-  },
-  {
     id: "wholesale-prices",
     title: "What it sold for",
     body: "A chart of wholesale prices, and how they differed between regions, will sit here. It is not drawn yet.",

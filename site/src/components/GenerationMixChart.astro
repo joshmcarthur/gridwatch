@@ -1,0 +1,266 @@
+---
+import * as Plot from "@observablehq/plot";
+import type { SiteDay } from "@gridwatch/publisher/site-contract";
+import { parseHTML } from "linkedom";
+import {
+  type GenerationMix,
+  type StackFuel,
+  generationMix,
+  generationMixSummary,
+  generationMixTable,
+} from "../lib/generation-mix";
+
+interface Props {
+  day: SiteDay;
+}
+
+const { day } = Astro.props;
+
+/** Fuel colours come from the Landscape tokens in tokens.css (ADR-0015). */
+const FUEL_COLOUR: Record<StackFuel, string> = {
+  hydro: "var(--color-fuel-hydro)",
+  geothermal: "var(--color-fuel-geothermal)",
+  wind: "var(--color-fuel-wind)",
+  solar: "var(--color-fuel-solar)",
+  gas: "var(--color-fuel-gas)",
+  coal_gas: "var(--color-fuel-coal-gas)",
+  other: "var(--color-fuel-other)",
+  unmapped: "var(--color-fuel-unmapped)",
+};
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const mix = generationMix(day);
+
+/** Plot runs here, at build time, and returns static SVG. No client script. */
+function renderChart(data: GenerationMix): {
+  svg: string;
+  summary: string;
+} {
+  const { document } = parseHTML("<!doctype html><html><body></body></html>");
+  const summary = generationMixSummary(data);
+  const labelAt = new Map(
+    data.ticks.map((tick) => [tick.at.getTime(), tick.label]),
+  );
+  const plot = Plot.plot({
+    document: document as unknown as Document,
+    width: 960,
+    height: 340,
+    marginLeft: 72,
+    marginBottom: 40,
+    x: {
+      label: null,
+      ticks: data.ticks.map((tick) => tick.at),
+      tickFormat: (value: Date) => labelAt.get(value.getTime()) ?? "",
+    },
+    y: { label: "Average megawatts (MW)", grid: true },
+    color: {
+      domain: data.layers.map((layer) => layer.fuel),
+      range: data.layers.map((layer) => FUEL_COLOUR[layer.fuel]),
+    },
+    marks: [
+      Plot.areaY(data.areas, {
+        x: "start",
+        y1: "base",
+        y2: "top",
+        fill: "fuel",
+        stroke: "white",
+        strokeWidth: 1,
+      }),
+      Plot.ruleX(data.points, {
+        x: "start",
+        stroke: "transparent",
+        strokeWidth: 14,
+        title: "title",
+      }),
+    ],
+  }) as unknown as SVGSVGElement;
+
+  const title = document.createElementNS(SVG_NS, "title");
+  title.setAttribute("id", "generation-mix-chart-title");
+  title.textContent = "Generation mix by fuel";
+  const desc = document.createElementNS(SVG_NS, "desc");
+  desc.setAttribute("id", "generation-mix-chart-summary");
+  desc.textContent = summary;
+  plot.insertBefore(desc, plot.firstChild);
+  plot.insertBefore(title, desc);
+  plot.setAttribute("role", "img");
+  plot.setAttribute(
+    "aria-labelledby",
+    "generation-mix-chart-title generation-mix-chart-summary",
+  );
+  return { svg: plot.outerHTML, summary };
+}
+
+const rendered = mix ? renderChart(mix) : null;
+const table = mix ? generationMixTable(mix) : null;
+---
+
+{
+  mix === null ? (
+    <p class="chart-missing">
+      We do not have generation numbers for this day, so there is no chart.
+    </p>
+  ) : (
+    <>
+    <figure class="chart">
+      {mix.incomplete && (
+        <p class="chart-notice">
+          Some generation numbers are missing. Where a plant has no number, the
+          chart counts it as 0, and the table marks that time as incomplete.
+        </p>
+      )}
+      <Fragment set:html={rendered?.svg} />
+      <ul class="legend" aria-label="Fuels, in the order of the stack">
+        {mix.layers.map((layer) => (
+          <li>
+            <span
+              class="swatch"
+              style={`background: ${FUEL_COLOUR[layer.fuel]}`}
+              aria-hidden="true"
+            />
+            {layer.label}
+          </li>
+        ))}
+      </ul>
+      <figcaption>
+        <p>
+          Average megawatts (MW) for each 30-minute period. Each band is one
+          fuel, stacked on the bands below it. Hover over the chart to see the
+          numbers for one period.
+        </p>
+        <p>
+          Source: Electricity Authority generation data, one row per power
+          station, grouped by fuel.
+        </p>
+        <p>
+          Batteries are not in the stack. Their power is in the last column of
+          the table.
+        </p>
+      </figcaption>
+    </figure>
+    <details class="chart-table">
+      <summary>Show the numbers as a table</summary>
+      <div class="table-scroll">
+        <table>
+          <caption>
+            Average megawatts by fuel for each 30-minute period. Shares are of
+            the primary total, which excludes battery.
+          </caption>
+          <thead>
+            <tr>
+              {table?.headers.map((header) => <th scope="col">{header}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {table?.rows.map((row) => (
+              <tr>
+                <th scope="row">{row[0]}</th>
+                {row.slice(1).map((cell) => (
+                  <td>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    </>
+  )
+}
+
+<style>
+  .chart {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .chart :global(svg) {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .chart-notice,
+  .chart-missing {
+    margin: 0;
+  }
+
+  .legend {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    font-size: var(--text-label);
+  }
+
+  .legend li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .swatch {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 0.25rem;
+    flex: none;
+  }
+
+  figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    font-size: var(--text-label);
+    color: var(--color-ink-muted);
+  }
+
+  figcaption p {
+    margin: 0;
+  }
+
+  .chart-table summary {
+    cursor: pointer;
+    font-size: var(--text-label);
+  }
+
+  .table-scroll {
+    overflow-x: auto;
+    margin-top: var(--space-3);
+  }
+
+  table {
+    border-collapse: collapse;
+    font-size: var(--text-label);
+    white-space: nowrap;
+  }
+
+  caption {
+    text-align: left;
+    padding-bottom: var(--space-2);
+    color: var(--color-ink-muted);
+    white-space: normal;
+  }
+
+  th,
+  td {
+    padding: var(--space-1) var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+    text-align: right;
+  }
+
+  th {
+    text-align: right;
+  }
+
+  thead th {
+    font-weight: 700;
+  }
+
+  tbody th {
+    font-weight: 400;
+  }
+</style>

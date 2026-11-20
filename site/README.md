@@ -31,4 +31,4 @@ The publisher writes one JSON file per trading day to `gold/site/days/YYYY-MM-DD
 
 ## Design
 
-Layout, type and colour follow the Landscape HTML archives (local `design/` zip files, not in git). Tokens live in `src/styles/tokens.css`. Charts reuse those tokens. The chart library is Observable Plot ([ADR-0015](../docs/adr/0015-chart-library.md)). The Plot package is not a dependency until a chart issue adds it.
+Layout, type and colour follow the Landscape HTML archives (local `design/` zip files, not in git). Tokens live in `src/styles/tokens.css`. Charts reuse those tokens. The chart library is Observable Plot ([ADR-0015](../docs/adr/0015-chart-library.md)). Charts render to static SVG at build time, with no client JavaScript ([ADR-0017](../docs/adr/0017-static-svg-charts.md)).

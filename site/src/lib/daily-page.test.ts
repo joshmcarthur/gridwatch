@@ -172,7 +172,6 @@ test("headline falls back when generation or prices are missing", () => {
 
 test("chart slots leave empty homes for later issues", () => {
   expect(CHART_SLOTS.map((slot) => slot.id)).toEqual([
-    "generation-mix",
     "wholesale-prices",
     "energy-flow",
   ]);
