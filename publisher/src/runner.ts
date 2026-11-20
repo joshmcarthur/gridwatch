@@ -5,6 +5,13 @@ import { parseArgs } from "node:util";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { datasets, type PublisherDataset } from "./datasets.ts";
 import { bronzeVersions, lit } from "./silver/common.ts";
+import {
+  completenessKey,
+  fillHeldCompleteness,
+  loadCompleteness,
+  recordCompleteness,
+  saveCompleteness,
+} from "./silver/completeness.ts";
 
 export interface RunOptions {
   bronzeDir: string;
@@ -80,13 +87,17 @@ async function silverVersions(
 
 /**
  * Publish every dataset, in registry order. A date is published when its silver partition is
- * missing or holds an older bronze version than the manifest names. A run with nothing new writes nothing.
+ * missing or holds an older bronze version than the manifest names. A run that publishes
+ * nothing, and already has a completeness row for each skipped date, writes nothing (ADR-0010).
  * A failing dataset or date does not stop the others.
  */
 export async function runPublish(
   options: RunOptions,
 ): Promise<DatasetSummary[]> {
   const { bronzeDir, silverDir, range } = options;
+  const completeness = await loadCompleteness(silverDir);
+  const processedAt = new Date().toISOString();
+  let dirty = false;
   const summaries: DatasetSummary[] = [];
   for (const dataset of options.registry ?? datasets) {
     if (options.only && !options.only.includes(dataset.id)) continue;
@@ -109,31 +120,69 @@ export async function runPublish(
       const dates = [...wanted.keys()]
         .filter((d) => !range || (d >= range.from && d <= range.to))
         .sort();
+      const skipped: string[] = [];
       for (const date of dates) {
         if (held.get(date) === wanted.get(date)) {
           summary.upToDate++;
+          if (!completeness.has(completenessKey(dataset.id, date)))
+            skipped.push(date);
           continue;
         }
         try {
           const result = await dataset.publish({ bronzeDir, silverDir, date });
-          if (result.status === "missing") summary.missing++;
-          else if (result.status === "invalid")
-            summary.failed.push(`${date}: INVALID ${result.errors.join("; ")}`);
-          else {
-            summary.published++;
-            if (result.status === "partial")
+          switch (result.status) {
+            case "missing":
+              summary.missing++;
+              break;
+            case "invalid":
+              summary.failed.push(
+                `${date}: INVALID ${result.errors.join("; ")}`,
+              );
+              break;
+            case "complete":
+              summary.published++;
+              break;
+            case "partial":
+              summary.published++;
               summary.partial.push(
                 `${date}: PARTIAL ${result.rows} rows, missing periods ${result.missingPeriods.join(",")}`,
               );
+              break;
+            default: {
+              const unreachable: never = result;
+              throw new Error(
+                `Unknown publish status: ${JSON.stringify(unreachable)}`,
+              );
+            }
           }
+          recordCompleteness(
+            completeness,
+            dataset,
+            wanted.get(date),
+            result,
+            processedAt,
+          );
+          dirty = true;
         } catch (error) {
           summary.failed.push(`${date}: ${(error as Error).message}`);
         }
+      }
+      if (skipped.length > 0) {
+        await fillHeldCompleteness(
+          completeness,
+          dataset,
+          silverDir,
+          skipped,
+          wanted,
+          processedAt,
+        );
+        dirty = true;
       }
     } catch (error) {
       summary.failed.push((error as Error).message);
     }
   }
+  if (dirty) await saveCompleteness(silverDir, completeness);
   return summaries;
 }
 
@@ -154,10 +203,12 @@ export function printSummary(summaries: DatasetSummary[]): void {
 }
 
 export const USAGE = `Usage: publisher [--from YYYY-MM-DD --to YYYY-MM-DD] [--dataset ID]... [--force]
+       publisher status
 
 With no range, each dataset publishes every date that is new or whose bronze file changed.
 With --from and --to, only dates in that range are considered (--from alone ends today; --to
 alone is not allowed). --force publishes the selected dates again even when they are up to date.
+publisher status prints the latest complete trading date for each dataset.
 Datasets: ${datasets.map((d) => d.id).join(", ")}`;
 
 /** Parse the command line. Throws a RangeError or TypeError for bad input. */

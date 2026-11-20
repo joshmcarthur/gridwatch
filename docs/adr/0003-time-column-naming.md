@@ -38,4 +38,8 @@ The module `publisher/src/trading-time.ts` implements the model with `Temporal` 
 
 ## Amendment (2026-11-20, [ADR-0005](0005-dataset-pattern.md))
 
-Silver tables omit `processed_at` so that re-publishing a day gives byte-identical Parquet. Only gold tables use `processed_at`.
+Silver fact tables omit `processed_at` so that re-publishing a day gives byte-identical Parquet. Gold tables use `processed_at`.
+
+## Amendment (2026-11-20, [ADR-0010](0010-completeness.md))
+
+`silver/_completeness` stores `processed_at`. Fact tables still omit it.

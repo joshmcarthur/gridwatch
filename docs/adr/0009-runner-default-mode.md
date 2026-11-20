@@ -41,7 +41,7 @@ A date the source never published (a gap in the source) has no record, so each r
 
 ### Publisher range
 
-Default: every date the manifest lists for the dataset. The manifest holds only what the collector fetched, so this is bounded by the backfill. `--from --to` limits the dates (`--from` alone ends today). `--force` publishes the selected dates again, for the case where silver code changed and bronze did not. A date that is up to date is skipped, so a second run writes nothing.
+Default: every date the manifest lists for the dataset. The manifest holds only what the collector fetched, so this is bounded by the backfill. `--from --to` limits the dates (`--from` alone ends today). `--force` publishes the selected dates again, for the case where silver code changed and bronze did not. A date that is up to date is skipped, so a second run writes nothing. The completeness row for a skipped date stays as it is ([ADR-0010](0010-completeness.md)). The run writes a completeness row when it publishes the date, or when the date is up to date and has no row yet. A run that does neither does not rewrite `silver/_completeness`.
 
 ### Failures
 
