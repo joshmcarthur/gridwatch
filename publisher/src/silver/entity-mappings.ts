@@ -3,7 +3,7 @@ import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { lit, writeParquetAtomically } from "./common.ts";
-import { FUEL_MAP } from "./fuel-map.ts";
+import { FUEL_MAP, FUEL_PLANT_OVERRIDES } from "./fuel-map.ts";
 
 export const TABLES = [
   "entity_points_of_connection",
@@ -106,12 +106,24 @@ function fingerprint(
   inputs: Partition[],
   shaOf: Map<string, string>,
 ): string {
+  const mapping = [
+    ...Object.entries(FUEL_MAP).map(
+      ([code, category]) => `fuel ${code} ${category}`,
+    ),
+    ...Object.entries(FUEL_PLANT_OVERRIDES).map(
+      ([plantId, category]) => `plant ${plantId} ${category}`,
+    ),
+  ]
+    .sort()
+    .join("\n");
   return createHash("sha256")
     .update(
-      inputs
-        .map(([, file]) => `${relative(silverDir, file)} ${shaOf.get(file)}`)
-        .sort()
-        .join("\n"),
+      [
+        mapping,
+        ...inputs
+          .map(([, file]) => `${relative(silverDir, file)} ${shaOf.get(file)}`)
+          .sort(),
+      ].join("\n"),
     )
     .digest("hex");
 }
@@ -214,6 +226,18 @@ export async function publishEntityMappings(options: {
          ${Object.entries(FUEL_MAP)
            .map(([code, category]) => `(${lit(code)}, ${lit(category)})`)
            .join(", ")}) t(fuel_code, fuel_category)`,
+    );
+    const plantOverrides = Object.entries(FUEL_PLANT_OVERRIDES);
+    await run(
+      plantOverrides.length === 0
+        ? `CREATE TEMP TABLE fuel_plant_overrides AS
+           SELECT NULL::VARCHAR AS plant_id, NULL::VARCHAR AS fuel_category WHERE false`
+        : `CREATE TEMP TABLE fuel_plant_overrides AS SELECT * FROM (VALUES
+             ${plantOverrides
+               .map(
+                 ([plantId, category]) => `(${lit(plantId)}, ${lit(category)})`,
+               )
+               .join(", ")}) t(plant_id, fuel_category)`,
     );
 
     // NSP rows for the day. A row is in force when start_date <= day <= end_date (inclusive,
@@ -370,13 +394,15 @@ export async function publishEntityMappings(options: {
         ? `CREATE TEMP TABLE plant_keys AS
            SELECT g.site_code || '/' || lower(g.gen_code) AS plant_id, g.site_code,
              g.point_of_connection, g.network_code, g.gen_code, g.fuel_code,
-             m.fuel_category
+             coalesce(o.fuel_category, m.fuel_category) AS fuel_category
            FROM (
              SELECT site_code, point_of_connection, network_code, gen_code,
                arg_max(fuel_code, trading_date) AS fuel_code
              FROM read_parquet(${files(generation)})
              GROUP BY site_code, point_of_connection, network_code, gen_code) g
-           LEFT JOIN fuel_map m ON m.fuel_code = g.fuel_code`
+           LEFT JOIN fuel_map m ON m.fuel_code = g.fuel_code
+           LEFT JOIN fuel_plant_overrides o
+             ON o.plant_id = g.site_code || '/' || lower(g.gen_code)`
         : `CREATE TEMP TABLE plant_keys AS SELECT NULL::VARCHAR AS plant_id,
              NULL::VARCHAR AS site_code, NULL::VARCHAR AS point_of_connection,
              NULL::VARCHAR AS network_code, NULL::VARCHAR AS gen_code,

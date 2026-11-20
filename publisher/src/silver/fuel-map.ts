@@ -40,3 +40,12 @@ export const FUEL_MAP: Record<string, FuelCategory> = {
   DSL: "other",
   CLG: "coal_gas", // the fleet file says "Coal/Gas"; see ADR-0008
 };
+
+/**
+ * Plant IDs whose Generation_MD fuel code is wrong. The match is the plant ID
+ * (`<site>/<lower-case Gen_Code>`). It does not change the source fuel code. Owner on #105:
+ * Waipori at `WPG0331` is mostly Mahinerangi wind, labelled Hydro in Generation_MD.
+ */
+export const FUEL_PLANT_OVERRIDES: Record<string, FuelCategory> = {
+  "WPG/waipori": "wind",
+};

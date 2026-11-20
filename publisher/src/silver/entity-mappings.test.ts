@@ -863,6 +863,26 @@ test("a fleet row ends on its end date: the end is exclusive", async () => {
   expect(await units("2026-11-18")).toEqual(["AAA1101:LATE", "AAA1101:NEXT"]);
 });
 
+test("Waipori at WPG0331 is wind even when Generation_MD labels it Hydro", async () => {
+  await writeNsp("2026-11-01", [
+    nsp("WPG0331", "SI", "2020-01-01", null),
+    nsp("BWK1101", "SI", "2020-01-01", null),
+  ]);
+  await writeGmd("2026-11-18", [
+    ["WPG", "WPG0331", "OTPO", "waipori", "Hydro"],
+    ["BWK", "BWK1101", "OTPO", "waipori", "Hydro"],
+  ]);
+  await build("2026-11-18");
+  expect(
+    await query(
+      `SELECT plant_id, fuel_category FROM ${table("entity_plants", "2026-11-18")} ORDER BY plant_id`,
+    ),
+  ).toEqual([
+    { plant_id: "BWK/waipori", fuel_category: "hydro" },
+    { plant_id: "WPG/waipori", fuel_category: "wind" },
+  ]);
+});
+
 test("a unit links to a plant only when the POC has one plant and the fuel agrees", async () => {
   await writeNsp("2026-11-01", [nsp("AAA1101", "NI", "2020-01-01", null)]);
   await writeGmd("2026-11-18", [

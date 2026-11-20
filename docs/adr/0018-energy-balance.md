@@ -66,4 +66,5 @@ A day term is a sum only when all periods have the term: `CASE WHEN count(term) 
 
 - The Sankey can show the residual as its own band, with units and a plain label.
 - A reader sees modelled load, so the Sankey must say "modelled". The glossary has entries for **Grid load (modelled)**, **Energy-balance residual** and **HVDC import**.
-- The size of the typical and the worst residual is in the comment on [#23](https://github.com/joshmcarthur/gridwatch/issues/23). Whether it is acceptable for a public Sankey is the owner's decision, and #30 waits for it.
+- The size of the typical and the worst residual is in the comment on [#23](https://github.com/joshmcarthur/gridwatch/issues/23).
+- Owner on [#107](https://github.com/joshmcarthur/gridwatch/issues/107) (2026-11-21): the residual is acceptable for a public Sankey when it is its own band and labelled as modelled load, not consumption. Generation_MD omissions stay visible in the residual and in the Sankey note. [#30](https://github.com/joshmcarthur/gridwatch/issues/30) can start.
