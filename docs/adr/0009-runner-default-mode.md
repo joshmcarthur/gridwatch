@@ -18,6 +18,8 @@ The runner stores no "last run" value. It derives it.
 - **Collector.** The runner reads which trading dates the manifest holds for each dataset. Every check appends a record, so the manifest is the record of what ran. It decides what is missing in the 12-month window.
 - **Publisher.** A date needs publishing when its silver partition is missing, or its `bronze_sha256` differs from the SHA-256 of the newest bronze version that lists the date. Every silver row carries `bronze_sha256` ([ADR-0005](0005-dataset-pattern.md)). The runner reads the manifest once for the newest SHA of each date, and reads `bronze_sha256` from the silver partitions with one DuckDB query for each dataset.
 
+The entity mappings have no bronze file. Their silver tables carry `inputs_sha256` instead, and the runner compares it the same way. See the runner contract in [ADR-0008](0008-entity-model.md).
+
 The publisher does not call `tradingDatesChangedSince` ([ADR-0004](0004-bronze-archive-and-manifest.md), [ADR-0007](0007-generation-md-monthly-files.md)). That function lived in the collector and needed the time of the last publish. We removed it. ADR-0004 and ADR-0007 keep their text, with a note that points here. A stored time is a second state file. It also loses a day for good when one publish fails after the time moves. Comparing SHA values needs no state, publishes exactly the days whose input changed, and tries an invalid day again on each run. The publisher keeps its own manifest reader (`bronzeVersions` next to `findBronze`), as the manifest field names are the contract between the two packages.
 
 ### Collector default range

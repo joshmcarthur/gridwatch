@@ -37,13 +37,14 @@ const nzToday = () => Temporal.Now.plainDateISO("Pacific/Auckland").toString();
 /**
  * The SHA-256 of the bronze file behind each silver partition of a dataset, by date. Every
  * silver row carries `bronze_sha256` (ADR-0005), so silver says which bronze version it holds.
+ * The entity mappings carry `inputs_sha256` instead (ADR-0008).
  */
 async function silverVersions(
   silverDir: string,
   dataset: PublisherDataset,
 ): Promise<Map<string, string>> {
   const versions = new Map<string, string>();
-  const dir = join(silverDir, dataset.id);
+  const dir = join(silverDir, dataset.table ?? dataset.id);
   // A folder without `data.parquet` is not a partition. A failed first write leaves one.
   const folders = await readdir(dir, { withFileTypes: true }).catch(
     (error: NodeJS.ErrnoException) => {
@@ -63,14 +64,14 @@ async function silverVersions(
     const reader = await connection.runAndReadAll(
       `SELECT DISTINCT
          regexp_extract(filename, '${dataset.partitionKey}=(\\d{4}-\\d{2}-\\d{2})', 1) AS date,
-         bronze_sha256
+         ${dataset.versionColumn ?? "bronze_sha256"} AS version
        FROM read_parquet([${files.map(lit).join(", ")}], filename = true)`,
     );
     for (const row of reader.getRowObjectsJson() as Array<{
       date: string;
-      bronze_sha256: string;
+      version: string;
     }>)
-      versions.set(row.date, row.bronze_sha256);
+      versions.set(row.date, row.version);
   } finally {
     connection.closeSync();
   }
@@ -78,8 +79,8 @@ async function silverVersions(
 }
 
 /**
- * Publish every dataset. A date is published when its silver partition is missing or holds
- * an older bronze version than the manifest names. A run with nothing new writes nothing.
+ * Publish every dataset, in registry order. A date is published when its silver partition is
+ * missing or holds an older bronze version than the manifest names. A run with nothing new writes nothing.
  * A failing dataset or date does not stop the others.
  */
 export async function runPublish(
@@ -99,7 +100,9 @@ export async function runPublish(
     };
     summaries.push(summary);
     try {
-      const wanted = await bronzeVersions(bronzeDir, dataset.id);
+      const wanted = dataset.wantedVersions
+        ? await dataset.wantedVersions(silverDir)
+        : await bronzeVersions(bronzeDir, dataset.id);
       const held = options.force
         ? new Map<string, string>()
         : await silverVersions(silverDir, dataset);
