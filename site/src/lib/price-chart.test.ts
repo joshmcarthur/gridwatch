@@ -66,7 +66,9 @@ test("period 1 has the three node prices, the spreads and the 00:00 time", () =>
   expect(first.time).toBe("00:00");
   expect(first.title).toContain("OTA2201 $81.00");
   expect(chart.nodes.map((node) => node.values[0])).toEqual([81, 71, 61]);
-  expect(chart.spreads.map((spread) => spread.values[0])).toEqual([10, 10, 20]);
+  expect(chart.tableSpreads.map((spread) => spread.values[0])).toEqual([
+    10, 10, 20,
+  ]);
 });
 
 test("period 5 on the DST-start day is 03:00, with no NZDT suffix", () => {
@@ -186,19 +188,6 @@ test("a null price breaks only that node's line, and the table says No data", ()
     "$10.00",
     "No data",
   ]);
-  expect(chart.nodes[1]?.lone.some(Boolean)).toBe(false);
-});
-
-test("a single valid period between two gaps is marked for a dot", () => {
-  const day = copy();
-  const ben = day.prices.nodes[2];
-  if (!ben) throw new Error("expected BEN");
-  ben.price[2] = null;
-  ben.price[4] = null;
-  const chart = chartOf(day);
-  expect(chart.nodes[2]?.lone[3]).toBe(true);
-  expect(chart.nodes[2]?.lone[2]).toBe(false);
-  expect(chart.nodes[2]?.lone[4]).toBe(false);
 });
 
 test("a spike inside a period is plotted as the period price, not the daily maximum", () => {
@@ -240,16 +229,20 @@ test("a negative spread shows a minus sign and the spread axis includes zero", (
   expect(chart.spreadDomain[1]).toBeGreaterThanOrEqual(0);
 });
 
-test("OTA-BEN is not drawn, so it does not set the spread axis", () => {
+test("OTA-BEN is table-only, so it does not set the spread axis", () => {
   const day = copy();
   const otaBen = day.prices.spreads[2];
   if (!otaBen) throw new Error("expected OTA-BEN");
   otaBen.spread = otaBen.spread.map(() => 1000);
   const chart = chartOf(day);
-  expect(chart.spreads.map((spread) => spread.drawn)).toEqual([
-    true,
-    true,
-    false,
+  expect(chart.plottedSpreads.map((spread) => spread.name)).toEqual([
+    "OTA-HAY",
+    "HAY-BEN",
+  ]);
+  expect(chart.tableSpreads.map((spread) => spread.name)).toEqual([
+    "OTA-HAY",
+    "HAY-BEN",
+    "OTA-BEN",
   ]);
   expect(chart.spreadDomain).toEqual([0, 10]);
 });
@@ -287,6 +280,6 @@ test("a day with no period prices says so in the summary", () => {
     node.price = node.price.map(() => null);
   }
   expect(priceChartSummary(chartOf(day))).toBe(
-    "We have no period prices for this day.",
+    "Period prices for this day are missing.",
   );
 });

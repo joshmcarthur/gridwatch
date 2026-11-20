@@ -2,27 +2,22 @@ import type {
   PricesSection,
   SiteDay,
 } from "@gridwatch/publisher/site-contract";
-import { PRICE_REGIONS } from "./daily-page.ts";
 import { clockLabeller, timeTicks, zonedAt } from "./period-clock.ts";
+import { PRICE_REGIONS } from "./price-regions.ts";
 
 export const PRICE_MISSING =
-  "We do not have wholesale prices for this day, so there is no chart.";
+  "Wholesale prices for this day are missing, so there is no chart.";
 
 export const PRICE_NOTICE =
   "Some wholesale price numbers are missing. A node with no price has a gap in its line, and the table says No data.";
 
+export type PriceIsland = "NI" | "SI";
+
 /** Island and line style for each reference node (ADR-0012, Landscape colour rules). */
-const NODE_STYLE: Record<string, { island: "NI" | "SI"; dashed: boolean }> = {
+const NODE_STYLE: Record<string, { island: PriceIsland; dashed: boolean }> = {
   OTA2201: { island: "NI", dashed: false },
   HAY2201: { island: "NI", dashed: true },
   BEN2201: { island: "SI", dashed: false },
-};
-
-/** Which spreads are drawn and how, keyed by `from-to`. OTA-BEN is the sum of the other two, so it is not drawn (ADR-0012, ADR-0017). */
-const SPREAD_STYLE: Record<string, { drawn: boolean; dashed: boolean }> = {
-  "OTA2201-HAY2201": { drawn: true, dashed: true },
-  "HAY2201-BEN2201": { drawn: true, dashed: false },
-  "OTA2201-BEN2201": { drawn: false, dashed: false },
 };
 
 const money = new Intl.NumberFormat("en-NZ", {
@@ -34,14 +29,12 @@ export interface PriceNodeLine {
   poc: string;
   /** The label from `PRICE_REGIONS`. */
   label: string;
-  island: "NI" | "SI";
+  island: PriceIsland;
   dashed: boolean;
   /** $/MWh for each period. Null where silver has no price. */
   values: Array<number | null>;
   /** True where the period price is a proxy price. */
   proxy: boolean[];
-  /** A valid period whose neighbours are both null. A line draws nothing for it, so it gets a dot. */
-  lone: boolean[];
   daily: {
     mean: number | null;
     min: number | null;
@@ -56,10 +49,9 @@ export interface PriceSpreadLine {
   name: string;
   /** First minus second, in $/MWh. */
   values: Array<number | null>;
-  /** A valid period with both neighbours null. See `PriceNodeLine.lone`. */
-  lone: boolean[];
-  /** Only two spreads are drawn. The third is in the table and in the hover text. */
-  drawn: boolean;
+}
+
+export interface PlottedSpreadLine extends PriceSpreadLine {
   dashed: boolean;
 }
 
@@ -79,14 +71,18 @@ export interface PriceChart {
   incomplete: boolean;
   periods: PricePeriod[];
   nodes: PriceNodeLine[];
-  /** The spreads in the contract order. */
-  spreads: PriceSpreadLine[];
+  /** Spreads drawn as chart lines. OTA-BEN is not here. */
+  plottedSpreads: PlottedSpreadLine[];
+  /** Spreads in the table and hover text, including OTA-BEN, in contract order. */
+  tableSpreads: PriceSpreadLine[];
   /** Y domain of the price chart. Built from the period prices, with zero included. */
   priceDomain: [number, number];
-  /** Y domain of the spread chart, over the drawn spreads, with zero included. */
+  /** Y domain of the spread chart, over the plotted spreads, with zero included. */
   spreadDomain: [number, number];
   ticks: Array<{ at: Date; label: string }>;
 }
+
+type SpreadPlacement = { kind: "plotted"; dashed: boolean } | { kind: "table" };
 
 /**
  * Builds the price chart for one day. Returns null when the prices section is missing.
@@ -112,7 +108,6 @@ export function priceChart(day: SiteDay): PriceChart | null {
       dashed: style.dashed,
       values,
       proxy: day.periods.map((period) => proxyPeriods.has(period.period)),
-      lone: lonePoints(values),
       daily: {
         mean: node.daily.mean_price,
         min: node.daily.min_price,
@@ -121,21 +116,29 @@ export function priceChart(day: SiteDay): PriceChart | null {
     };
   });
 
-  const spreads: PriceSpreadLine[] = section.spreads.map((spread) => {
-    const style = SPREAD_STYLE[`${spread.from}-${spread.to}`];
-    if (!style) {
-      throw new Error(`No chart style for ${spread.from} to ${spread.to}`);
-    }
-    return {
+  const plottedSpreads: PlottedSpreadLine[] = [];
+  const tableSpreads: PriceSpreadLine[] = [];
+  for (const spread of section.spreads) {
+    const line: PriceSpreadLine = {
       from: spread.from,
       to: spread.to,
       name: `${spread.from.slice(0, 3)}-${spread.to.slice(0, 3)}`,
       values: spread.spread,
-      lone: lonePoints(spread.spread),
-      drawn: style.drawn,
-      dashed: style.dashed,
     };
-  });
+    tableSpreads.push(line);
+    const placement = spreadPlacement(spread.from, spread.to);
+    switch (placement.kind) {
+      case "plotted":
+        plottedSpreads.push({ ...line, dashed: placement.dashed });
+        break;
+      case "table":
+        break;
+      default: {
+        const _exhaustive: never = placement;
+        return _exhaustive;
+      }
+    }
+  }
 
   const periods: PricePeriod[] = day.periods.map((period, index) => {
     // A gap is a period with no price at any node. One missing node only breaks its own line.
@@ -144,13 +147,12 @@ export function priceChart(day: SiteDay): PriceChart | null {
     const start = new Date(period.start_utc);
     const title = gap
       ? `${time} · No price numbers for this period`
-      : hoverText(time, index, nodes, spreads);
+      : hoverText(time, index, nodes, tableSpreads);
     return { period: period.period, start, time, gap, title };
   });
 
   const plotted = nodes.flatMap((node) => node.values).filter(isNumber);
-  const drawnSpreads = spreads
-    .filter((spread) => spread.drawn)
+  const plottedSpreadValues = plottedSpreads
     .flatMap((spread) => spread.values)
     .filter(isNumber);
 
@@ -158,9 +160,10 @@ export function priceChart(day: SiteDay): PriceChart | null {
     incomplete: section.state === "incomplete",
     periods,
     nodes,
-    spreads,
+    plottedSpreads,
+    tableSpreads,
     priceDomain: domain(plotted),
-    spreadDomain: domain(drawnSpreads),
+    spreadDomain: domain(plottedSpreadValues),
     ticks: timeTicks(day),
   };
 }
@@ -173,7 +176,7 @@ export function priceChartTable(chart: PriceChart): {
   const headers = [
     "Time",
     ...chart.nodes.map((node) => `${node.poc} $/MWh`),
-    ...chart.spreads.map((spread) => `Spread ${spread.name} ($/MWh)`),
+    ...chart.tableSpreads.map((spread) => `Spread ${spread.name} ($/MWh)`),
   ];
   const rows = chart.periods.map((period, index) => {
     const incomplete =
@@ -187,7 +190,7 @@ export function priceChartTable(chart: PriceChart): {
           node.proxy[index] ?? false,
         );
       }),
-      ...chart.spreads.map((spread) => {
+      ...chart.tableSpreads.map((spread) => {
         if (period.gap) return "No data";
         const value = spread.values[index] ?? null;
         return value === null ? "No data" : signedMoney(value);
@@ -206,19 +209,17 @@ export function priceChartSummary(chart: PriceChart): string {
       return `${node.poc} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
     })
     .filter((part): part is string => part !== null);
-  if (parts.length === 0) return "We have no period prices for this day.";
+  if (parts.length === 0) return "Period prices for this day are missing.";
   return `Period prices per megawatt-hour: ${parts.join(", ")}.`;
 }
 
 /** One sentence for the spread chart text alternative. */
 export function priceSpreadSummary(chart: PriceChart): string {
-  const parts = chart.spreads
-    .filter((spread) => spread.drawn)
-    .map((spread) => {
-      const plotted = spread.values.filter(isNumber);
-      if (plotted.length === 0) return `${spread.name} has no data`;
-      return `${spread.name} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
-    });
+  const parts = chart.plottedSpreads.map((spread) => {
+    const plotted = spread.values.filter(isNumber);
+    if (plotted.length === 0) return `${spread.name} has no data`;
+    return `${spread.name} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
+  });
   return `Spreads in $/MWh, first node minus second: ${parts.join(", ")}. OTA-BEN is in the table.`;
 }
 
@@ -247,6 +248,20 @@ export function priceChartDaily(chart: PriceChart): string[] {
       .join(", ");
     return [`${heading}: ${list}, per megawatt-hour.`];
   });
+}
+
+function spreadPlacement(from: string, to: string): SpreadPlacement {
+  const key = `${from}-${to}`;
+  switch (key) {
+    case "OTA2201-HAY2201":
+      return { kind: "plotted", dashed: true };
+    case "HAY2201-BEN2201":
+      return { kind: "plotted", dashed: false };
+    case "OTA2201-BEN2201":
+      return { kind: "table" };
+    default:
+      throw new Error(`No chart style for ${from} to ${to}`);
+  }
 }
 
 function hoverText(
@@ -285,16 +300,6 @@ function priceCell(value: number | null, proxy: boolean): string {
 function signedMoney(value: number): string {
   const sign = value < 0 ? "-" : "";
   return `${sign}$${money.format(Math.abs(value))}`;
-}
-
-/** A valid period whose neighbours are both null (or outside the day). A line draws nothing for it. */
-export function lonePoints(values: Array<number | null>): boolean[] {
-  return values.map(
-    (value, index) =>
-      value !== null &&
-      (values[index - 1] ?? null) === null &&
-      (values[index + 1] ?? null) === null,
-  );
 }
 
 /** Zero is always in the domain. An empty list gives a unit domain, so the axis still draws. */
