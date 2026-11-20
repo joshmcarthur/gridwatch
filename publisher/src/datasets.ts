@@ -1,5 +1,6 @@
 import type { PublishResult } from "./silver/common.ts";
 import { publishDispatchEnergyPrices } from "./silver/dispatch-energy-prices.ts";
+import { publishDispatchReservePrices } from "./silver/dispatch-reserve-prices.ts";
 import { publishGenerationFleet } from "./silver/generation-fleet.ts";
 import { publishGenerationMd } from "./silver/generation-md.ts";
 import { publishNetworkSupplyPoints } from "./silver/network-supply-points.ts";
@@ -27,6 +28,11 @@ export const datasets: PublisherDataset[] = [
     id: "dispatch_energy_prices",
     partitionKey: "trading_date",
     publish: publishDispatchEnergyPrices,
+  },
+  {
+    id: "dispatch_reserve_prices",
+    partitionKey: "trading_date",
+    publish: publishDispatchReservePrices,
   },
   {
     id: "nodal_prices_and_volumes",

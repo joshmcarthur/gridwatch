@@ -1,5 +1,6 @@
 import type { ManifestRecord } from "./archive.ts";
 import { collectDispatchEnergyPrices } from "./electricity-authority/dispatch-energy-prices.ts";
+import { collectDispatchReservePrices } from "./electricity-authority/dispatch-reserve-prices.ts";
 import { collectGenerationFleet } from "./electricity-authority/generation-fleet.ts";
 import { collectGenerationMd } from "./electricity-authority/generation-md.ts";
 import { collectNetworkSupplyPoints } from "./electricity-authority/network-supply-points.ts";
@@ -94,6 +95,11 @@ export const datasets: CollectorDataset[] = [
     id: "dispatch_energy_prices",
     defaultFrom: dailyFrom,
     collect: (context) => collectDispatchEnergyPrices(context).then(outcome),
+  },
+  {
+    id: "dispatch_reserve_prices",
+    defaultFrom: dailyFrom,
+    collect: (context) => collectDispatchReservePrices(context).then(outcome),
   },
   {
     id: "nodal_prices_and_volumes",
