@@ -1,0 +1,33 @@
+# ADR-0007: Generation_MD: one monthly file, one silver partition per trading day
+
+- Status: Accepted
+- Date: 2026-11-20
+
+## Context
+
+[ADR-0005](0005-dataset-pattern.md) fits datasets with one file per trading day. Generation_MD does not. The source publishes one wide CSV per calendar month, with columns `TP1` to `TP50`. The files lag the metered data by 10 days to about 6 weeks. The source re-stamps earlier months. See [#8](https://github.com/joshmcarthur/gridwatch/issues/8) and [`docs/sources.md`](../sources.md) section 3.5.
+
+## Decision
+
+The dataset ID is `generation_md`. It has the same shape as a dataset in ADR-0005. The differences follow.
+
+- **Collector.** `collectGenerationMd` lists the folder and archives each monthly file that overlaps `--from` to `--to`. It still uses `listNames` and `archiveFile`. A month the source does not list goes in `missing` (format `YYYY-MM`). The failed list also uses months. Without `--from`, the CLI starts 12 months before `--to`. The owner chose a 12 month backfill on #8. The default end is yesterday in NZ. That gives 12 files today.
+- **Manifest.** `trading_dates` lists every date of the month, also for a month the source has published only in part. `findBronze` then works for each day without a change. A revised file lists the same dates, so `tradingDatesChangedSince` returns all days of that month.
+- **Publisher.** One call publishes one trading date. It reads the whole monthly file and keeps the rows of that date. Each day is its own partition: `silver/generation_md/trading_date=YYYY-MM-DD/data.parquet`. The newest bronze version wins for each day. A revised monthly file replaces every partition of its month the next time the publisher runs for those days.
+- **Long form.** Silver has one row per unit and trading period. A blank cell writes no row. DuckDB `UNPIVOT` on the `TP<n>` columns does this in SQL. DuckDB matches column names without case, so `Trading_date` and `Trading_Date` both work.
+- **Unit key.** `(site_code, point_of_connection, network_code, gen_code)`. These are the source `Site_Code`, `POC_Code`, `Nwk_Code` and `Gen_Code`. One plant can have more than one point of connection. A duplicate key on a day is invalid.
+- **Unit of measure.** The source gives kWh. Silver keeps kWh in the column `kilowatt_hours`. Silver does not convert to MWh, because the conversion adds nothing and a division can change the digits. Gold can convert.
+- **Source codes.** `fuel_code` and `tech_code` keep the source values. The two vocabularies (`Hydro` and `HYD`, `Wind` and `WIN`, `Solar` and `SOL`, `Geo` and `GEO`) stay as they are. A fuel map belongs to the entity model issue (open question 8 in `docs/sources.md`).
+- **Period rules.** A non-empty value outside the periods of the day is invalid. That is TP49 and TP50 on a 48-period day, and TP47 and TP48 on a 46-period day. A normal day uses TP1 to TP48. The DST-end day uses TP1 to TP50.
+- **Missing, partial, invalid.**
+  - `missing`: no bronze file, or the file has no rows for that date. The second case is a month that the source has published in part.
+  - `partial`: a period has no value for any unit. The rows that exist are written. A blank cell for one unit in a period that other units fill writes no row and is not reported.
+  - `invalid`: the file has no rows, a trading date does not parse, a unit code is blank, a unit is duplicated, a value is not a finite number, or a value lies outside the periods of the day. A bad date makes every day of that file invalid, because the publisher cannot tell which day the row belongs to.
+- **Negative values.** Silver keeps them. A battery could report one. Live data from 12 months has none.
+- **Publisher CLI.** Without `--from`, it also starts 12 months before `--to`. It counts days with no source data and does not list them. The source lags, so the last weeks of a default range always have none.
+
+## Consequences
+
+- Each day reads the whole monthly file again (about 0.8 MB). A 12 month run reads each file about 30 times. A run takes under a minute.
+- A silver reader sees a `kilowatt_hours` value per unit and period. It must join the unit to the fleet table for plant and owner. The entity model issue decides the join key. Both tables hold `point_of_connection`.
+- A revised month changes the output of its days only when the publisher runs for them again. The runner issue decides when.
