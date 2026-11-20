@@ -1,0 +1,354 @@
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+import { DuckDBInstance } from "@duckdb/node-api";
+import { lit, writeParquetAtomically } from "./common.ts";
+import { FUEL_MAP } from "./fuel-map.ts";
+
+export const TABLES = [
+  "entity_points_of_connection",
+  "entity_regions",
+  "entity_participants",
+  "entity_plants",
+  "entity_units",
+  "entity_unmapped",
+] as const;
+
+export type EntityMappingsResult =
+  | {
+      date: string;
+      status: "complete";
+      /** Rows per table. `entity_unmapped` is the count of unmapped identifiers. */
+      rows: Record<(typeof TABLES)[number], number>;
+    }
+  /** No NSP snapshot on or before the date, so there is no mapping for it. */
+  | { date: string; status: "missing" }
+  | { date: string; status: "invalid"; errors: string[] };
+
+/** The partition files of a silver dataset, oldest first, as `[date, file]`. */
+async function partitions(silverDir: string, dataset: string) {
+  let names: string[];
+  try {
+    names = await readdir(join(silverDir, dataset));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  return names
+    .flatMap((name) => {
+      const match = /^(?:snapshot|trading)_date=(\d{4}-\d{2}-\d{2})$/.exec(
+        name,
+      );
+      return match?.[1]
+        ? [[match[1], join(silverDir, dataset, name, "data.parquet")] as const]
+        : [];
+    })
+    .sort(([a], [b]) => a.localeCompare(b));
+}
+
+/** A SQL list of file names for `read_parquet`. */
+const files = (list: ReadonlyArray<readonly [string, string]>) =>
+  `[${list.map(([, file]) => lit(file)).join(", ")}]`;
+
+/**
+ * Publish the entity mapping tables for one trading date, one partition per table:
+ * `<silverDir>/<table>/trading_date=<date>/data.parquet`. The tables hold the mapping that
+ * applies to that day (ADR-0008). The same call writes `entity_unmapped`: the identifiers in
+ * that day's silver of dispatch energy prices, nodal prices and volumes, and Generation_MD
+ * that do not resolve. A dataset with no partition for the day adds nothing to the report.
+ * Unmapped identifiers do not make the build fail. There is no `processed_at` column
+ * (ADR-0003, ADR-0005).
+ *
+ * Inputs: the newest NSP snapshot on or before the date; the newest fleet snapshot on or before
+ * the date, or the oldest fleet snapshot when none is that old (ADR-0008 amends ADR-0006 for
+ * the fleet, whose file holds its own history); every Generation_MD partition up to the
+ * date; every dispatch energy prices partition (the island of a POC does not change).
+ *
+ * Missing: there is no NSP snapshot on or before the date.
+ * Invalid (nothing written): one POC has two islands in the NSP rows chosen for it; one POC has
+ * two different islands in the dispatch price files and no NSP island; one region ID has two
+ * names.
+ */
+export async function publishEntityMappings(options: {
+  silverDir: string;
+  date: string;
+}): Promise<EntityMappingsResult> {
+  const { silverDir, date } = options;
+  const day = `DATE ${lit(date)}`;
+  const nsp = (await partitions(silverDir, "network_supply_points")).findLast(
+    ([snapshot]) => snapshot <= date,
+  );
+  if (!nsp) return { date, status: "missing" };
+  const fleets = await partitions(silverDir, "generation_fleet");
+  const fleet = fleets.findLast(([snapshot]) => snapshot <= date) ?? fleets[0];
+  const dispatch = await partitions(silverDir, "dispatch_energy_prices");
+  const generation = (await partitions(silverDir, "generation_md")).filter(
+    ([tradingDate]) => tradingDate <= date,
+  );
+  const sameDay = async (dataset: string) =>
+    (await partitions(silverDir, dataset)).filter(
+      ([tradingDate]) => tradingDate === date,
+    );
+  const nodalDay = await sameDay("nodal_prices_and_volumes");
+  const dispatchDay = await sameDay("dispatch_energy_prices");
+  const generationDay = generation.filter(
+    ([tradingDate]) => tradingDate === date,
+  );
+
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    await connection.run("SET TimeZone = 'UTC'");
+    const run = (sql: string) => connection.run(sql);
+
+    await run(
+      `CREATE TEMP TABLE fuel_map AS SELECT * FROM (VALUES
+         ${Object.entries(FUEL_MAP)
+           .map(([code, category]) => `(${lit(code)}, ${lit(category)})`)
+           .join(", ")}) t(fuel_code, fuel_category)`,
+    );
+
+    // NSP rows for the day. A row is in force when start_date <= day <= end_date (inclusive,
+    // ADR-0006). A POC with no row in force keeps its newest closed row: a closed POC can
+    // still carry a price, and the island and region of a place do not change.
+    await run(
+      `CREATE TEMP TABLE nsp_start AS
+       SELECT * FROM read_parquet(${lit(nsp[1])}) WHERE start_date <= ${day}`,
+    );
+    await run(
+      `CREATE TEMP TABLE nsp_pick AS
+       SELECT *, 'in_force' AS row_status FROM nsp_start
+       WHERE coalesce(end_date, DATE 'infinity') >= ${day}
+       UNION ALL
+       SELECT *, 'last_closed' FROM nsp_start
+       WHERE end_date < ${day}
+         AND point_of_connection NOT IN (
+           SELECT point_of_connection FROM nsp_start
+           WHERE coalesce(end_date, DATE 'infinity') >= ${day})
+       QUALIFY end_date = max(end_date) OVER (PARTITION BY point_of_connection)`,
+    );
+
+    await run(
+      dispatch.length > 0
+        ? `CREATE TEMP TABLE dispatch_islands AS
+           SELECT point_of_connection, count(DISTINCT island) AS islands, min(island) AS island,
+             string_agg(DISTINCT island, ', ' ORDER BY island) AS island_list
+           FROM read_parquet(${files(dispatch)})
+           WHERE island IS NOT NULL GROUP BY point_of_connection`
+        : `CREATE TEMP TABLE dispatch_islands AS SELECT NULL::VARCHAR AS point_of_connection,
+             NULL::BIGINT AS islands, NULL::VARCHAR AS island, NULL::VARCHAR AS island_list
+           WHERE false`,
+    );
+
+    // One row per POC from the NSP rows chosen above. Region is NULL when the POC has NSPs in
+    // more than one region.
+    await run(
+      `CREATE TEMP TABLE nsp_poc AS
+       SELECT point_of_connection AS poc_id, any_value(row_status) AS nsp_row_status,
+         count(DISTINCT island) AS islands, min(island) AS island,
+         count(DISTINCT network_reporting_region_id) AS region_count,
+         CASE WHEN count(DISTINCT network_reporting_region_id) = 1
+              THEN min(network_reporting_region_id) END AS region_id,
+         CASE WHEN count(DISTINCT (latitude, longitude)) = 1 THEN min(latitude) END AS latitude,
+         CASE WHEN count(DISTINCT (latitude, longitude)) = 1 THEN min(longitude) END AS longitude,
+         count(*) AS nsp_count
+       FROM nsp_pick GROUP BY point_of_connection`,
+    );
+
+    const errors: string[] = [];
+    const found = async (sql: string) =>
+      (await connection.runAndReadAll(sql)).getRowObjectsJson() as Array<
+        Record<string, string>
+      >;
+    for (const row of await found(
+      "SELECT poc_id FROM nsp_poc WHERE islands > 1 ORDER BY poc_id",
+    ))
+      errors.push(`${row.poc_id} has two islands in the NSP rows`);
+    for (const row of await found(
+      `SELECT d.point_of_connection AS poc, d.island_list FROM dispatch_islands d
+       WHERE d.islands > 1
+         AND d.point_of_connection NOT IN (SELECT poc_id FROM nsp_poc WHERE island IS NOT NULL)
+       ORDER BY 1`,
+    ))
+      errors.push(
+        `${row.poc} has two islands in the dispatch price files (${row.island_list})`,
+      );
+    for (const row of await found(
+      `SELECT network_reporting_region_id AS id FROM nsp_pick
+       WHERE network_reporting_region_id IS NOT NULL
+       GROUP BY 1 HAVING count(DISTINCT network_reporting_region) > 1 ORDER BY 1`,
+    ))
+      errors.push(`region ${row.id} has two names`);
+    if (errors.length > 0) return { date, status: "invalid", errors };
+
+    // Points of connection: every NSP POC with an island, plus every priced POC that the NSP
+    // table cannot place. These take their island from the price files.
+    await run(
+      `CREATE TEMP TABLE poc AS
+       SELECT poc_id, island, 'nsp' AS island_source, nsp_row_status, region_id, region_count,
+         latitude, longitude, nsp_count
+       FROM nsp_poc WHERE island IS NOT NULL
+       UNION ALL
+       SELECT d.point_of_connection, d.island, 'dispatch_prices', n.nsp_row_status,
+         n.region_id, coalesce(n.region_count, 0), n.latitude, n.longitude,
+         coalesce(n.nsp_count, 0)
+       FROM dispatch_islands d LEFT JOIN nsp_poc n ON n.poc_id = d.point_of_connection
+       WHERE n.island IS NULL`,
+    );
+
+    if (fleet) {
+      await run(
+        `CREATE TEMP TABLE fleet AS
+         SELECT * FROM read_parquet(${lit(fleet[1])})
+         WHERE effective_start_date <= ${day} AND ${day} < effective_end_date`,
+      );
+    } else {
+      await run(
+        `CREATE TEMP TABLE fleet AS SELECT NULL::DATE AS snapshot_date,
+           NULL::VARCHAR AS plant_name, NULL::VARCHAR AS point_of_connection,
+           NULL::VARCHAR AS unit_code, NULL::VARCHAR AS technology_code,
+           NULL::VARCHAR AS fuel_code, NULL::VARCHAR AS plant_operator_code,
+           NULL::VARCHAR AS plant_operator, NULL::DOUBLE AS nameplate_megawatts,
+           NULL::DATE AS date_commissioned, NULL::DATE AS date_decommissioned WHERE false`,
+      );
+    }
+
+    // Participants: network participants of the NSP rows, and plant operators of the fleet.
+    // The fleet placeholder operator `N/A` is not a participant.
+    await run(
+      `CREATE TEMP TABLE participants AS
+       SELECT code AS participant_id, min(name) AS name,
+         bool_or(is_operator) AS is_plant_operator, bool_or(is_network) AS is_network_participant
+       FROM (
+         SELECT network_participant AS code, NULL AS name, false AS is_operator, true AS is_network
+           FROM nsp_pick WHERE network_participant IS NOT NULL
+         UNION ALL
+         SELECT embedded_under_network_participant, NULL, false, true
+           FROM nsp_pick WHERE embedded_under_network_participant IS NOT NULL
+         UNION ALL
+         SELECT plant_operator_code, plant_operator, true, false
+           FROM fleet WHERE plant_operator_code <> 'N/A')
+       GROUP BY code`,
+    );
+
+    // Plants: one row per Generation_MD unit key. The plant ID is the site code and the
+    // lower-case Gen_Code. The fuel codes come from the newest day of each key.
+    await run(
+      generation.length > 0
+        ? `CREATE TEMP TABLE plants AS
+           SELECT g.site_code || '/' || lower(g.gen_code) AS plant_id,
+             g.point_of_connection AS poc_id, g.site_code, g.point_of_connection, g.network_code,
+             g.gen_code, g.fuel_code, g.tech_code, m.fuel_category,
+             p.participant_id AS network_participant_id
+           FROM (
+             SELECT site_code, point_of_connection, network_code, gen_code,
+               arg_max(fuel_code, trading_date) AS fuel_code,
+               arg_max(tech_code, trading_date) AS tech_code
+             FROM read_parquet(${files(generation)})
+             GROUP BY site_code, point_of_connection, network_code, gen_code) g
+           LEFT JOIN fuel_map m ON m.fuel_code = g.fuel_code
+           LEFT JOIN participants p ON p.participant_id = g.network_code`
+        : `CREATE TEMP TABLE plants AS SELECT NULL::VARCHAR AS plant_id, NULL::VARCHAR AS poc_id,
+             NULL::VARCHAR AS site_code, NULL::VARCHAR AS point_of_connection,
+             NULL::VARCHAR AS network_code, NULL::VARCHAR AS gen_code, NULL::VARCHAR AS fuel_code,
+             NULL::VARCHAR AS tech_code, NULL::VARCHAR AS fuel_category,
+             NULL::VARCHAR AS network_participant_id WHERE false`,
+    );
+
+    // Units: fleet rows in force. A unit links to a plant when its POC has exactly one plant
+    // and the fuel category agrees.
+    await run(
+      `CREATE TEMP TABLE units AS
+       SELECT f.point_of_connection || ':' || f.unit_code AS unit_id,
+         f.point_of_connection AS poc_id, p.plant_id,
+         f.point_of_connection, f.unit_code, f.plant_name, f.technology_code, f.fuel_code,
+         m.fuel_category, f.plant_operator_code,
+         nullif(f.plant_operator_code, 'N/A') AS operator_participant_id,
+         f.nameplate_megawatts, f.date_commissioned, f.date_decommissioned
+       FROM fleet f
+       LEFT JOIN fuel_map m ON m.fuel_code = f.fuel_code
+       LEFT JOIN (
+         SELECT point_of_connection, any_value(plant_id) AS plant_id,
+           any_value(fuel_category) AS fuel_category
+         FROM plants GROUP BY point_of_connection
+         HAVING count(DISTINCT plant_id) = 1 AND count(DISTINCT fuel_category) = 1) p
+         ON p.point_of_connection = f.point_of_connection AND p.fuel_category = m.fuel_category`,
+    );
+
+    // The unmapped report.
+    const unmapped: string[] = [
+      `SELECT 'generation_fleet' AS dataset, 'fuel_code' AS id_type,
+         coalesce(fuel_code, '') AS source_id, count(*) AS row_count
+       FROM units WHERE fuel_category IS NULL GROUP BY fuel_code`,
+    ];
+    if (dispatchDay[0])
+      unmapped.push(
+        `SELECT 'dispatch_energy_prices', 'point_of_connection', point_of_connection, count(*)
+         FROM read_parquet(${lit(dispatchDay[0][1])})
+         WHERE point_of_connection NOT IN (SELECT poc_id FROM poc) GROUP BY 3`,
+      );
+    if (nodalDay[0]) {
+      const nodal = lit(nodalDay[0][1]);
+      unmapped.push(
+        `SELECT 'nodal_prices_and_volumes', 'point_of_connection', point_of_connection, count(*)
+         FROM read_parquet(${nodal})
+         WHERE point_of_connection NOT IN (SELECT poc_id FROM poc) GROUP BY 3`,
+        `SELECT 'nodal_prices_and_volumes', 'unit', point_of_connection || ':' || unit_code, count(*)
+         FROM read_parquet(${nodal})
+         WHERE unit_code IS NOT NULL
+           AND point_of_connection || ':' || unit_code NOT IN (SELECT unit_id FROM units)
+         GROUP BY 3`,
+      );
+    }
+    if (generationDay[0]) {
+      const md = lit(generationDay[0][1]);
+      unmapped.push(
+        `SELECT 'generation_md', 'point_of_connection', point_of_connection, count(*)
+         FROM read_parquet(${md})
+         WHERE point_of_connection NOT IN (SELECT poc_id FROM poc) GROUP BY 3`,
+        `SELECT 'generation_md', 'fuel_code', coalesce(fuel_code, ''), count(*)
+         FROM read_parquet(${md})
+         WHERE fuel_code IS NULL OR fuel_code NOT IN (SELECT fuel_code FROM fuel_map)
+         GROUP BY 3`,
+        `SELECT 'generation_md', 'network_code', network_code, count(*)
+         FROM read_parquet(${md})
+         WHERE network_code NOT IN (SELECT participant_id FROM participants) GROUP BY 3`,
+      );
+    }
+
+    const stamp = `${day} AS trading_date`;
+    const selects: Record<(typeof TABLES)[number], string> = {
+      entity_points_of_connection: `SELECT ${stamp}, poc_id, substr(poc_id, 1, 3) AS site_id,
+          island, island_source, nsp_row_status, region_id, region_count, latitude, longitude,
+          nsp_count, DATE ${lit(nsp[0])} AS nsp_snapshot_date
+        FROM poc ORDER BY poc_id`,
+      entity_regions: `SELECT ${stamp}, network_reporting_region_id AS region_id,
+          min(network_reporting_region) AS region_name
+        FROM nsp_pick WHERE network_reporting_region_id IS NOT NULL
+        GROUP BY 2 ORDER BY 2`,
+      entity_participants: `SELECT ${stamp}, * FROM participants ORDER BY participant_id`,
+      entity_plants: `SELECT ${stamp}, * FROM plants
+        ORDER BY site_code, point_of_connection, network_code, gen_code`,
+      entity_units: `SELECT ${stamp}, *,
+          ${fleet ? `DATE ${lit(fleet[0])}` : "NULL::DATE"} AS fleet_snapshot_date
+        FROM units ORDER BY unit_id`,
+      entity_unmapped: `SELECT ${stamp}, * FROM (${unmapped.join(" UNION ALL ")})
+        ORDER BY dataset, id_type, source_id`,
+    };
+    const rows = {} as Record<(typeof TABLES)[number], number>;
+    for (const table of TABLES) {
+      const path = join(
+        silverDir,
+        table,
+        `trading_date=${date}`,
+        "data.parquet",
+      );
+      await writeParquetAtomically(connection, selects[table], path);
+      const [count] = await found(
+        `SELECT count(*) AS n FROM read_parquet(${lit(path)})`,
+      );
+      rows[table] = Number(count?.n);
+    }
+    return { date, status: "complete", rows };
+  } finally {
+    connection.closeSync();
+  }
+}
