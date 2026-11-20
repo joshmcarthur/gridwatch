@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { mkdir, readdir, rename, rm, symlink } from "node:fs/promises";
+import { access, mkdir, readdir, rename, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,7 +36,11 @@ export async function buildAndSwap({
   await mkdir(releaseDir);
   try {
     await build(releaseDir);
-    if (!existsSync(join(releaseDir, "index.html"))) {
+    const hasIndex = await access(join(releaseDir, "index.html")).then(
+      () => true,
+      () => false,
+    );
+    if (!hasIndex) {
       throw new Error(`Build wrote no index.html to ${releaseDir}`);
     }
     await swap(outRoot, name);
@@ -53,7 +56,12 @@ async function swap(outRoot: string, name: string): Promise<void> {
   const tmp = join(outRoot, "current.tmp");
   await rm(tmp, { force: true });
   await symlink(join("releases", name), tmp);
-  await rename(tmp, join(outRoot, "current"));
+  try {
+    await rename(tmp, join(outRoot, "current"));
+  } catch (error) {
+    await rm(tmp, { force: true });
+    throw error;
+  }
 }
 
 async function prune(releasesDir: string, live: string): Promise<void> {
@@ -68,10 +76,13 @@ async function prune(releasesDir: string, live: string): Promise<void> {
 }
 
 /** Runs the Astro build with SITE_REQUIRE_GOLD=1, so it never falls back to fixtures. */
-export function astroBuild(outDir: string): Promise<void> {
+export function astroBuild(
+  outDir: string,
+  run: typeof spawn = spawn,
+): Promise<void> {
   const siteDir = fileURLToPath(new URL(".", import.meta.url));
   return new Promise((resolve, reject) => {
-    const child = spawn("npm", ["run", "build", "--", "--outDir", outDir], {
+    const child = run("npm", ["run", "build", "--", "--outDir", outDir], {
       cwd: siteDir,
       env: { ...process.env, SITE_REQUIRE_GOLD: "1" },
       stdio: "inherit",

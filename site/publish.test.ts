@@ -1,5 +1,8 @@
+import type { spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
 import {
   lstat,
+  mkdir,
   mkdtemp,
   readdir,
   readFile,
@@ -10,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { type BuildFn, buildAndSwap } from "./publish.ts";
+import { astroBuild, type BuildFn, buildAndSwap } from "./publish.ts";
 
 let outRoot: string;
 
@@ -96,4 +99,36 @@ test("five builds keep three releases and current points at the newest", async (
   expect(await readlink(join(outRoot, "current"))).toBe(
     "releases/20261121T080400Z",
   );
+});
+
+test("a swap that fails leaves no release and no temporary link", async () => {
+  // A real directory at current: rename(2) cannot replace it with a symlink.
+  await mkdir(join(outRoot, "current"));
+  await expect(
+    buildAndSwap({ build: goodBuild, outRoot, now: at(0) }),
+  ).rejects.toThrow();
+  expect(await releasesOf()).toEqual([]);
+  expect(
+    await lstat(join(outRoot, "current.tmp")).then(
+      () => true,
+      () => false,
+    ),
+  ).toBe(false);
+});
+
+test("the astro build runs with SITE_REQUIRE_GOLD=1 in the child environment", async () => {
+  const calls: { command: string; env: NodeJS.ProcessEnv | undefined }[] = [];
+  const fakeSpawn = ((
+    command: string,
+    _args: string[],
+    options: { env?: NodeJS.ProcessEnv },
+  ) => {
+    calls.push({ command, env: options.env });
+    const child = new EventEmitter();
+    process.nextTick(() => child.emit("exit", 0));
+    return child;
+  }) as unknown as typeof spawn;
+  await astroBuild(join(outRoot, "release"), fakeSpawn);
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.env?.SITE_REQUIRE_GOLD).toBe("1");
 });
