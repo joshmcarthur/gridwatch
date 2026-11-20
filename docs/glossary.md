@@ -4,13 +4,19 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 ## Electricity market
 
-**Case (RTD case).** One run of the real-time schedule for a 5-minute interval, with a `CaseID`. A re-run about two minutes later can give a second case for the same interval. Silver keeps every case. See [ADR-0005](adr/0005-dataset-pattern.md) and [sources 3.3](sources.md#33-nodal-prices-and-volumes).
+**Case (RTD case).** One run of real-time dispatch (RTD), the system operator's schedule for a 5-minute interval, with a `CaseID`. A re-run about two minutes later can give a second case for the same interval. Silver keeps every case. See [ADR-0005](adr/0005-dataset-pattern.md) and [sources 3.3](sources.md#33-nodal-prices-and-volumes).
 
 **Cleared offer.** A generator or reserve provider offers to supply energy or reserve. The cleared quantity is the part the market accepted. The Cleared Offers dataset gives it for each 5-minute interval and unit. See [sources 3.4](sources.md#34-cleared-offers).
 
 **Dispatch energy prices.** The price in dollars per megawatt-hour at each point of connection, published at irregular times. Gridwatch uses it for "the price at a node in a trading period". See [sources 3.1](sources.md#31-dispatch-energy-prices).
 
+**Dry year.** A year with low inflows to the hydro lakes. New Zealand relies on hydro, so a dry year needs more thermal generation, and prices rise. The Huntly Rankine units are kept as dry-year cover.
+
 **FIR and SIR.** The two reserve classes in the reserve price and cleared offer files. FIR is 6-second reserve. SIR is 60-second reserve. See [sources 3.2](sources.md#32-dispatch-reserve-prices).
+
+**Frequency keeping.** A service that keeps the system frequency at 50 Hz from moment to moment. The brief lists it as an ancillary service for a later phase.
+
+**Gentailer.** A company that both generates and retails electricity, such as Genesis, Meridian, Mercury or Contact.
 
 **Interim and final prices.** Dispatch prices are interim. The Authority declares them final by 2pm on the next business day, unless someone lodges a pricing error claim. Settled prices are in a separate dataset. See [sources 3.1](sources.md#31-dispatch-energy-prices).
 
@@ -28,7 +34,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Grid exit point and grid injection point.** Places where power leaves or enters the grid. The brief lists them as possible entities. No source we use names them, so the model has none. See [ADR-0008](adr/0008-entity-model.md).
 
-**HVDC.** The high-voltage direct current link between the North and South Islands. The brief lists "how does the HVDC link work" as a topic to explain.
+**HVDC.** The high-voltage direct current link between the North and South Islands. Its terminals are at Benmore (`BEN2201`) in the South Island and Haywards (`HAY2201`) in the North Island. These two POCs are the only ones in the reserve price files. The brief lists "how does the HVDC link work" as a topic to explain.
 
 **Island.** `NI` (North Island) or `SI` (South Island). Every point of connection in the model has one. See [ADR-0008](adr/0008-entity-model.md).
 
@@ -48,7 +54,11 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Battery.** A storage category, not primary energy. A battery charges from the grid and discharges back to it. Gold must show it apart from primary generation and must not add it to the primary total. Source code `ELE`. See [ADR-0008](adr/0008-entity-model.md).
 
+**CCGT.** Combined cycle gas turbine. A gas turbine whose hot exhaust also drives a steam turbine, so it uses less gas per MWh. Huntly 5 is one.
+
 **Coal/gas (`coal_gas`).** The category for the Huntly Rankine units, which can burn either fuel. No dataset says which one they burned, so Gridwatch shows one band. See [ADR-0008](adr/0008-entity-model.md).
+
+**Cogeneration.** A plant that makes electricity and useful heat together, often at an industrial site. The fleet file uses the technology code `COG`.
 
 **Fleet.** The generation fleet file (`DispatchedGenerationPlant.csv`). It lists each plant unit with its point of connection, fuel, operator and dates. See [ADR-0006](adr/0006-mapping-datasets-snapshots.md).
 
@@ -58,7 +68,13 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Nameplate capacity.** The rated size of a unit in megawatts, from the fleet file (`nameplate_megawatts`).
 
+**OCGT.** Open cycle gas turbine. A gas turbine without a steam stage. It starts quickly, so it often runs only at peak times. Huntly 6 is one.
+
+**Peaking plant.** A plant that runs mainly at times of high demand or high prices. The fleet file marks it with `PeakingPlantFlag` = `Y`.
+
 **Plant.** A generating station. In Generation_MD it is a `Gen_Code` such as `aratiatia`. Its ID is `<site>/<lower-case Gen_Code>`, for example `ARI/arapuni`. See [ADR-0008](adr/0008-entity-model.md).
+
+**Rankine unit.** A steam unit: fuel boils water, and the steam drives a turbine. The fleet file uses the technology code `RKN`. Huntly Rankine 1, 2 and 4 burn coal or gas, so they are `coal_gas`.
 
 **Unit.** One generating unit at a POC, with a unit code such as `HLY1`. Its ID is `<POC>:<unit code>`. The fleet file and nodal prices carry it. See [ADR-0008](adr/0008-entity-model.md).
 
