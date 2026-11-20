@@ -26,4 +26,4 @@ Everything runs on the owner's home server.
 - The home server must be on at run time. If it is off, that day's run is missed. The collector re-fetches the last five days, so a short outage heals.
 - Scheduling and failure alerts are host configuration, outside this repository (owner decision, 2026-11-20; [#15](https://github.com/joshmcarthur/gridwatch/issues/15) is closed). The publisher exits with code 1 when a dataset fails, so the host can alert on the exit code.
 - The 12-month backfill (about 6.9 GB, about 1.2 hours) runs in place on the server. It has no disk or time limit.
-- The nginx service and the site publish step are in `compose.yml` and `site/publish.ts` ([#31](https://github.com/joshmcarthur/gridwatch/issues/31)).
+- The nginx service and the site publish step are in `compose.yml` and `site/publish.ts` ([#31](https://github.com/joshmcarthur/gridwatch/issues/31)). The dedicated `site-build` compose service stays (owner on [#110](https://github.com/joshmcarthur/gridwatch/issues/110), 2026-11-21).

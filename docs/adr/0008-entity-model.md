@@ -51,6 +51,7 @@ One plant or place has a different identifier in each dataset. Dispatch energy p
 - `Gas&Oil` (older Generation_MD files, not seen in the last 12 months) is not in the map. It goes to the unmapped report if it appears.
 - The fleet placeholder `N/A` (one decommissioned unit, `NPL3`) is not in the map. It shows in the report on every day.
 - The map covers the codes of Oct 2026. Older Generation_MD files are not checked.
+- **Plant overrides.** `FUEL_PLANT_OVERRIDES` in the same file sets a category by plant ID when the source fuel code is wrong. It does not change the source code. `WPG/waipori` is `wind`: Generation_MD labels `WPG0331` Hydro, and most of that energy is Mahinerangi wind ([#105](https://github.com/joshmcarthur/gridwatch/issues/105)). `BWK/waipori` stays hydro. The override is in `inputs_sha256`, so a change rebuilds the entity tables and then gold generation.
 
 ### Mapping tables
 
@@ -88,7 +89,7 @@ An unmapped identifier does not fail the build. A dataset with no partition for 
 
 ### Runner contract
 
-The runner ([#13](https://github.com/joshmcarthur/gridwatch/issues/13)) finds stale silver days by comparing `bronze_sha256` with the manifest. Entity tables have no bronze input, so each table has an `inputs_sha256` column instead. It is a SHA-256 over the `bronze_sha256` values of every silver partition the build read, with the partition path, in a fixed order. The inputs are the NSP snapshot, the fleet snapshot, the dispatch energy prices and Generation_MD partitions up to the day, and that day's nodal partition. The call returns the same value as `inputsSha256`.
+The runner ([#13](https://github.com/joshmcarthur/gridwatch/issues/13)) finds stale silver days by comparing `bronze_sha256` with the manifest. Entity tables have no bronze input, so each table has an `inputs_sha256` column instead. It is a SHA-256 over the fuel map (codes and plant overrides) and the `bronze_sha256` values of every silver partition the build read, with the partition path, in a fixed order. The inputs are the NSP snapshot, the fleet snapshot, the dispatch energy prices and Generation_MD partitions up to the day, and that day's nodal partition. The call returns the same value as `inputsSha256`. A fuel-map change therefore rebuilds every mapping date.
 
 - The publisher runner builds entity mappings last, after all other datasets.
 - It builds them for the dates in its range.
