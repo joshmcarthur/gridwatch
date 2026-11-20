@@ -11,6 +11,7 @@
     "collect:generation-fleet": "node src/electricity-authority/generation-fleet.cli.ts",
     "collect:nodal-prices-and-volumes": "node src/electricity-authority/nodal-prices-and-volumes.cli.ts",
     "collect:generation-md": "node src/electricity-authority/generation-md.cli.ts",
+    "collect:hvdc-flows": "node src/electricity-authority/hvdc-flows.cli.ts",
     "typecheck": "tsc -p ."
   }
 }

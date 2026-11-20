@@ -5,6 +5,7 @@ import { collectDispatchEnergyPrices } from "./electricity-authority/dispatch-en
 import { collectDispatchReservePrices } from "./electricity-authority/dispatch-reserve-prices.ts";
 import { collectGenerationFleet } from "./electricity-authority/generation-fleet.ts";
 import { collectGenerationMd } from "./electricity-authority/generation-md.ts";
+import { collectHvdcFlows } from "./electricity-authority/hvdc-flows.ts";
 import { collectNetworkSupplyPoints } from "./electricity-authority/network-supply-points.ts";
 import { collectNodalPricesAndVolumes } from "./electricity-authority/nodal-prices-and-volumes.ts";
 
@@ -173,6 +174,11 @@ export const datasets: CollectorDataset[] = [
     id: "generation_md",
     defaultRanges: monthlyRanges,
     collect: (context) => collectGenerationMd(context).then(outcome),
+  },
+  {
+    id: "hvdc_flows",
+    defaultRanges: monthlyRanges,
+    collect: (context) => collectHvdcFlows(context).then(outcome),
   },
   {
     id: "network_supply_points",

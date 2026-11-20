@@ -6,7 +6,7 @@ Research for [issue #2](https://github.com/joshmcarthur/gridwatch/issues/2). Che
 
 Shorthand: `BLOB` = `https://emidatasets.blob.core.windows.net/publicdata`, `WH` = `BLOB/Datasets/Wholesale`.
 
-## 1. Recommended download method (all six datasets)
+## 1. Recommended download method (all seven datasets)
 
 **Use the public Azure blob container over HTTPS. Do not scrape the HTML catalogue pages.** Listing and download are anonymous. The pages also publish a SAS token for Storage Explorer and AzCopy; we do not need it, so keep it out of the repository.
 
@@ -32,9 +32,10 @@ Parallel download throughput is **unknown** (not tried).
 | Nodal Prices and Volumes | `DispatchAndPricing/NodalPricesAndVolumes/<yyyy>/` | trading day | CSV, long | 2020-09-10 |
 | Cleared Offers | `DispatchAndPricing/ClearedOffers/<yyyy>/` | trading day | CSV, long | 2022-04-01 |
 | Generation_MD | `Generation/Generation_MD/` | calendar month | CSV, wide (`TP1`..`TP50`) | 1997-08 |
+| HVDC Flows | `Metered_data/HVDC_Flows/` | calendar month | CSV, wide (`TP1`..`TP50`) | 1996-10 |
 | Mappings and Geospatial | `MappingsAndGeospatial/` | dated snapshot or static file | CSV, ZIP, PDF | static 2017/2018; snapshots from 2026-01-06 |
 
-File names: `yyyymmdd_DispatchEnergyPrices.csv`, `yyyymmdd_DispatchReservePrices.csv`, `yyyymmdd_DispatchNodalPricesAndVolumes.csv` (extra word `Dispatch`), `yyyymmdd_ClearedOffers.csv`, `yyyymm_Generation_MD.csv`, `yyyymmdd_NetworkSupplyPointsTable.csv`. Only the meshblocks file starts with a UTF-8 byte-order mark.
+File names: `yyyymmdd_DispatchEnergyPrices.csv`, `yyyymmdd_DispatchReservePrices.csv`, `yyyymmdd_DispatchNodalPricesAndVolumes.csv` (extra word `Dispatch`), `yyyymmdd_ClearedOffers.csv`, `yyyymm_Generation_MD.csv`, `yyyymm_HVDC_flows.csv` (lower-case `flows`), `yyyymmdd_NetworkSupplyPointsTable.csv`. Only the meshblocks file starts with a UTF-8 byte-order mark.
 
 **Shared cadence (measured).** Daily files for trading day D carry a `Last-Modified` of about 07:08 NZ on D+1 (the 19 Nov files: Thu 19 Nov 18:06-18:09 UTC). The pages say "made available early each morning".
 
@@ -165,6 +166,25 @@ Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/MappingsAndGeospa
 
 Each NSP snapshot is a full table with history in `Start date`/`End date`/`Current flag`, so the latest snapshot rebuilds history; archive every snapshot because old ones are dropped. Coverage gap: section 6, item 7.
 
+### 3.7 HVDC Flows
+
+Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/Metered_data/HVDC_Flows). Example file: [202610](https://emidatasets.blob.core.windows.net/publicdata/Datasets/Wholesale/Metered_data/HVDC_Flows/202610_HVDC_flows.csv). Checked 21 November 2026 (NZ time) with the blob listing and three files fetched anonymously (202604, 202609, 202610). Used by [#19](https://github.com/joshmcarthur/gridwatch/issues/19) and [ADR-0016](adr/0016-hvdc-flows.md).
+
+| Question | Answer |
+|---|---|
+| Pattern | One CSV per calendar month in one folder, 361 files, 1996-10 to 2026-10 with no missing month (measured from the listing). About 60 KB per month. No `NextMarker` on the listing. |
+| Columns | `POC, Nwk_Code, Generation_Type, Trader, Unit_Measure, Flow_Direction, Status, Trading_Date, TP1..TP50`. Measured in the 202610 header. |
+| Rows | Four rows per trading day: `BEN2201` and `HAY2201`, each with `X` and `I`. Measured on all 91 days of 202604, 202609 and 202610 (364 rows). `Unit_Measure` is `kWh` and `Status` is `F` on every row. |
+| Meaning of the rows | `BEN2201` (Benmore) and `HAY2201` (Haywards) are the two HVDC terminals ([#7](https://github.com/joshmcarthur/gridwatch/issues/7)). `X` is offtake from the AC grid into the link. `I` is injection from the link into the AC grid. **Inferred** from the data: on 31 Oct 2026 TP1, Benmore `X` is 204.554 MWh and Haywards `I` is 198.323 MWh. The other two cells are zero. The source gives no legend in the file. |
+| Resolution | Half-hour. `TP49`/`TP50` are blank on 48-period days and `TP47`..`TP50` on the 46-period day. 5 Apr 2026 has 50 values. A period can carry both directions on one POC: Benmore on 24 Oct 2026 TP27 has `X` 55,845 kWh and `I` 3,170 kWh (measured). |
+| Idle periods | Zero, not blank. For example 26 Apr 2026 TP21 to TP35 are zero on all four rows (measured). |
+| Disagreement | The two ends can disagree in a period. 12 Apr 2026 TP38 gives a net of +1.115 MWh at Benmore and -0.486 MWh at Haywards (measured). The cause is **unknown**. Gold marks such a period as `none` ([ADR-0016](adr/0016-hvdc-flows.md)). |
+| Units | kWh per period. The gold table converts to MWh ([ADR-0016](adr/0016-hvdc-flows.md)). |
+| Earliest | 1996-10. Not fetched. |
+| Lag | Measured: the `202610` file has a `Last-Modified` of 10 Nov 2026, the same lag as Generation_MD (section 3.5). No November file exists on 21 Nov 2026. Revisions: **unknown**. |
+
+### 3.6 Mappings and Geospatial
+
 **Files chosen for [#7](https://github.com/joshmcarthur/gridwatch/issues/7)** (silver pattern: [ADR-0006](adr/0006-mapping-datasets-snapshots.md)):
 
 | Silver table | Source file | Gives |
@@ -189,6 +209,7 @@ Sizes below are derived from the measured growth per year in the blob listings (
 | Nodal Prices and Volumes | 4.0 GB | about 365 | 0.5 GB | 2020-09-10 (settlement-relevant from 2022-11-01, inferred) |
 | Cleared Offers | 1.3 GB | about 365 | 0.05 GB | 2022-04-01 |
 | Generation_MD | 0.01 GB | 12 monthly files | under 0.01 GB | 1997-08 |
+| HVDC Flows | under 0.01 GB | 12 monthly files | under 0.01 GB | 1996-10 |
 | Mappings | 0.09 GB | all NSP snapshots (first 2026-01-06) and static files | 0.02 GB | 2026-01-06 |
 | **Total** | **about 6.9 GB** | **about 1,700** | **about 0.7 GB** | |
 
@@ -213,6 +234,7 @@ Website content, including these datasets, is licensed under Creative Commons At
 11. The 12-month backfill is about 6.9 GB raw (more than half Nodal) and about 0.7 GB gzip; it takes about 1.2 hours on one stream. Affects #5, #13 and the hosting spike.
 12. The backfill covers the last 12 months only (owner direction). If it is extended, start the dispatch datasets no earlier than 2022-11-01: Nodal exists from 2020-09-10 and Cleared Offers from 2022-04-01, but the settlement relevance of earlier data is inferred (see 3.3). Affects #9, #12, #13.
 13. Trading days can have 46 or 50 periods (checked in energy prices, Generation_MD and cleared offers; other datasets unchecked), so never assume 48. Affects #6, #8, #9, #11, #12.
+14. HVDC_Flows lags metered data by the same month as Generation_MD (the 202610 file is stamped 10 Nov 2026, section 3.7). Gold transfer is therefore a month behind. A live estimate from island residuals is 60 to 90 MW off the metered flow, so it is not used ([ADR-0016](adr/0016-hvdc-flows.md)). Affects #19, #23.
 
 ## 7. Generator outage information
 
