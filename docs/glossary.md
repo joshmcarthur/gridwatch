@@ -113,7 +113,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **`event_start_utc` and `event_end_utc`.** The UTC start (included) and end (excluded) of a trading period or dispatch interval. They are unambiguous across the daylight saving change. See [ADR-0003](adr/0003-time-column-naming.md).
 
-**Gold.** Derived and presentation data: analytical tables and the site JSON. Tables are Parquet partitions at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md) and [ADR-0011](adr/0011-gold-table-pattern.md).
+**Gold.** Derived and presentation data: analytical tables and the site JSON. Tables are Parquet partitions at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. The site JSON is described in [ADR-0014](adr/0014-site-json-contract.md). See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md) and [ADR-0011](adr/0011-gold-table-pattern.md).
 
 **`analysis_version`.** An integer in every gold row. Each gold module has a constant of this name, and a person bumps it when the logic changes. The runner then rebuilds the gold tables. See [ADR-0011](adr/0011-gold-table-pattern.md).
 
@@ -125,7 +125,13 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Partition.** One file of a silver table for one date, at `silver/<dataset>/trading_date=YYYY-MM-DD/data.parquet`. See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md) and [ADR-0005](adr/0005-dataset-pattern.md).
 
+**Period axis.** The 46, 48 or 50 trading periods of a day. Every array in a site day file has one entry for each period of this axis, so a DST day has its own length. See [ADR-0014](adr/0014-site-json-contract.md).
+
+**Section state.** The state of a section of a site day file: `complete`, `incomplete` or `missing`. A section is `incomplete` when an input is not complete, and `missing` when gold has no partition for it. The words are not the silver status words of [ADR-0010](adr/0010-completeness.md). See [ADR-0014](adr/0014-site-json-contract.md).
+
 **Silver.** Typed, validated Parquet with UTC timestamps and the source IDs kept, partitioned by date. See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md).
+
+**Site JSON.** The daily file `gold/site/days/YYYY-MM-DD.json` and the index `gold/site/index.json`. The site reads them and never queries the lake. See [ADR-0014](adr/0014-site-json-contract.md).
 
 **Snapshot.** A dated copy of a mapping table, such as one NSP file. Mapping datasets have one silver partition for each snapshot date. See [ADR-0006](adr/0006-mapping-datasets-snapshots.md).
 

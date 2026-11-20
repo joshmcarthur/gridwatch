@@ -2,6 +2,9 @@
   "name": "@gridwatch/publisher",
   "private": true,
   "type": "module",
+  "exports": {
+    "./site-contract": "./src/site/contract.ts"
+  },
   "scripts": {
     "start": "node src/main.ts",
     "publish:dispatch-energy-prices": "node src/silver/dispatch-energy-prices.cli.ts",
