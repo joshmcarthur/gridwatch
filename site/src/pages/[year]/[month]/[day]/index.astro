@@ -1,0 +1,158 @@
+---
+import Layout from "../../../../layouts/Layout.astro";
+import {
+  CHART_SLOTS,
+  completenessNotice,
+  dailyPath,
+  dailyStaticPaths,
+  dateFromParams,
+  headlineParagraphs,
+  monthGroups,
+  neighbouringDays,
+} from "../../../../lib/daily-page";
+import {
+  formatTradingDate,
+  loadSiteDay,
+  loadSiteIndex,
+} from "../../../../lib/site-data";
+
+export function getStaticPaths() {
+  return dailyStaticPaths(loadSiteIndex());
+}
+
+const { year, month, day: dayParam } = Astro.params;
+if (!year || !month || !dayParam) throw new Error("Missing date params");
+const date = dateFromParams(year, month, dayParam);
+const index = loadSiteIndex();
+const day = loadSiteDay(date, index);
+const titleDate = formatTradingDate(date);
+const headlines = headlineParagraphs(day);
+const notice = completenessNotice(day);
+const neighbours = neighbouringDays(index, date);
+const months = monthGroups(index);
+---
+
+<Layout
+  title={`${titleDate} · Gridwatch NZ`}
+  description={`What happened on the New Zealand electricity system on ${titleDate}.`}
+>
+  <p class="home">
+    <a href="/">Gridwatch NZ home</a>
+  </p>
+
+  <article class="prose">
+    <header class="lede">
+      <h1>{titleDate}</h1>
+      {headlines.map((paragraph) => <p>{paragraph}</p>)}
+    </header>
+
+    <section
+      class:list={["notice", notice.tone]}
+      aria-labelledby="completeness-heading"
+    >
+      <h2 id="completeness-heading">How complete is this day?</h2>
+      {notice.paragraphs.map((paragraph) => <p>{paragraph}</p>)}
+    </section>
+
+    {
+      CHART_SLOTS.map((slot) => (
+        <section class="slot" aria-labelledby={slot.id}>
+          <h2 id={slot.id}>{slot.title}</h2>
+          <p>{slot.body}</p>
+        </section>
+      ))
+    }
+
+    <nav class="days" aria-label="Other days">
+      <div class="turn">
+        {
+          neighbours.previous ? (
+            <a href={dailyPath(neighbours.previous.date)}>
+              Previous day: {formatTradingDate(neighbours.previous.date)}
+            </a>
+          ) : (
+            <p>No earlier day on this site yet.</p>
+          )
+        }
+        {
+          neighbours.next ? (
+            <a href={dailyPath(neighbours.next.date)}>
+              Next day: {formatTradingDate(neighbours.next.date)}
+            </a>
+          ) : (
+            <p>No later day on this site yet.</p>
+          )
+        }
+      </div>
+
+      {
+        months.map((group) => (
+          <section aria-labelledby={`month-${group.key}`}>
+            <h2 id={`month-${group.key}`}>{group.label}</h2>
+            <ol>
+              {group.days.map((entry) => (
+                <li>
+                  <a
+                    href={dailyPath(entry.date)}
+                    aria-current={entry.date === date ? "page" : undefined}
+                  >
+                    {formatTradingDate(entry.date)}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))
+      }
+    </nav>
+  </article>
+</Layout>
+
+<style>
+  .home {
+    margin: 0 0 var(--space-5);
+    font-size: var(--text-label);
+  }
+
+  .lede,
+  .notice,
+  .slot,
+  .days {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .notice,
+  .slot,
+  .days {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    padding: var(--space-5);
+  }
+
+  .notice.warn {
+    outline: 2px solid var(--color-caution);
+    outline-offset: -2px;
+  }
+
+  .turn {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  a[aria-current="page"] {
+    font-weight: 700;
+    text-decoration: underline;
+  }
+</style>
