@@ -10,3 +10,5 @@ Real extracts of two monthly files. Each keeps the header and the rows of five p
 Fetched anonymously with `curl` on 2026-11-20, then filtered with `awk -F, 'NR==1||(($7=="2026-04-01"||$7=="2026-04-05")&&($2=="ARA2201"||$2=="ASB0661"||$2=="CML0331"||$2=="KIW2201"||$2=="BRB0331"))'`. The September file used the dates 2026-09-26 and 2026-09-27.
 
 The files have no rows for the other days of the month. The tests use this to check a day that the file does not hold.
+
+The `202609` file also holds two rows that are not real extracts: `HLY2201`, `GENE`, `huntly_1_4`, fuel `Coal`, tech `Thrml`, for 2026-09-26 and 2026-09-27. They copy the `ARA2201` values and change the identifiers. The live files have this plant with the fuel code `Coal`, and the fuel map tests need that code in a fixture. That makes 8 unit rows on 2026-09-26 and 8 on 2026-09-27 in this file.

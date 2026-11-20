@@ -1,4 +1,4 @@
-/** The Gridwatch fuel categories (brief section 8.1, ADR-0008). */
+/** The Gridwatch fuel categories (brief section 8.1 plus `battery`, ADR-0008). */
 export const FUEL_CATEGORIES = [
   "hydro",
   "geothermal",
@@ -6,6 +6,7 @@ export const FUEL_CATEGORIES = [
   "gas",
   "coal",
   "solar",
+  "battery",
   "other",
 ] as const;
 
@@ -25,6 +26,7 @@ export const FUEL_MAP: Record<string, FuelCategory> = {
   Geo: "geothermal",
   Solar: "solar",
   Gas: "gas",
+  Coal: "coal",
   Diesel: "other",
   Wood: "other",
   // Generation_MD, short vocabulary; the fleet file uses the same short codes
@@ -32,7 +34,7 @@ export const FUEL_MAP: Record<string, FuelCategory> = {
   WIN: "wind",
   GEO: "geothermal",
   SOL: "solar",
-  ELE: "other", // battery storage, not a fuel
+  ELE: "battery", // storage, not primary energy; see ADR-0008
   // Fleet file only
   GAS: "gas",
   DSL: "other",

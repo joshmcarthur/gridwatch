@@ -158,7 +158,7 @@ test("publishes the 46-period DST-start day", async () => {
   const lines = await linesOf("202609");
   await archive("202609", toCsv(lines));
   const result = await publish("2026-09-27");
-  expect(result).toMatchObject({ status: "complete", rows: 322 });
+  expect(result).toMatchObject({ status: "complete", rows: 368 });
   if (result.status !== "complete") return;
   const [row] = await query(result.path, SPAN_SQL);
   expect(row).toEqual({
@@ -176,7 +176,7 @@ test("each day of one monthly file gets its own partition", async () => {
   if (a.status !== "complete" || b.status !== "complete")
     throw new Error("expected ok");
   expect(a.path).not.toBe(b.path);
-  expect(a.rows).toBe(336);
+  expect(a.rows).toBe(384);
 });
 
 test("publishing the same day again gives identical bytes", async () => {
