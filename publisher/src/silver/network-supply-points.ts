@@ -75,16 +75,18 @@ function nztmToWgs84(): string {
  * `<silverDir>/network_supply_points/snapshot_date=<date>/data.parquet`.
  *
  * The partition holds every row of the bronze file of that snapshot, closed rows included.
- * A row is in force for the trading dates `start_date` to `end_date`, both inclusive. A blank
- * `end_date` means it is still open. To find the mapping for a day, take the newest snapshot
- * on or before that day, then the rows in force on the day (ADR-0006).
- * There is no `processed_at` column: it would change on every run (ADR-0003, ADR-0005).
+ * A row is in force from (`start_date`, `start_trading_period`) to (`end_date`,
+ * `end_trading_period`), both inclusive. A blank end means it is still open. To find the
+ * mapping for a day, take the newest snapshot on or before that day, then the rows in force
+ * on the day (ADR-0006). There is no `processed_at` column: it would change on every run
+ * (ADR-0003, ADR-0005).
  *
  * Invalid snapshot (nothing written): the file cannot be read or lacks a column; no rows; a
  * row without NSP or point of connection; a flag that is not 0 or 1; a start date, start period
  * or region ID that does not parse; an end date or end period that is set and does not parse;
  * an end date before the start date; coordinates that are not both set or not numbers; an
- * island that is set and is not NI or SI; a duplicate key (NSP, start date, start period).
+ * island that is set and is not NI or SI; a duplicate key (NSP, start date, start period);
+ * two rows for the same NSP whose ranges overlap under the inclusive rule.
  * A snapshot has no expected periods, so it is never partial.
  */
 export async function publishNetworkSupplyPoints(options: {
@@ -155,7 +157,12 @@ export async function publishNetworkSupplyPoints(options: {
              OR (easting_text IS NOT NULL AND (easting IS NULL OR NOT isfinite(easting)))
              OR (northing_text IS NOT NULL AND (northing IS NULL OR NOT isfinite(northing)))) AS bad_coordinates,
            count(*) FILTER (WHERE island NOT IN ('NI', 'SI')) AS bad_islands,
-           count(*) - count(DISTINCT (nsp, start_date, start_trading_period)) AS duplicates
+           count(*) - count(DISTINCT (nsp, start_date, start_trading_period)) AS duplicates,
+           (SELECT count(*) FROM raw a JOIN raw b
+              ON a.nsp = b.nsp
+             AND (a.start_date, a.start_trading_period) < (b.start_date, b.start_trading_period)
+             AND (b.start_date, b.start_trading_period)
+                 <= (coalesce(a.end_date, DATE 'infinity'), coalesce(a.end_trading_period, 1000))) AS overlaps
          FROM raw`,
       )
     ).getRowObjectsJson() as Array<Record<string, unknown>>;
@@ -183,6 +190,8 @@ export async function publishNetworkSupplyPoints(options: {
         `${n("bad_islands")} rows have an island that is not NI or SI`,
       );
     if (n("duplicates") > 0) errors.push(`${n("duplicates")} duplicate keys`);
+    if (n("overlaps") > 0)
+      errors.push(`${n("overlaps")} overlapping ranges for the same NSP`);
     if (errors.length > 0) return { date, status: "invalid", errors };
 
     const path = join(

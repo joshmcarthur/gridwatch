@@ -61,13 +61,15 @@ test("archives the snapshots in the range, ignores other names, continues after 
     from: "2026-11-09",
     to: "2026-11-19",
   });
+  // 2026-11-08 is the newest snapshot before --from. The first days of the range need it.
   expect(result.records.map((r) => [r.status, r.trading_dates])).toEqual([
+    ["new", ["2026-11-08"]],
     ["new", ["2026-11-10"]],
     ["new", ["2026-11-19"]],
   ]);
   expect(result.failed).toEqual([{ date: "2026-11-12", error: "HTTP 403" }]);
   const manifest = await readManifest(bronzeDir);
-  expect(manifest.map((r) => r.dataset)).toEqual([DATASET, DATASET]);
+  expect(manifest.map((r) => r.dataset)).toEqual([DATASET, DATASET, DATASET]);
 });
 
 test("a second run finds the snapshots unchanged", async () => {

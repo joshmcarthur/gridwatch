@@ -11,7 +11,7 @@ export interface CollectOptions {
   bronzeDir: string;
   /**
    * Snapshot date, `YYYY-MM-DD`. The source file has no date and the source overwrites it in
-   * place. The caller names the date that this check stands for (ADR-0006).
+   * place. The CLI uses today's NZ date. Tests pass an explicit date (ADR-0006).
    */
   date: string;
   /** Override for tests. */

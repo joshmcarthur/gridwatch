@@ -26,7 +26,8 @@ export interface CollectResult {
 }
 
 /**
- * Archive the dated snapshots from `from` to `to` (inclusive) into bronze. The source does not
+ * Archive the dated snapshots from `from` to `to` (inclusive) into bronze, and the newest
+ * snapshot before `from`. The first days of the range need that snapshot. The source does not
  * publish a snapshot every day, so there is no list of missing dates. The snapshot date from the
  * file name is the manifest `trading_dates` value (ADR-0006).
  */
@@ -37,12 +38,16 @@ export async function collectNetworkSupplyPoints(
   const baseUrl = options.baseUrl ?? BLOB;
 
   const snapshots: Array<{ date: string; name: string }> = [];
+  let before: { date: string; name: string } | undefined;
   for (const name of await listNames(baseUrl, `${FOLDER}/`, options.fetch)) {
     const match = FILE_PATTERN.exec(name);
     if (!match) continue;
     const date = `${match[1]}-${match[2]}-${match[3]}`;
     if (date >= from && date <= to) snapshots.push({ date, name });
+    else if (date < from && (!before || date > before.date))
+      before = { date, name };
   }
+  if (before) snapshots.push(before);
   snapshots.sort((a, b) => a.date.localeCompare(b.date));
 
   const result: CollectResult = { records: [], failed: [] };

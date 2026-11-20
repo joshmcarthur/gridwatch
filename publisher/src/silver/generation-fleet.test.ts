@@ -121,6 +121,26 @@ test("publishes a snapshot with fuel, operator periods and provenance", async ()
   ]);
 });
 
+test("a day uses the newest snapshot on or before it and the half-open operator period", async () => {
+  await archive("2026-11-19", await fixture());
+  const result = await publish("2026-11-19");
+  if (result.status !== "complete") throw new Error("expected ok");
+  const operatorOn = async (day: string) => {
+    const [row] = await query(
+      result.path,
+      `SELECT plant_operator_code AS operator
+       FROM read_parquet($FILE)
+       WHERE point_of_connection = 'ARG1101'
+         AND effective_start_date <= DATE '${day}'
+         AND DATE '${day}' < effective_end_date`,
+    );
+    return row?.operator;
+  };
+  // Branch River ends one operator period on 2021-10-01 and starts the next on the same date.
+  expect(await operatorOn("2021-09-30")).toBe("TRUS");
+  expect(await operatorOn("2021-10-01")).toBe("CNIR");
+});
+
 test("publishing the same snapshot again gives identical bytes", async () => {
   await archive("2026-11-19", await fixture());
   const first = await publish("2026-11-19");
@@ -190,6 +210,18 @@ test.each([
       ...lines.slice(2),
     ],
     "1 rows lack a plant name, unit, point of connection, fuel or operator",
+  ],
+  [
+    "overlapping ranges",
+    (lines: string[]) => [
+      ...lines.slice(0, 3),
+      (lines[3] as string).replace(
+        "2021-10-01,2099-12-31",
+        "2021-09-01,2099-12-31",
+      ),
+      ...lines.slice(4),
+    ],
+    "1 overlapping ranges for the same unit",
   ],
   ["no rows", (lines: string[]) => lines.slice(0, 1), "no rows"],
   [

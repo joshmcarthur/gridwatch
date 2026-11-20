@@ -127,7 +127,7 @@ test("publishes a snapshot with provenance, history rows and WGS84 coordinates",
   });
 });
 
-test("converts NZTM to WGS84 within 0.00001 degrees of the PROJ result", async () => {
+test("converts NZTM to WGS84 within 0.000001 degrees of the PROJ result", async () => {
   await archive("2026-11-19", await fixture("2026-11-19"));
   const result = await publish("2026-11-19");
   if (result.status !== "complete") throw new Error("expected ok");
@@ -145,8 +145,8 @@ test("converts NZTM to WGS84 within 0.00001 degrees of the PROJ result", async (
   ];
   expect(rows.map((r) => r.poc)).toEqual(expected.map((e) => e.poc));
   for (const [i, e] of expected.entries()) {
-    expect(rows[i]?.lat).toBeCloseTo(e.lat, 5);
-    expect(rows[i]?.lon).toBeCloseTo(e.lon, 5);
+    expect(rows[i]?.lat).toBeCloseTo(e.lat, 6);
+    expect(rows[i]?.lon).toBeCloseTo(e.lon, 6);
   }
 });
 
@@ -205,6 +205,54 @@ test("an earlier snapshot keeps the mapping that applied then", async () => {
   expect(row).toEqual({ start_date: "2026-02-01" });
 });
 
+test("a day uses the newest snapshot on or before it, then the rows in force that day", async () => {
+  await archive("2026-01-06", await fixture("2026-01-06"));
+  await archive("2026-11-19", await fixture("2026-11-19"));
+  const early = await publish("2026-01-06");
+  const late = await publish("2026-11-19");
+  if (early.status !== "complete" || late.status !== "complete")
+    throw new Error("expected ok");
+  const mapping = async (day: string) => {
+    const rows = await query(
+      early.path,
+      `WITH all_rows AS (
+         SELECT * FROM read_parquet('${early.path}', hive_partitioning = false)
+         UNION ALL
+         SELECT * FROM read_parquet('${late.path}', hive_partitioning = false)
+       ), chosen AS (
+         SELECT max(snapshot_date) AS snapshot_date FROM all_rows
+         WHERE snapshot_date <= DATE '${day}'
+       )
+       SELECT DISTINCT point_of_connection AS poc
+       FROM all_rows r, chosen
+       WHERE r.snapshot_date = chosen.snapshot_date
+         AND r.start_date <= DATE '${day}'
+         AND (r.end_date IS NULL OR r.end_date >= DATE '${day}')
+       ORDER BY poc`,
+    );
+    return rows.map((r) => r.poc);
+  };
+  // January snapshot: AER0011 starts on 2026-02-01. OHG1101 is only in the November snapshot.
+  expect(await mapping("2026-01-20")).toEqual([
+    "ABY0111",
+    "AKL0331",
+    "ALB0331",
+  ]);
+  expect(await mapping("2026-02-01")).toEqual([
+    "ABY0111",
+    "AER0011",
+    "AKL0331",
+    "ALB0331",
+  ]);
+  expect(await mapping("2026-11-19")).toEqual([
+    "ABY0111",
+    "AER0011",
+    "AKL0331",
+    "ALB0331",
+    "OHG1101",
+  ]);
+});
+
 test("publishing the same snapshot again gives identical bytes", async () => {
   await archive("2026-11-19", await fixture("2026-11-19"));
   const first = await publish("2026-11-19");
@@ -226,6 +274,23 @@ test.each([
     "a duplicate key",
     (lines: string[]) => [...lines, lines[1] as string],
     "1 duplicate keys",
+  ],
+  [
+    "no NSP",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace("1,ABY0111ALPEGN,,ABY0111,", "1,,,ABY0111,"),
+      ...lines.slice(2),
+    ],
+    "1 rows have no NSP or point of connection",
+  ],
+  [
+    "overlapping ranges",
+    (lines: string[]) => [
+      ...lines,
+      (lines[1] as string).replace("2012-01-01", "2013-01-01"),
+    ],
+    "1 overlapping ranges for the same NSP",
   ],
   [
     "an island that is not NI or SI",
