@@ -32,10 +32,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const mix = generationMix(day);
 
 /** Plot runs here, at build time, and returns static SVG. No client script. */
-function renderChart(data: GenerationMix): {
-  svg: string;
-  summary: string;
-} {
+function renderChart(data: GenerationMix): string {
   const { document } = parseHTML("<!doctype html><html><body></body></html>");
   const summary = generationMixSummary(data);
   const labelAt = new Map(
@@ -91,10 +88,10 @@ function renderChart(data: GenerationMix): {
     "aria-labelledby",
     "generation-mix-chart-title generation-mix-chart-summary",
   );
-  return { svg: plot.outerHTML, summary };
+  return plot.outerHTML;
 }
 
-const rendered = mix ? renderChart(mix) : null;
+const svg = mix ? renderChart(mix) : null;
 const table = mix ? generationMixTable(mix) : null;
 ---
 
@@ -112,7 +109,7 @@ const table = mix ? generationMixTable(mix) : null;
             chart counts it as 0, and the table marks that time as incomplete.
           </p>
         )}
-        <Fragment set:html={rendered?.svg} />
+        <Fragment set:html={svg} />
         <ul class="legend" aria-label="Fuels, top of the stack first">
           {[...mix.layers].reverse().map((layer) => (
             <li>
