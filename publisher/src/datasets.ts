@@ -1,3 +1,4 @@
+import { energyBalance } from "./gold/energy-balance.ts";
 import { generation } from "./gold/generation.ts";
 import { hvdc } from "./gold/hvdc.ts";
 import { prices } from "./gold/prices.ts";
@@ -130,4 +131,6 @@ export const datasets: PublisherDataset[] = [
   prices,
   reserves,
   hvdc,
+  // After the gold tables it reads: it takes generation and HVDC gold as inputs (ADR-0018).
+  energyBalance,
 ];
