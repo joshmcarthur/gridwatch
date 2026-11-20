@@ -242,12 +242,17 @@ export async function publishPriceAnomalies(
        GROUP BY point_of_connection, observation_type, grp
        HAVING count(*) >= ${config.minPeriods}`,
     );
-    // A node-day is complete when every price period of it is complete (ADR-0012).
+    // A node-day is complete when every price period of it is complete (ADR-0012). Every node
+    // has a row, so a node with no price rows on the date is incomplete, not dropped.
     await connection.run(
       `CREATE TEMP TABLE node_day AS
-       SELECT point_of_connection, bool_and(inputs_complete) AS node_complete
-       FROM pp WHERE trading_date = DATE ${lit(date)}
-       GROUP BY point_of_connection`,
+       SELECT n.point_of_connection,
+         coalesce(bool_and(p.inputs_complete), false) AS node_complete
+       FROM nodes n
+       LEFT JOIN pp p
+         ON p.point_of_connection = n.point_of_connection
+        AND p.trading_date = DATE ${lit(date)}
+       GROUP BY n.point_of_connection`,
     );
 
     const observationsSql = `SELECT ${OBSERVATION_ID_SQL} AS observation_id,
@@ -283,10 +288,10 @@ export async function publishPriceAnomalies(
            END AS severity,
            ${lit(parameters)} AS parameters,
            ['gold/${PRICE_TABLE}'] AS input_tables,
-           n.node_complete
+           coalesce(n.node_complete, false) AS node_complete
          FROM runs r
          JOIN baseline b USING (point_of_connection)
-         JOIN node_day n USING (point_of_connection)
+         LEFT JOIN node_day n USING (point_of_connection)
        ) base
        ORDER BY observation_type, subject_id, start_trading_period`;
 
@@ -299,9 +304,9 @@ export async function publishPriceAnomalies(
          b.low_percentile_value, b.high_percentile_value,
          b.low_threshold, b.high_threshold,
          coalesce(c.observation_count, 0)::INTEGER AS observation_count,
-         ${stamp("node_complete")}
+         ${stamp("coalesce(n.node_complete, false)")}
        FROM baseline b
-       JOIN node_day n USING (point_of_connection)
+       LEFT JOIN node_day n USING (point_of_connection)
        LEFT JOIN (
          SELECT point_of_connection, count(*)::INTEGER AS observation_count
          FROM runs GROUP BY point_of_connection
@@ -335,8 +340,13 @@ export async function publishPriceAnomalies(
       no_baseline: boolean | null;
     }>;
 
-    const rows = REFERENCE_NODES.length;
     const path = goldPartitionPath(goldDir, TABLES[0], date);
+    const countReader = await connection.runAndReadAll(
+      `SELECT count(*)::INTEGER AS n FROM read_parquet(${lit(path)})`,
+    );
+    const [{ n: rows }] = countReader.getRowObjectsJson() as Array<{
+      n: number;
+    }>;
     return !incomplete && !no_baseline
       ? { date, status: "complete", rows, path }
       : { date, status: "partial", rows, path, missingPeriods };

@@ -59,6 +59,8 @@ interface DayOptions {
   complete?: (poc: string, period: number) => boolean;
   /** False for a period of a node that has no price row (rows_present = 0). */
   rowsPresent?: (poc: string, period: number) => boolean;
+  /** A node with no rows at all on the date. */
+  skipNode?: string;
   sha?: string;
 }
 
@@ -70,6 +72,7 @@ async function writeDay(
 ) {
   const rows: string[] = [];
   for (const node of REFERENCE_NODES) {
+    if (node.pointOfConnection === options.skipNode) continue;
     for (let period = 1; period <= periodsInTradingDate(date); period++) {
       const key = `${node.pointOfConnection}:${period}`;
       const price =
@@ -395,6 +398,19 @@ test("a period with no price row lists the missing period, and a status-only fai
     status: "partial",
     missingPeriods: [],
   });
+  // A node with no rows at all still has its sentinel row, and is not complete. Catches an
+  // inner join that drops the node from the sentinel and from the completeness flags.
+  await writeDay(DAY, flat, { skipNode: HAY });
+  expect(await publish(DAY)).toMatchObject({
+    status: "partial",
+    rows: 3,
+    missingPeriods: [],
+  });
+  const sentinel = await rowsOf(TABLES[0], DAY);
+  expect(sentinel).toHaveLength(3);
+  expect(sentinel.find((r) => r.point_of_connection === HAY)).toMatchObject({
+    inputs_complete: false,
+  });
 });
 
 test("a date with no price partition is missing and writes nothing", async () => {
@@ -510,7 +526,7 @@ test("the runner: a day is rebuilt when a price day in its window changes, and n
   });
 }, 60_000);
 
-test("the default dataset is gold_price_anomaly and it writes the sentinel table first", () => {
+test("the registry entry fields and the TABLES order: the runner reads the first table, the sentinel", () => {
   expect(priceAnomaly).toMatchObject({
     id: "gold_price_anomaly",
     table: TABLES[0],
