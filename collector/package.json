@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/main.ts",
+    "collect:dispatch-energy-prices": "node src/electricity-authority/dispatch-energy-prices.cli.ts",
     "typecheck": "tsc -p ."
   }
 }

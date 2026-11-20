@@ -85,8 +85,11 @@ function assertSafeSegment(name: string, value: string): void {
 }
 
 class HttpError extends Error {
-  constructor(readonly status: number) {
+  // Not a parameter property: Node strips types and does not support that syntax.
+  readonly status: number;
+  constructor(status: number) {
     super(`HTTP ${status}`);
+    this.status = status;
   }
 }
 
