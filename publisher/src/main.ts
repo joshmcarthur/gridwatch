@@ -30,10 +30,11 @@ if (argv[0] === "status") {
   if (args.help) {
     console.log(USAGE);
   } else {
-    const { bronze, silver } = dataPaths();
+    const { bronze, silver, gold } = dataPaths();
     const summaries = await runPublish({
       bronzeDir: bronze,
       silverDir: silver,
+      goldDir: gold,
       range: args.range,
       force: args.force,
       only: args.only,

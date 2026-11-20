@@ -30,10 +30,12 @@ const fixtures = join(
 let root: string;
 let bronzeDir: string;
 let silverDir: string;
+let goldDir: string;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "gw-completeness-"));
   bronzeDir = join(root, "bronze");
   silverDir = join(root, "silver");
+  goldDir = join(root, "gold");
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
@@ -61,6 +63,7 @@ const run = (options: Partial<Parameters<typeof runPublish>[0]> = {}) =>
   runPublish({
     bronzeDir,
     silverDir,
+    goldDir,
     only: [DISPATCH],
     ...options,
   });
@@ -123,6 +126,7 @@ test("records complete days, including a 46-period DST day, and a gap day stays 
   const lines = await completenessStatusLines(silverDir);
   expect(lines[0]).toBe(`${DISPATCH}: latest complete 2026-11-18`);
   expect(lines).toContain("generation_md: latest complete none");
+  expect(lines.some((line) => line.startsWith("gold_generation:"))).toBe(false);
 
   const table = completenessPath(silverDir);
   const mtime = (await stat(table)).mtimeMs;
@@ -244,7 +248,7 @@ test("period counts follow the trading date, including a 50-period DST day", asy
       },
     },
   ];
-  await runPublish({ bronzeDir, silverDir, registry });
+  await runPublish({ bronzeDir, silverDir, goldDir, registry });
   expect(existsSync(join(silverDir, "periods"))).toBe(false);
 
   expect(
@@ -296,7 +300,7 @@ test("a snapshot has no period count", async () => {
       }),
     },
   ];
-  await runPublish({ bronzeDir, silverDir, registry });
+  await runPublish({ bronzeDir, silverDir, goldDir, registry });
   expect(
     await readCompleteness(silverDir, "network_supply_points", "2026-11-18"),
   ).toMatchObject({

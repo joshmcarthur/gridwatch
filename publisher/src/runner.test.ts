@@ -32,10 +32,12 @@ const fixtures = join(
 let root: string;
 let bronzeDir: string;
 let silverDir: string;
+let goldDir: string;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "gw-publish-run-"));
   bronzeDir = join(root, "bronze");
   silverDir = join(root, "silver");
+  goldDir = join(root, "gold");
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
@@ -59,7 +61,7 @@ const partition = (date: string) =>
   join(silverDir, DISPATCH, `trading_date=${date}`, "data.parquet");
 const only = (id: string) => ({ only: [id] });
 const run = (options: Partial<Parameters<typeof runPublish>[0]> = {}) =>
-  runPublish({ bronzeDir, silverDir, ...options });
+  runPublish({ bronzeDir, silverDir, goldDir, ...options });
 const summaryOf = (summaries: DatasetSummary[], id: string) => {
   const found = summaries.find((s) => s.id === id);
   if (!found) throw new Error(id);
@@ -300,7 +302,10 @@ test("entity mappings build last, settle, and rebuild when an input partition ch
     );
 
   const first = await run();
-  expect(first.at(-1)?.id).toBe("entity_mappings");
+  expect(first.map((x) => x.id).slice(-2)).toEqual([
+    "entity_mappings",
+    "gold_generation",
+  ]);
   expect(entity(first)).toMatchObject({
     published: 2,
     upToDate: 0,

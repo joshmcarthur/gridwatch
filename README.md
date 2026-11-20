@@ -2,7 +2,7 @@
 
 An independent observatory for the New Zealand electricity market. Gridwatch turns public market data into plain-English explanations of what happened, why, and what it means. See the [project brief](docs/brief.md).
 
-The repository is a TypeScript monorepo. To add a dataset, follow [ADR-0005](docs/adr/0005-dataset-pattern.md). See [ADR-0001](docs/adr/0001-typescript-monorepo-and-data-layers.md) for the decisions behind the layout. New to the market or the data terms? Read the [glossary](docs/glossary.md).
+The repository is a TypeScript monorepo. To add a dataset, follow [ADR-0005](docs/adr/0005-dataset-pattern.md). To add a gold table, follow [ADR-0011](docs/adr/0011-gold-table-pattern.md). See [ADR-0001](docs/adr/0001-typescript-monorepo-and-data-layers.md) for the decisions behind the layout. New to the market or the data terms? Read the [glossary](docs/glossary.md).
 
 ## Layout
 

@@ -1,5 +1,10 @@
+import { generation } from "./gold/generation.ts";
 import { publishClearedOffers } from "./silver/cleared-offers.ts";
-import type { PublishResult } from "./silver/common.ts";
+import type {
+  PartitionKey,
+  PublishResult,
+  VersionColumn,
+} from "./silver/common.ts";
 import { publishDispatchEnergyPrices } from "./silver/dispatch-energy-prices.ts";
 import { publishDispatchReservePrices } from "./silver/dispatch-reserve-prices.ts";
 import {
@@ -15,7 +20,9 @@ export interface PublisherDataset {
   /** The dataset ID. It is the same in the manifest, the bronze folder and the silver folder. */
   id: string;
   /** The partition folder is `<partitionKey>=YYYY-MM-DD`. */
-  partitionKey: "trading_date" | "snapshot_date";
+  partitionKey: PartitionKey;
+  /** The directory that holds this dataset's partitions. Default: the silver directory. A gold table holds them in gold (ADR-0011). */
+  partitionRoot?(dirs: { silverDir: string; goldDir: string }): string;
   /**
    * The silver folder that holds the partitions, when it differs from `id`. The entity mappings
    * write several tables, and the runner reads the first.
@@ -25,7 +32,7 @@ export interface PublisherDataset {
    * The column that holds the input version of a silver row. Default `bronze_sha256`. A dataset
    * with no bronze file of its own uses a fingerprint of its silver inputs.
    */
-  versionColumn?: string;
+  versionColumn?: VersionColumn;
   /**
    * True when the date is complete only if every trading period is present.
    * The count is 46, 48 or 50, from `periodsInTradingDate` (ADR-0010).
@@ -34,17 +41,18 @@ export interface PublisherDataset {
   countsTradingPeriods?: boolean;
   /** The version each date should hold, from silver. Default: the manifest (bronze). */
   wantedVersions?(silverDir: string): Promise<Map<string, string>>;
-  /** Publish the silver partition of one date. */
+  /** Publish the partition of one date. */
   publish(options: {
     bronzeDir: string;
     silverDir: string;
+    goldDir: string;
     date: string;
   }): Promise<PublishResult>;
 }
 
 /**
- * The datasets the runner publishes. A new dataset adds one entry here and one in
- * `collector/src/datasets.ts`.
+ * The datasets the runner publishes. A new silver dataset adds one entry here and one in
+ * `collector/src/datasets.ts`. A gold table adds one entry at the end (ADR-0011).
  */
 export const datasets: PublisherDataset[] = [
   {
@@ -97,4 +105,6 @@ export const datasets: PublisherDataset[] = [
     publish: ({ silverDir, date }) =>
       publishEntityMappings({ silverDir, date }),
   },
+  // Gold runs after silver in the same run (ADR-0011). It reads the silver above.
+  generation,
 ];
