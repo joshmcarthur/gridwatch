@@ -19,7 +19,7 @@ Three sources feed it. Generation_MD gives metered generation by unit ([ADR-0007
 
 ### Tables
 
-`publisher/src/gold/energy-balance.ts`, `ANALYSIS_VERSION = 1`. The sentinel is `energy_balance_period` (key `island`, `trading_period`). `energy_balance_day` has the key `island`, `trading_date`. Each date has one row per island (`NI` and `SI`).
+`publisher/src/gold/energy-balance.ts`, `ANALYSIS_VERSION = 1`. The sentinel is `energy_balance_period` (key `island`, `trading_period`). `energy_balance_day` has the key `island`, `trading_date`. Each date has one row per island (`NI` and `SI`), and the period table has one row per island and per period.
 
 Inputs: gold `generation_by_fuel_period` (generation by island), gold `hvdc_transfer_period`, silver `nodal_prices_and_volumes` and silver `entity_points_of_connection`.
 

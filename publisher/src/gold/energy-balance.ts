@@ -82,7 +82,7 @@ const PERCENT = "residual_mwh / nullif(load_mwh, 0) * 100";
  *   not in that table takes the `Island` string of the nodal row (`North Island` or
  *   `South Island`).
  * - `residual_mwh` = generation + HVDC import - load. Null when any term is null. It is never
- *   adjusted, clamped or spread. It holds AC losses, the gap between RTD model load and metered
+ *   adjusted, clamped or spread. It holds transmission losses, the gap between RTD model load and metered
  *   generation, generation that Generation_MD omits and RTD dispatches, and embedded generation
  *   that is counted twice. `residual_pct_of_load` is the residual over the load, in percent.
  *
