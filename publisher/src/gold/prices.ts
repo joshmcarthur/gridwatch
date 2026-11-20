@@ -18,9 +18,6 @@ import {
  */
 export const ANALYSIS_VERSION = 1;
 
-/** A trading period is 30 minutes and a dispatch interval is 5. */
-const INTERVALS_PER_PERIOD = 6;
-
 const OTA = "OTA2201";
 const HAY = "HAY2201";
 const BEN = "BEN2201";
@@ -58,17 +55,15 @@ const INPUTS: GoldInput[] = [DISPATCH];
  * of that date: `<goldDir>/<table>/trading_date=<date>/data.parquet` for each of `TABLES`
  * (ADR-0011, ADR-0012).
  *
- * Silver keeps every RTD case. Here one dispatch interval has one price: the case with the
- * latest `source_published_at` (owner decision on #9). Silver has no interval column, so the
- * interval is the 5-minute boundary nearest to the publish time, kept inside the row's period.
- * A re-run published a few minutes after the first lands on the same boundary.
+ * Rule B (owner decision, 2026-11-20): silver's `trading_period` is the period a row belongs
+ * to. Within one POC and period, rows sort by `source_published_at`. A price applies from its
+ * publish time until the next row's publish time. The first row applies from the period start
+ * and the last until the period end. Prices do not carry over between periods. The period
+ * price is the time-weighted mean over the period, so a late publish gets little weight.
  *
- * A period price is the time-weighted mean of the latest-case interval prices in the period.
- * Every interval is 5 minutes, so this is the mean of the intervals that exist. Rows are
- * flagged, not dropped: a node with fewer than 6 intervals in a period has
- * `inputs_complete = false`, and a period with no price still has a row with null prices.
- * Completeness is this 6-interval count, not `inputsComplete()` (that helper counts trading
- * periods in silver fact files).
+ * Rows are flagged, not dropped: a node with no row in a period has a row with null prices
+ * and `inputs_complete = false`. Completeness is "at least one row", not `inputsComplete()`
+ * (that helper counts trading periods in silver fact files).
  *
  * Missing (nothing written): the date has no dispatch energy prices silver.
  * Repeatable: no `processed_at`. A total `ORDER BY` and one thread make the same inputs give
@@ -116,49 +111,47 @@ export async function publishGoldPrices(options: {
       `CREATE TEMP TABLE nodes AS
        SELECT * FROM (VALUES ${nodes}) n(point_of_connection, price_region)`,
     );
-    // One row per POC and interval: the latest case.
+    // Each row applies from its publish time to the next row's, inside its period.
     await connection.run(
-      `CREATE TEMP TABLE latest AS
-       SELECT * EXCLUDE (rn) FROM (
-         SELECT *, row_number() OVER (
-           PARTITION BY point_of_connection, interval_start_utc
-           ORDER BY source_published_at DESC) AS rn
-         FROM (
-           SELECT point_of_connection, trading_period, source_published_at, is_proxy_price,
-             dollars_per_megawatt_hour AS price,
-             least(greatest(
-               to_timestamp(floor((epoch(source_published_at) + 150) / 300) * 300),
-               event_start_utc), event_end_utc - INTERVAL 5 MINUTE) AS interval_start_utc
-           FROM read_parquet(${lit(input)}))
-       ) WHERE rn = 1`,
+      `CREATE TEMP TABLE segments AS
+       SELECT point_of_connection, trading_period, is_proxy_price, price,
+         CASE WHEN rn = 1 THEN event_start_utc
+              ELSE least(source_published_at, event_end_utc) END AS segment_start,
+         coalesce(least(next_published_at, event_end_utc), event_end_utc) AS segment_end
+       FROM (
+         SELECT r.point_of_connection, r.trading_period, r.is_proxy_price,
+           r.dollars_per_megawatt_hour AS price, r.source_published_at,
+           s.event_start_utc, s.event_end_utc,
+           row_number() OVER w AS rn,
+           lead(r.source_published_at) OVER w AS next_published_at
+         FROM read_parquet(${lit(input)}) r
+         JOIN spans s USING (trading_period)
+         WINDOW w AS (PARTITION BY r.point_of_connection, r.trading_period
+                      ORDER BY r.source_published_at))`,
     );
-    // One row per POC and period that has a price.
+    // One row per POC and period that has a row.
     await connection.run(
       `CREATE TEMP TABLE poc_periods AS
        SELECT point_of_connection, trading_period,
-         avg(price) AS price,
-         min(price) AS min_interval_price,
-         max(price) AS max_interval_price,
-         count(*)::INTEGER AS intervals_present,
+         sum(price * epoch(segment_end - segment_start)) AS weighted_sum,
+         sum(epoch(segment_end - segment_start)) AS covered_seconds,
+         sum(price * epoch(segment_end - segment_start))
+           / sum(epoch(segment_end - segment_start)) AS price,
+         min(price) AS min_price,
+         max(price) AS max_price,
+         count(*)::INTEGER AS rows_present,
          bool_or(is_proxy_price) AS has_proxy_price
-       FROM latest GROUP BY ALL`,
+       FROM segments GROUP BY ALL`,
     );
-    // Distinct intervals with a price from any POC, per period.
-    await connection.run(
-      `CREATE TEMP TABLE period_intervals AS
-       SELECT trading_period, count(DISTINCT interval_start_utc)::INTEGER AS intervals_present
-       FROM latest GROUP BY trading_period`,
-    );
-    // The reference nodes on every expected period, with nulls where silver has no price.
+    // The reference nodes on every expected period, with nulls where silver has no row.
     await connection.run(
       `CREATE TEMP TABLE node_periods AS
        SELECT n.point_of_connection, n.price_region, s.trading_period,
          s.event_start_utc, s.event_end_utc,
-         p.price, p.min_interval_price, p.max_interval_price,
-         coalesce(p.intervals_present, 0)::INTEGER AS intervals_present,
-         ${INTERVALS_PER_PERIOD}::INTEGER AS intervals_expected,
+         p.price, p.weighted_sum, p.covered_seconds, p.min_price, p.max_price,
+         coalesce(p.rows_present, 0)::INTEGER AS rows_present,
          coalesce(p.has_proxy_price, false) AS has_proxy_price,
-         coalesce(p.intervals_present, 0) = ${INTERVALS_PER_PERIOD} AS inputs_complete
+         p.rows_present IS NOT NULL AS inputs_complete
        FROM nodes n CROSS JOIN spans s
        LEFT JOIN poc_periods p
          ON p.point_of_connection = n.point_of_connection AND p.trading_period = s.trading_period`,
@@ -167,19 +160,18 @@ export async function publishGoldPrices(options: {
     const tradingDate = `DATE ${lit(date)} AS trading_date`;
     const selects: Record<(typeof TABLES)[number], string> = {
       price_periods: `SELECT ${tradingDate}, trading_period, event_start_utc, event_end_utc,
-         point_of_connection, price_region, price, min_interval_price, max_interval_price,
-         intervals_present, intervals_expected, has_proxy_price,
+         point_of_connection, price_region, price, min_price, max_price,
+         rows_present, has_proxy_price,
          ${stamp("inputs_complete")}
        FROM node_periods ORDER BY point_of_connection, trading_period`,
       price_daily_summary: `SELECT ${tradingDate}, point_of_connection, price_region,
          avg(price) AS mean_price,
-         sum(price * intervals_present) / nullif(sum(intervals_present), 0) AS time_weighted_mean_price,
-         min(min_interval_price) AS min_price,
-         max(max_interval_price) AS max_price,
+         sum(weighted_sum) / nullif(sum(covered_seconds), 0) AS time_weighted_mean_price,
+         min(min_price) AS min_price,
+         max(max_price) AS max_price,
          count(price)::INTEGER AS periods_present,
          ${periods}::INTEGER AS periods_expected,
-         sum(intervals_present)::INTEGER AS intervals_present,
-         ${periods * INTERVALS_PER_PERIOD}::INTEGER AS intervals_expected,
+         sum(rows_present)::INTEGER AS rows_present,
          ${stamp("bool_and(inputs_complete)")}
        FROM node_periods GROUP BY point_of_connection, price_region
        ORDER BY point_of_connection`,
@@ -204,12 +196,9 @@ export async function publishGoldPrices(options: {
          quantile_cont(p.price, 0.75) AS p75_price,
          quantile_cont(p.price, 0.95) AS p95_price,
          max(p.price) AS max_price,
-         coalesce(max(i.intervals_present), 0)::INTEGER AS intervals_present,
-         ${INTERVALS_PER_PERIOD}::INTEGER AS intervals_expected,
-         ${stamp(`coalesce(max(i.intervals_present), 0) = ${INTERVALS_PER_PERIOD}`)}
+         ${stamp("count(p.price) > 0")}
        FROM spans s
        LEFT JOIN poc_periods p ON p.trading_period = s.trading_period
-       LEFT JOIN period_intervals i ON i.trading_period = s.trading_period
        GROUP BY s.trading_period, s.event_start_utc, s.event_end_utc
        ORDER BY s.trading_period`,
     };

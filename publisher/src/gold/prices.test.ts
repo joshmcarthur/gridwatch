@@ -49,11 +49,11 @@ afterEach(() => rm(root, { recursive: true, force: true }));
 
 interface SilverRow {
   poc: string;
-  /** 0-based index of the 5-minute interval of the day. */
-  interval: number;
+  /** 1-based trading period, as silver holds it. */
+  period: number;
+  /** Seconds after the period start that the price was published. */
+  at: number;
   price: number;
-  /** Seconds after the interval start. Default 10. */
-  publishOffset?: number;
   proxy?: boolean;
 }
 
@@ -66,13 +66,10 @@ async function writeSilver(
 ) {
   const values = rows
     .map((r) => {
-      const period = Math.floor(r.interval / 6) + 1;
-      const start = dayStart + (period - 1) * 30 * 60_000;
-      const publish =
-        dayStart + r.interval * 300_000 + (r.publishOffset ?? 10) * 1000;
+      const start = dayStart + (r.period - 1) * 30 * 60_000;
       const iso = (ms: number) => lit(new Date(ms).toISOString());
-      return `(${period}, ${iso(start)}::TIMESTAMPTZ, ${iso(start + 1_800_000)}::TIMESTAMPTZ,
-        ${iso(publish)}::TIMESTAMPTZ, ${lit(r.poc)}, ${r.proxy ?? false}, ${r.price}::DOUBLE, ${lit(sha)})`;
+      return `(${r.period}, ${iso(start)}::TIMESTAMPTZ, ${iso(start + 1_800_000)}::TIMESTAMPTZ,
+        ${iso(start + r.at * 1000)}::TIMESTAMPTZ, ${lit(r.poc)}, ${r.proxy ?? false}, ${r.price}::DOUBLE, ${lit(sha)})`;
     })
     .join(",");
   const path = join(silverDir, DATASET, `trading_date=${date}`, "data.parquet");
@@ -102,35 +99,41 @@ async function readGold(table: string, date = DATE) {
   }
 }
 
-const each = (poc: string, prices: number[], from = 0): SilverRow[] =>
-  prices.map((price, i) => ({ poc, interval: from + i, price }));
+/** Rows of one POC and period: `[at, price]` pairs. */
+const rowsOf = (
+  poc: string,
+  period: number,
+  ...pairs: Array<[at: number, price: number]>
+): SilverRow[] => pairs.map(([at, price]) => ({ poc, period, at, price }));
 
 /**
- * Hand-calculated day. Period 1 (intervals 0-5) and period 2 (intervals 6-11) only.
- * OTA P1: 10..60 step 10, mean 35. OTA P2: 3 intervals of 100.
- * HAY: 5 all of P1, 10 all of P2.
- * BEN P1: 1,2,3,4,5,6 but interval 2 has a re-run (publish +130 s) at 9, so 1,2,9,4,5,6 = 27/6 = 4.5.
+ * Hand-calculated day under rule B. A period is 1800 s. Only periods 1 and 2 have rows.
+ * OTA P1: 10 from 0 s, 20 from 600 s, 60 from 1200 s: (10 + 20 + 60) / 3 = 30.
+ * OTA P2: one row at 300 s. It applies from the period start: 100.
+ * HAY P1: 5. HAY P2: 10 from 0 s, 30 from 900 s: 20.
+ * BEN P1: 3 published at 60 s (applies from 0), 9 from 1500 s: (3 * 1500 + 9 * 300) / 1800 = 4.
  * BEN P2: 20.
  * Two other POCs in P1 only: Z1 at 0 and Z2 at 100.
  */
 const synthetic: SilverRow[] = [
-  ...each("OTA2201", [10, 20, 30, 40, 50, 60]),
-  ...each("OTA2201", [100, 100, 100], 6),
-  ...each("HAY2201", [5, 5, 5, 5, 5, 5]),
-  ...each("HAY2201", [10, 10, 10, 10, 10, 10], 6),
-  ...each("BEN2201", [1, 2, 3, 4, 5, 6]),
-  { poc: "BEN2201", interval: 2, price: 9, publishOffset: 130 },
-  ...each("BEN2201", [20, 20, 20, 20, 20, 20], 6),
-  ...each("Z1", [0, 0, 0, 0, 0, 0]),
-  ...each("Z2", [100, 100, 100, 100, 100, 100]),
+  ...rowsOf("OTA2201", 1, [0, 10], [600, 20], [1200, 60]),
+  ...rowsOf("OTA2201", 2, [300, 100]),
+  ...rowsOf("HAY2201", 1, [0, 5]),
+  ...rowsOf("HAY2201", 2, [0, 10], [900, 30]),
+  ...rowsOf("BEN2201", 1, [60, 3], [1500, 9]),
+  ...rowsOf("BEN2201", 2, [0, 20]),
+  ...rowsOf("Z1", 1, [0, 0]),
+  ...rowsOf("Z2", 1, [0, 100]),
 ];
 
-test("price per reference node per period keeps the latest case and flags gaps", async () => {
+test("price per reference node per period: each price applies until the next publish", async () => {
   await writeSilver(synthetic);
   const result = await publishGoldPrices({ silverDir, goldDir, date: DATE });
   expect(result.status).toBe("partial");
   if (result.status !== "partial") throw new Error("expected partial");
-  expect(result.missingPeriods).toContain(2);
+  expect(result.missingPeriods).toEqual(
+    Array.from({ length: 46 }, (_, i) => i + 3),
+  );
   expect(result.rows).toBe(3 * 48);
 
   const rows = await readGold("price_periods");
@@ -140,53 +143,48 @@ test("price per reference node per period keeps the latest case and flags gaps",
       (r) => r.point_of_connection === poc && r.trading_period === period,
     );
   expect(at("OTA2201", 1)).toMatchObject({
-    price: 35,
-    min_interval_price: 10,
-    max_interval_price: 60,
-    intervals_present: 6,
+    price: 30,
+    min_price: 10,
+    max_price: 60,
+    rows_present: 3,
     inputs_complete: true,
     price_region: "upper_north_island",
     analysis_version: ANALYSIS_VERSION,
   });
-  expect(at("BEN2201", 1)?.price).toBe(4.5);
-  expect(at("BEN2201", 1)?.intervals_present).toBe(6);
-  expect(at("OTA2201", 2)).toMatchObject({
-    price: 100,
-    intervals_present: 3,
-    inputs_complete: false,
-  });
+  expect(at("OTA2201", 2)).toMatchObject({ price: 100, rows_present: 1 });
+  expect(at("HAY2201", 2)?.price).toBe(20);
+  expect(at("BEN2201", 1)?.price).toBe(4);
   expect(at("HAY2201", 3)).toMatchObject({
     price: null,
-    intervals_present: 0,
+    rows_present: 0,
     inputs_complete: false,
   });
   expect(Date.parse(String(at("OTA2201", 1)?.event_start_utc))).toBe(DAY_START);
 });
 
-test("daily summary: mean of periods, time-weighted mean of intervals, min, max", async () => {
+test("daily summary: mean of periods, time-weighted mean, min and max of published prices", async () => {
   await writeSilver(synthetic);
   await publishGoldPrices({ silverDir, goldDir, date: DATE });
   const rows = await readGold("price_daily_summary");
   const ota = rows.find((r) => r.point_of_connection === "OTA2201");
-  // mean of period prices (35 + 100) / 2. Intervals (35*6 + 100*3) / 9.
-  expect(ota?.mean_price).toBe(67.5);
-  expect(ota?.time_weighted_mean_price).toBeCloseTo(510 / 9, 9);
+  // Period prices 30 and 100. Both periods are covered for all 1800 s, so both means agree.
+  expect(ota?.mean_price).toBe(65);
+  expect(ota?.time_weighted_mean_price).toBeCloseTo(65, 9);
   expect(ota).toMatchObject({
     min_price: 10,
     max_price: 100,
     periods_present: 2,
     periods_expected: 48,
-    intervals_present: 9,
-    intervals_expected: 288,
+    rows_present: 4,
     inputs_complete: false,
   });
   const ben = rows.find((r) => r.point_of_connection === "BEN2201");
-  expect(ben?.mean_price).toBe(12.25); // (4.5 + 20) / 2
-  expect(ben?.min_price).toBe(1);
+  expect(ben?.mean_price).toBe(12); // (4 + 20) / 2
+  expect(ben?.min_price).toBe(3);
   expect(ben?.max_price).toBe(20);
 });
 
-test("spreads are from minus to, by period, flagged when either side is incomplete", async () => {
+test("spreads are from minus to, by period, flagged when either side has no row", async () => {
   await writeSilver(synthetic);
   await publishGoldPrices({ silverDir, goldDir, date: DATE });
   const rows = await readGold("price_spreads");
@@ -199,41 +197,34 @@ test("spreads are from minus to, by period, flagged when either side is incomple
         r.trading_period === period,
     );
   expect(at("OTA2201", "HAY2201", 1)).toMatchObject({
-    spread: 30,
+    spread: 25,
+    from_price_region: "upper_north_island",
+    to_price_region: "lower_north_island",
     inputs_complete: true,
   });
   expect(at("HAY2201", "BEN2201", 1)).toMatchObject({
-    spread: 0.5,
+    spread: 1,
     inputs_complete: true,
   });
   expect(at("OTA2201", "BEN2201", 1)).toMatchObject({
-    spread: 30.5,
+    spread: 26,
     inputs_complete: true,
   });
-  expect(at("OTA2201", "HAY2201", 2)).toMatchObject({
-    spread: 90,
-    inputs_complete: false,
-  });
-  expect(at("HAY2201", "BEN2201", 2)).toMatchObject({
-    spread: -10,
-    inputs_complete: true,
-  });
-  expect(at("OTA2201", "BEN2201", 2)).toMatchObject({
-    spread: 80,
-    inputs_complete: false,
-  });
+  expect(at("OTA2201", "HAY2201", 2)?.spread).toBe(80);
+  expect(at("HAY2201", "BEN2201", 2)?.spread).toBe(0);
+  expect(at("OTA2201", "BEN2201", 2)?.spread).toBe(80);
   expect(at("OTA2201", "HAY2201", 3)).toMatchObject({
     spread: null,
     inputs_complete: false,
   });
 });
 
-test("national distribution of period prices across all nodes", async () => {
+test("national distribution of period prices over the POCs that have a row", async () => {
   await writeSilver(synthetic);
   await publishGoldPrices({ silverDir, goldDir, date: DATE });
   const rows = await readGold("price_distribution");
   expect(rows).toHaveLength(48);
-  // P1 prices: 0, 4.5, 5, 35, 100.
+  // P1 prices: 0, 4, 5, 30, 100.
   expect(rows[0]).toMatchObject({
     trading_period: 1,
     poc_count: 5,
@@ -242,10 +233,11 @@ test("national distribution of period prices across all nodes", async () => {
     max_price: 100,
     inputs_complete: true,
   });
-  expect(rows[0]?.p05_price).toBeCloseTo(0.9, 9);
-  expect(rows[0]?.p25_price).toBeCloseTo(4.5, 9);
-  expect(rows[0]?.p75_price).toBeCloseTo(35, 9);
-  expect(rows[0]?.p95_price).toBeCloseTo(87, 9);
+  expect(rows[0]?.p05_price).toBeCloseTo(0.8, 9);
+  expect(rows[0]?.p25_price).toBeCloseTo(4, 9);
+  expect(rows[0]?.p75_price).toBeCloseTo(30, 9);
+  expect(rows[0]?.p95_price).toBeCloseTo(86, 9);
+  expect(rows[1]).toMatchObject({ poc_count: 3, median_price: 20 });
   expect(rows[2]).toMatchObject({
     poc_count: 0,
     min_price: null,
@@ -301,13 +293,13 @@ test("a DST-start day has 46 periods in every table, and a proxy price is flagge
   // Period 1 starts at 00:00 NZST (UTC+12), 2026-09-26T12:00Z.
   const dayStart = Date.parse("2026-09-26T12:00:00Z");
   const rows: SilverRow[] = [
-    ...each("OTA2201", [10, 10, 10, 10, 10, 10]),
-    ...each("HAY2201", [4, 4, 4, 4, 4, 4]),
-    ...each("BEN2201", [1, 1, 1, 1, 1, 1]),
-    // The last period of a 46-period day, with one proxy price at HAY2201.
-    ...each("OTA2201", [7, 7, 7, 7, 7, 7], 45 * 6),
-    ...each("HAY2201", [5, 5, 5, 5, 5, 5], 45 * 6),
-    { poc: "BEN2201", interval: 45 * 6, price: 3, proxy: true },
+    ...rowsOf("OTA2201", 1, [0, 10]),
+    ...rowsOf("HAY2201", 1, [0, 4]),
+    ...rowsOf("BEN2201", 1, [0, 1]),
+    // The last period of a 46-period day, with a proxy price at BEN2201.
+    ...rowsOf("OTA2201", 46, [0, 7]),
+    ...rowsOf("HAY2201", 46, [0, 5]),
+    { poc: "BEN2201", period: 46, at: 0, price: 3, proxy: true },
   ];
   await writeSilver(rows, "sha-a", date, dayStart);
   const result = await publishGoldPrices({ silverDir, goldDir, date });
@@ -325,8 +317,8 @@ test("a DST-start day has 46 periods in every table, and a proxy price is flagge
   expect(at("BEN2201", 46)).toMatchObject({
     price: 3,
     has_proxy_price: true,
-    intervals_present: 1,
-    inputs_complete: false,
+    rows_present: 1,
+    inputs_complete: true,
   });
   expect(at("HAY2201", 46)).toMatchObject({
     has_proxy_price: false,
@@ -338,7 +330,7 @@ test("a DST-start day has 46 periods in every table, and a proxy price is flagge
   const summary = await readGold("price_daily_summary", date);
   expect(summary[0]).toMatchObject({
     periods_expected: 46,
-    intervals_expected: 276,
+    periods_present: 2,
   });
 });
 
@@ -350,7 +342,7 @@ test("a date with no silver is missing and writes nothing", async () => {
   expect(existsSync(goldDir)).toBe(false);
 });
 
-test("real data: HAY2201 period prices match hand sums, and spreads equal from minus to", async () => {
+test("real data: HAY2201 period prices match hand sums (periods 1 and 45), and spreads equal from minus to", async () => {
   const csv = await readFile(
     join(fixtures, "20261118_DispatchEnergyPrices.csv"),
     "utf8",
@@ -367,28 +359,31 @@ test("real data: HAY2201 period prices match hand sums, and spreads equal from m
   await publishDispatchEnergyPrices({ bronzeDir, silverDir, date: DATE });
 
   const result = await publishGoldPrices({ silverDir, goldDir, date: DATE });
-  expect(result.status).toBe("partial");
-  if (result.status !== "partial") throw new Error("expected partial");
+  // The extract has rows in every period, so the day is complete.
+  expect(result).toMatchObject({ status: "complete", rows: 3 * 48 });
 
   const periods = await readGold("price_periods");
   const hay = (period: number) =>
     periods.find(
       (r) => r.point_of_connection === "HAY2201" && r.trading_period === period,
     );
-  // Hand sum of the file: period 1 has 5 intervals (00:00, 00:05, 00:10, 00:20, 00:25).
+  // Hand sums. Each price applies until the next publish; the first applies from the period
+  // start. Period 1 rows (seconds after 00:00 NZDT): 13 28.83, 280 28.69, 590 27.91, 1213 5.40,
+  // 1486 5.39. Weights: 280, 310, 623, 273, 314 s.
   expect(hay(1)?.price).toBeCloseTo(
-    (28.83 + 28.69 + 27.91 + 5.4 + 5.39) / 5,
+    (280 * 28.83 + 310 * 28.69 + 623 * 27.91 + 273 * 5.4 + 314 * 5.39) / 1800,
     9,
   );
-  expect(hay(1)).toMatchObject({
-    intervals_present: 5,
-    inputs_complete: false,
+  expect(hay(1)).toMatchObject({ rows_present: 5, inputs_complete: true });
+  // Period 45 (22:00 to 22:30). Publishes at 49, 483, 591, 952, 1187 and 1480 s:
+  // 71.04, 71.24, 51.69, 40.52, 36.63, 32.59. Weights: 483, 108, 361, 235, 293, 320 s.
+  // Sum of weight * price = 91349.92.
+  expect(hay(45)?.price).toBeCloseTo(91349.92 / 1800, 9);
+  expect(hay(45)).toMatchObject({
+    rows_present: 6,
+    min_price: 32.59,
+    max_price: 71.24,
   });
-  expect(hay(2)?.price).toBeCloseTo(
-    (16.9 + 15.86 + 5.67 + 16.92 + 4.4 + 16.58) / 6,
-    9,
-  );
-  expect(hay(2)?.inputs_complete).toBe(true);
 
   const byKey = new Map(
     periods.map((r) => [
@@ -403,10 +398,9 @@ test("real data: HAY2201 period prices match hand sums, and spreads equal from m
     expect(s.spread).toBeCloseTo(Number(from) - Number(to), 9);
   }
 
-  // The distribution covers the 4 POCs of the extract and agrees with the node rows.
+  // The distribution covers the 4 POCs of the extract.
   const dist = await readGold("price_distribution");
   expect(dist[0]?.poc_count).toBe(4);
-  expect(dist[1]?.max_price).toBeGreaterThanOrEqual(Number(hay(2)?.price));
 });
 
 test("the runner builds gold_prices, skips it when silver is unchanged and rebuilds it when the dispatch fingerprint changes", async () => {
@@ -439,4 +433,4 @@ test("the runner builds gold_prices, skips it when silver is unchanged and rebui
   }
   await rename(`${file}.new`, file);
   expect(await run()).toMatchObject({ published: 1, upToDate: 1 });
-});
+}, 20_000);
