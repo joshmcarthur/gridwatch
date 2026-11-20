@@ -152,7 +152,7 @@ test("the table has a time column, one column per node and one per spread", () =
 test("the hover text includes OTA-BEN from the contract, not a sum", () => {
   const chart = chartOf(fixture);
   expect(chart.periods[4]?.title).toBe(
-    "03:00 · OTA2201 $85.00/MWh · HAY2201 $75.00/MWh · BEN2201 $65.00/MWh · Spread OTA-HAY $10.00 · Spread HAY-BEN $10.00 · Spread OTA-BEN $20.00",
+    "03:00 · OTA2201 $85.00/MWh · HAY2201 $75.00/MWh · BEN2201 $65.00/MWh · Spread OTA-HAY $10.00/MWh · Spread HAY-BEN $10.00/MWh · Spread OTA-BEN $20.00/MWh",
   );
 });
 
@@ -167,6 +167,10 @@ test("a null price breaks only that node's line, and the table says No data", ()
   const ota = day.prices.nodes[0];
   if (!ota) throw new Error("expected OTA");
   ota.price[9] = null;
+  // OTA-HAY and OTA-BEN are computed from OTA, so they are null too. HAY-BEN is not.
+  for (const spread of day.prices.spreads) {
+    if (spread.from === "OTA2201") spread.spread[9] = null;
+  }
   day.prices.missing_periods = [10];
   day.prices.state = "incomplete";
   const chart = chartOf(day);
@@ -178,9 +182,9 @@ test("a null price breaks only that node's line, and the table says No data", ()
     "No data",
     "$80.00",
     "$70.00",
+    "No data",
     "$10.00",
-    "$10.00",
-    "$20.00",
+    "No data",
   ]);
   expect(chart.nodes[1]?.lone.some(Boolean)).toBe(false);
 });

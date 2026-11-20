@@ -18,6 +18,13 @@ const NODE_STYLE: Record<string, { island: "NI" | "SI"; dashed: boolean }> = {
   BEN2201: { island: "SI", dashed: false },
 };
 
+/** Which spreads are drawn and how, keyed by `from-to`. OTA-BEN is the sum of the other two, so it is not drawn (ADR-0012, ADR-0017). */
+const SPREAD_STYLE: Record<string, { drawn: boolean; dashed: boolean }> = {
+  "OTA2201-HAY2201": { drawn: true, dashed: true },
+  "HAY2201-BEN2201": { drawn: true, dashed: false },
+  "OTA2201-BEN2201": { drawn: false, dashed: false },
+};
+
 const money = new Intl.NumberFormat("en-NZ", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -115,16 +122,18 @@ export function priceChart(day: SiteDay): PriceChart | null {
   });
 
   const spreads: PriceSpreadLine[] = section.spreads.map((spread) => {
-    // OTA-BEN is the sum of the other two, so it is not drawn (ADR-0012).
-    const undrawn = spread.from === "OTA2201" && spread.to === "BEN2201";
+    const style = SPREAD_STYLE[`${spread.from}-${spread.to}`];
+    if (!style) {
+      throw new Error(`No chart style for ${spread.from} to ${spread.to}`);
+    }
     return {
       from: spread.from,
       to: spread.to,
       name: `${spread.from.slice(0, 3)}-${spread.to.slice(0, 3)}`,
       values: spread.spread,
       lone: lonePoints(spread.spread),
-      drawn: !undrawn,
-      dashed: spread.from === "OTA2201" && spread.to === "HAY2201",
+      drawn: style.drawn,
+      dashed: style.dashed,
     };
   });
 
@@ -261,7 +270,7 @@ function hoverText(
     parts.push(
       value === null
         ? `Spread ${spread.name} no data`
-        : `Spread ${spread.name} ${signedMoney(value)}`,
+        : `Spread ${spread.name} ${signedMoney(value)}/MWh`,
     );
   }
   return parts.join(" · ");

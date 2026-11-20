@@ -2,7 +2,7 @@
 import * as Plot from "@observablehq/plot";
 import type { SiteDay } from "@gridwatch/publisher/site-contract";
 import ChartFigure from "./ChartFigure.astro";
-import { renderPlot } from "../lib/chart-svg";
+import { CHART_FRAME, renderPlot } from "../lib/chart-svg";
 import {
   PRICE_MISSING,
   PRICE_NOTICE,
@@ -32,6 +32,7 @@ const ISLAND_COLOUR: Record<PriceNodeLine["island"], string> = {
   SI: "var(--color-island-south)",
 };
 
+/** Spreads use ink, not island colour (ADR-0017). */
 function spreadColour(spread: PriceSpreadLine): string {
   return spread.dashed ? "var(--color-ink-muted)" : "var(--color-ink)";
 }
@@ -40,7 +41,7 @@ function dash(dashed: boolean): string {
   return dashed ? "4 3" : "none";
 }
 
-/** Rows for one line: one per period, with null where the node has no price. */
+/** Rows for one line: one per period, with null where the line has no value. */
 function rowsFor(
   data: PriceChart,
   values: Array<number | null>,
@@ -56,6 +57,27 @@ function rowsFor(
   }));
 }
 
+/** The line, plus a dot for each lone point. A gap in the values breaks the line, and a lone point gets a dot. */
+function lineWithLoneDots(
+  rows: ReturnType<typeof rowsFor>,
+  colour: string,
+  dashed: boolean,
+) {
+  return [
+    Plot.line(rows, {
+      x: "start",
+      y: "value",
+      stroke: colour,
+      strokeWidth: 2,
+      strokeDasharray: dash(dashed),
+    }),
+    Plot.dot(
+      rows.filter((row) => row.lone),
+      { x: "start", y: "value", fill: colour, r: 2.5 },
+    ),
+  ];
+}
+
 function axisX(data: PriceChart) {
   const labelAt = new Map(
     data.ticks.map((tick) => [tick.at.getTime(), tick.label]),
@@ -69,22 +91,12 @@ function axisX(data: PriceChart) {
   };
 }
 
-/** Line, lone-point dots and proxy markers for one node. A gap breaks only this line. */
+/** A node line with its lone dots, plus an open circle for each proxy period. */
 function nodeMarks(data: PriceChart, node: PriceNodeLine) {
   const rows = rowsFor(data, node.values, node.lone, node.proxy);
   const colour = ISLAND_COLOUR[node.island];
   return [
-    Plot.line(rows, {
-      x: "start",
-      y: "value",
-      stroke: colour,
-      strokeWidth: 2,
-      strokeDasharray: dash(node.dashed),
-    }),
-    Plot.dot(
-      rows.filter((row) => row.lone),
-      { x: "start", y: "value", fill: colour, r: 2.5 },
-    ),
+    ...lineWithLoneDots(rows, colour, node.dashed),
     Plot.dot(
       rows.filter((row) => row.proxy && row.value !== null),
       {
@@ -95,24 +107,6 @@ function nodeMarks(data: PriceChart, node: PriceNodeLine) {
         strokeWidth: 1.5,
         r: 3.5,
       },
-    ),
-  ];
-}
-
-function spreadMarks(data: PriceChart, spread: PriceSpreadLine) {
-  const rows = rowsFor(data, spread.values, spread.lone);
-  const colour = spreadColour(spread);
-  return [
-    Plot.line(rows, {
-      x: "start",
-      y: "value",
-      stroke: colour,
-      strokeWidth: 2,
-      strokeDasharray: dash(spread.dashed),
-    }),
-    Plot.dot(
-      rows.filter((row) => row.lone),
-      { x: "start", y: "value", fill: colour, r: 2.5 },
     ),
   ];
 }
@@ -130,12 +124,8 @@ function hoverMark(data: PriceChart) {
 function priceSvg(data: PriceChart): string {
   return renderPlot(
     {
-      width: 330,
-      height: 260,
+      ...CHART_FRAME,
       marginTop: 28,
-      marginLeft: 56,
-      marginBottom: 36,
-      style: { fontSize: "14px" },
       x: axisX(data),
       y: {
         label: "Wholesale price ($ per megawatt-hour, $/MWh)",
@@ -157,15 +147,14 @@ function priceSvg(data: PriceChart): string {
 }
 
 function spreadSvg(data: PriceChart): string {
-  const drawn = data.spreads.filter((spread) => spread.drawn);
+  // Dashed lines are drawn last, so a dashed line that shares values with a solid one stays visible.
+  const drawn = data.spreads
+    .filter((spread) => spread.drawn)
+    .sort((a, b) => Number(a.dashed) - Number(b.dashed));
   return renderPlot(
     {
-      width: 330,
-      height: 260,
+      ...CHART_FRAME,
       marginTop: 28,
-      marginLeft: 56,
-      marginBottom: 36,
-      style: { fontSize: "14px" },
       x: axisX(data),
       y: {
         label: "Spread ($/MWh), first node minus second",
@@ -175,7 +164,13 @@ function spreadSvg(data: PriceChart): string {
       },
       marks: [
         Plot.ruleY([0], { stroke: "var(--color-ink-muted)" }),
-        ...drawn.flatMap((spread) => spreadMarks(data, spread)),
+        ...drawn.flatMap((spread) =>
+          lineWithLoneDots(
+            rowsFor(data, spread.values, spread.lone),
+            spreadColour(spread),
+            spread.dashed,
+          ),
+        ),
         hoverMark(data),
       ],
     },
@@ -190,6 +185,7 @@ function spreadSvg(data: PriceChart): string {
 const table = chart ? priceChartTable(chart) : null;
 const svgs = chart ? `${priceSvg(chart)}${spreadSvg(chart)}` : null;
 const daily = chart ? priceChartDaily(chart) : [];
+const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
 ---
 
 {
@@ -235,6 +231,11 @@ const daily = chart ? priceChartDaily(chart) : [];
           spike inside a period is smoothed out, so the highest price of the day
           can be above the line.
         </p>
+        <p>
+          Where two spread lines have the same values, one sits on top of the
+          other.
+        </p>
+        {anyProxy && <p>An open circle marks a proxy price.</p>}
         {daily.map((line) => (
           <p>{line}</p>
         ))}
