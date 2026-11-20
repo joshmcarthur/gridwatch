@@ -47,7 +47,8 @@ const isGold = (dataset: PublisherDataset) =>
  * partition is missing or holds a different input version than wanted: the newest bronze
  * version for silver, the silver fingerprint for gold (ADR-0011). Completeness rows are silver
  * only (ADR-0010). Gold gets the in-memory completeness rows of this run. A run that publishes
- * nothing, and already has a completeness row for each skipped silver date, writes nothing. A failing dataset or date does not stop the others.
+ * nothing, and already has a completeness row for each skipped silver date, writes nothing.
+ * A failing dataset or date does not stop the others.
  */
 export async function runPublish(
   options: RunOptions,

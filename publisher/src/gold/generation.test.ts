@@ -436,33 +436,65 @@ test("an invalid Generation_MD day gives incomplete rows in the same run", async
     date,
     "SELECT 'AAA0111' AS poc_id, 'SI' AS island, 'sha-e' AS inputs_sha256",
   );
-  // Silver keeps the old partition and records `invalid`.
-  const invalidSilver: PublisherDataset = {
+  // Entity mappings are complete, so only the generation_md status can make gold incomplete.
+  const entityMappings: PublisherDataset = {
+    id: "entity_mappings",
+    partitionKey: "trading_date",
+    countsTradingPeriods: true,
+    wantedVersions: async () => new Map([[date, "sha-e-new"]]),
+    publish: async ({ date: d }) => ({
+      date: d,
+      status: "complete",
+      rows: 1,
+      path: "p",
+    }),
+  };
+  // Silver keeps the old partition and records `invalid`, or `complete` once the file is valid.
+  let status: "complete" | "invalid" = "invalid";
+  const generationMd: PublisherDataset = {
     id: "generation_md",
     partitionKey: "trading_date",
     countsTradingPeriods: true,
     wantedVersions: async () => new Map([[date, "sha-new"]]),
-    publish: async ({ date: d }) => ({
-      date: d,
-      status: "invalid",
-      errors: ["bad file"],
-    }),
+    publish: async ({ date: d }) =>
+      status === "complete"
+        ? { date: d, status: "complete", rows: 1, path: "p" }
+        : { date: d, status: "invalid", errors: ["bad file"] },
   };
-  const summaries = await runPublish({
-    bronzeDir,
-    silverDir,
-    goldDir,
-    registry: [invalidSilver, generation],
-  });
-  expect(summaries.find((s) => s.id === "gold_generation")).toMatchObject({
-    published: 1,
-  });
-  for (const table of TABLES) {
-    const flags = await query(
-      `SELECT DISTINCT inputs_complete FROM ${gold(table, date)}`,
+  const run = () =>
+    runPublish({
+      bronzeDir,
+      silverDir,
+      goldDir,
+      registry: [generationMd, entityMappings, generation],
+    }).then((s) => s.find((x) => x.id === "gold_generation"));
+  const flagsOf = async () =>
+    Promise.all(
+      TABLES.map((table) =>
+        query(`SELECT DISTINCT inputs_complete FROM ${gold(table, date)}`),
+      ),
     );
-    expect(flags, table).toEqual([{ inputs_complete: false }]);
-  }
+
+  const invalid = await run();
+  expect(invalid).toMatchObject({ published: 1 });
+  expect(invalid?.partial).toHaveLength(1);
+  for (const [i, flags] of (await flagsOf()).entries())
+    expect(flags, TABLES[i]).toEqual([{ inputs_complete: false }]);
+  const invalidSha = (
+    await query(`SELECT DISTINCT inputs_sha256 FROM ${gold(TABLES[0], date)}`)
+  )[0]?.inputs_sha256;
+
+  // Control: the same inputs with generation_md `complete` give complete rows.
+  status = "complete";
+  expect(await run()).toMatchObject({ published: 1, partial: [] });
+  for (const [i, flags] of (await flagsOf()).entries())
+    expect(flags, TABLES[i]).toEqual([{ inputs_complete: true }]);
+  expect(
+    (
+      await query(`SELECT DISTINCT inputs_sha256 FROM ${gold(TABLES[0], date)}`)
+    )[0]?.inputs_sha256,
+  ).not.toBe(invalidSha);
+  expect(await run()).toMatchObject({ published: 0, upToDate: 1 });
 
   // An invalid entity day flags gold on its own.
   const publish = (view: ReturnType<typeof completenessView>) =>

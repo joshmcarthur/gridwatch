@@ -29,10 +29,10 @@ export interface GoldInput {
   versionColumn: VersionColumn;
   /**
    * The `_completeness` dataset ID of this input (ADR-0010, ADR-0011). Two tables of one
-   * dataset share it, as the entity tables share `entity_mappings`. Leave it out for an input
+   * dataset share it, as the entity tables share `entity_mappings`. Use `null` for an input
    * that has no row: it counts as complete.
    */
-  completenessDataset?: string;
+  completenessDataset: string | null;
 }
 
 /** The `_completeness` status of an input on a date. No row counts as `missing`. */
@@ -41,7 +41,7 @@ const inputStatus = (
   input: GoldInput,
   date: string,
 ) =>
-  input.completenessDataset === undefined
+  input.completenessDataset === null
     ? "complete"
     : (completeness.get(completenessKey(input.completenessDataset, date))
         ?.status ?? "missing");
