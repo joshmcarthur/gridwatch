@@ -42,7 +42,7 @@ The runner saves the table after each silver dataset, not only at the end. A run
 
 Two runs that overlap, for example a cron run and a backfill, each hold their own copy of the map and each rewrite the whole file. The last writer wins, and the other run's new rows are lost until a later run records them again. A skipped date with no row is filled again, and an `invalid` day is recorded again on its next publish, so the table heals. This is acceptable for a single cron host.
 
-The entity mapping tables have no row in this table: they have no trading periods and no publish status of their own for a day. Gold counts an entity table as `complete` for a date when its partition exists.
+The entity mappings have one row for each trading date, under the dataset ID `entity_mappings`, with null period counts. Gold generation lists both entity tables with that ID, so an `invalid` or `missing` entity day flags gold.
 
 ## Rationale
 

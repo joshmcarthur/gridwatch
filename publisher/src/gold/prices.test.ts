@@ -16,6 +16,7 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import type { PublisherDataset } from "../datasets.ts";
 import { runPublish } from "../runner.ts";
 import { lit } from "../silver/common.ts";
+import { completenessKey, saveCompleteness } from "../silver/completeness.ts";
 import {
   DATASET,
   publishDispatchEnergyPrices,
@@ -610,4 +611,32 @@ test("a date with no completeness row is not complete", async () => {
     date: DATE,
   });
   expect(result).toMatchObject({ status: "partial", missingPeriods: [] });
+});
+
+test("a gold-only run reads the held completeness from disk", async () => {
+  await writeSilver(
+    ["OTA2201", "HAY2201", "BEN2201"].flatMap((poc) =>
+      Array.from({ length: 48 }, (_, i) => ({
+        poc,
+        period: i + 1,
+        at: 0,
+        price: 10,
+      })),
+    ),
+  );
+  const held = completenessView().get(completenessKey(DATASET, DATE));
+  if (!held) throw new Error("no row");
+  await saveCompleteness(
+    silverDir,
+    new Map([[completenessKey(DATASET, DATE), held]]),
+  );
+  await runPublish({
+    bronzeDir: join(root, "bronze"),
+    silverDir,
+    goldDir,
+    only: ["gold_prices"],
+  });
+  expect(
+    (await readGold("price_daily_summary")).map((r) => r.inputs_complete),
+  ).toEqual([true, true, true]);
 });

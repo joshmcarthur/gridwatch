@@ -463,4 +463,14 @@ test("an invalid Generation_MD day gives incomplete rows in the same run", async
     );
     expect(flags, table).toEqual([{ inputs_complete: false }]);
   }
+
+  // An invalid entity day flags gold on its own.
+  const publish = (view: ReturnType<typeof completenessView>) =>
+    publishGeneration({ silverDir, goldDir, completeness: view, date });
+  expect(await publish(completenessView())).toMatchObject({
+    status: "complete",
+  });
+  expect(
+    await publish(completenessView([["entity_mappings", date, "invalid"]])),
+  ).toMatchObject({ status: "partial", missingPeriods: [] });
 });

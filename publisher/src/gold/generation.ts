@@ -35,12 +35,20 @@ const GENERATION: GoldInput = {
   completenessDataset: "generation_md",
 };
 // Both entity tables carry the same `inputs_sha256`. Listing both keeps the rule simple:
-// every silver table that the SQL reads is a fingerprint input. They have no `_completeness`
-// row (ADR-0010), so each counts as complete when its partition exists.
+// every silver table that the SQL reads is a fingerprint input. The runner records one
+// `_completeness` row for each date under the dataset ID `entity_mappings` (ADR-0010).
 const INPUTS: GoldInput[] = [
   GENERATION,
-  { table: "entity_plants", versionColumn: "inputs_sha256" },
-  { table: "entity_points_of_connection", versionColumn: "inputs_sha256" },
+  {
+    table: "entity_plants",
+    versionColumn: "inputs_sha256",
+    completenessDataset: "entity_mappings",
+  },
+  {
+    table: "entity_points_of_connection",
+    versionColumn: "inputs_sha256",
+    completenessDataset: "entity_mappings",
+  },
 ];
 
 /**

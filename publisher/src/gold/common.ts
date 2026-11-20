@@ -28,9 +28,9 @@ export interface GoldInput {
   /** `bronze_sha256` for a dataset with a bronze file, `inputs_sha256` for a derived table. */
   versionColumn: VersionColumn;
   /**
-   * The `_completeness` dataset ID of this input (ADR-0010, ADR-0011). Leave it out for an
-   * entity table: `_completeness` has no row for it, and it counts as complete when its
-   * partition exists.
+   * The `_completeness` dataset ID of this input (ADR-0010, ADR-0011). Two tables of one
+   * dataset share it, as the entity tables share `entity_mappings`. Leave it out for an input
+   * that has no row: it counts as complete.
    */
   completenessDataset?: string;
 }

@@ -48,7 +48,7 @@ Gold reads this run's completeness rows from memory. `runPublish` passes a read-
 
 `inputs_complete` is true when both checks pass:
 
-1. **Input status.** Each input of the gold table that has `_completeness` rows is `complete` for the date. The inputs are `generation_md` for generation, `dispatch_energy_prices` for prices and `dispatch_reserve_prices` for reserves. A date with no row counts as not complete. The entity tables have no `_completeness` row, so they count as complete when their partition exists. A date without that partition is not wanted at all.
+1. **Input status.** Each input of the gold table that has `_completeness` rows is `complete` for the date. The inputs are `generation_md` and the two entity tables (`entity_mappings` in `_completeness`) for generation, `dispatch_energy_prices` for prices and `dispatch_reserve_prices` for reserves. A date with no row counts as not complete. A date that lacks an input partition is not wanted at all.
 2. **Row-level data rule.** Generation: `generation_md` has rows in every expected trading period (46, 48 or 50). Prices and reserves: the node, or the reserve class and island, has at least one row in the period. A daily, spread or distribution row needs this of every period or node it covers.
 
 A `partial`, `missing` or `invalid` input day gives `inputs_complete = false`, in the same run. The inputs of a gold table are not otherwise checked: a gold table does not read `_completeness` for a dataset that it does not list. The fingerprint includes each input's status, so a status change alone rebuilds the date.
