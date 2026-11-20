@@ -1,7 +1,7 @@
 /**
  * The site JSON contract (ADR-0014). The publisher writes these files and the site reads them.
- * This file has no imports, so the site can import its types through the `exports` entry of
- * the publisher package, and nothing else.
+ * This file has no imports, so the site can import types and assert helpers through the
+ * `exports` entry of the publisher package, and nothing else from the publisher.
  */
 
 /** Bump only for a breaking change. Adding an optional field is not one (ADR-0014). */
