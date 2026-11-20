@@ -89,6 +89,22 @@ A day is **partial** (written) when one or more periods of the day have no rows.
 
 `trading_date`, `trading_period`, `event_start_utc`, `event_end_utc` (the 5-minute interval), `source_run_at` (`RunDateTime`), `case_type`, `case_id`, `point_of_connection`, `unit_code` and `plant_name` (null on point of connection rows, where the source says `N/A`), `island` (null when blank), `load_megawatts`, `initial_megawatts`, `generation_megawatts`, `location_factor`, `dollars_per_megawatt_hour`, `is_dead`, `is_disconnected`, `bronze_file_name`, `bronze_sha256`, `retrieved_at`. Load and generation stay in separate columns. The data stays at source resolution.
 
+### Validation for dispatch reserve prices
+
+The source has FIR and SIR columns on one row. Silver is long: one row per reserve class, so the checks run on those rows. A day is **invalid** (nothing written) when:
+
+1. The file has no rows, or a row has a `TradingDate` other than the requested date.
+2. A row has a trading period outside the range of the day (1 to 46, 48 or 50).
+3. The key `(TradingPeriod, PublishDateTime, PointOfConnection, reserve class)` has duplicates. The count is of extra rows, so one repeated source line reports `2 duplicate keys`.
+4. A period, time, point of connection or price does not parse, or a price is not finite.
+5. `Island` is neither blank, `NI` nor `SI`.
+
+A day is **partial** (written) when one or more periods of the day have no rows. Otherwise it is **complete**. The `rows` count in the result is silver rows, so it is twice the source rows.
+
+### Silver columns, dispatch reserve prices
+
+`trading_date`, `trading_period`, `event_start_utc`, `event_end_utc` (the period span), `source_published_at`, `point_of_connection`, `island` (null when blank in the source), `reserve_class` (`FIR` or `SIR`, the source codes), `dollars_per_megawatt_hour`, `bronze_file_name`, `bronze_sha256`, `retrieved_at`.
+
 ## Consequences
 
 - Five datasets mean five similar files. The shared parts are in `common.ts`, `blob.ts` and `archive.ts`.
