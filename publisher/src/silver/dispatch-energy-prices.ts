@@ -39,18 +39,26 @@ export async function publishDispatchEnergyPrices(options: {
 
     // Dataset-specific casts. Read as text, then TRY_CAST: a bad value becomes NULL and
     // the validation counts it.
-    await connection.run(
-      `CREATE TEMP TABLE prices AS
-       SELECT
-         TRY_CAST(TradingDate AS DATE) AS trading_date,
-         TRY_CAST(TradingPeriod AS INTEGER) AS trading_period,
-         TRY_CAST(PublishDateTime AS TIMESTAMPTZ) AS source_published_at,
-         nullif(PointOfConnection, '') AS point_of_connection,
-         nullif(Island, '') AS island,
-         IsProxyPriceFlag AS proxy_flag,
-         TRY_CAST(DollarsPerMegawattHour AS DOUBLE) AS dollars_per_megawatt_hour
-       FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
-    );
+    try {
+      await connection.run(
+        `CREATE TEMP TABLE prices AS
+         SELECT
+           TRY_CAST(TradingDate AS DATE) AS trading_date,
+           TRY_CAST(TradingPeriod AS INTEGER) AS trading_period,
+           TRY_CAST(PublishDateTime AS TIMESTAMPTZ) AS source_published_at,
+           nullif(PointOfConnection, '') AS point_of_connection,
+           nullif(Island, '') AS island,
+           IsProxyPriceFlag AS proxy_flag,
+           TRY_CAST(DollarsPerMegawattHour AS DOUBLE) AS dollars_per_megawatt_hour
+         FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
+      );
+    } catch (error) {
+      return {
+        date,
+        status: "invalid",
+        errors: [`cannot read the file: ${(error as Error).message}`],
+      };
+    }
 
     // Dataset-specific validation.
     const [check] = (

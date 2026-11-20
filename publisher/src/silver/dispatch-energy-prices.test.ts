@@ -211,6 +211,14 @@ test.each([
     ],
     "1 rows are not for 2026-11-18",
   ],
+  [
+    "a missing column",
+    (lines: string[]) => [
+      (lines[0] as string).replace("TradingDate", "Trading_Date"),
+      ...lines.slice(1),
+    ],
+    expect.stringContaining("cannot read the file"),
+  ],
 ])(
   "marks a day with %s as invalid and writes nothing",
   async (_name, mutate, error) => {
@@ -218,7 +226,8 @@ test.each([
     await archive("2026-11-18", `${mutate(lines).join("\n")}\n`);
     const result = await publish("2026-11-18");
     expect(result).toMatchObject({ status: "invalid" });
-    if (result.status === "invalid") expect(result.errors).toContain(error);
+    if (result.status === "invalid")
+      expect(result.errors).toContainEqual(error);
     expect(existsSync(join(silverDir, DATASET))).toBe(false);
   },
 );

@@ -50,18 +50,28 @@ export async function publishGenerationMd(options: {
     await connection.run("SET TimeZone = 'UTC'");
 
     // Read as text, then TRY_CAST: a bad value becomes NULL and the validation counts it.
-    await connection.run(
-      `CREATE TEMP TABLE wide AS
-       SELECT * FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
-    );
-    const [file] = (
-      await connection.runAndReadAll(
-        `SELECT count(*) AS rows,
-           count(*) FILTER (WHERE TRY_CAST(Trading_Date AS DATE) IS NULL) AS bad_dates,
-           count(*) FILTER (WHERE TRY_CAST(Trading_Date AS DATE) = DATE ${lit(date)}) AS day_rows
-         FROM wide`,
-      )
-    ).getRowObjectsJson() as Array<Record<string, unknown>>;
+    let file: Record<string, unknown> | undefined;
+    try {
+      await connection.run(
+        `CREATE TEMP TABLE wide AS
+         SELECT * FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
+      );
+      const [row] = (
+        await connection.runAndReadAll(
+          `SELECT count(*) AS rows,
+             count(*) FILTER (WHERE TRY_CAST(Trading_Date AS DATE) IS NULL) AS bad_dates,
+             count(*) FILTER (WHERE TRY_CAST(Trading_Date AS DATE) = DATE ${lit(date)}) AS day_rows
+           FROM wide`,
+        )
+      ).getRowObjectsJson() as Array<Record<string, unknown>>;
+      file = row;
+    } catch (error) {
+      return {
+        date,
+        status: "invalid",
+        errors: [`cannot read the file: ${(error as Error).message}`],
+      };
+    }
     const f = (key: string) => Number(file?.[key]);
     if (f("rows") === 0)
       return { date, status: "invalid", errors: ["no rows"] };
