@@ -72,6 +72,32 @@ The shared kit lives in `publisher/src/gold/observation.ts` (`createRunTables`, 
 - **Tables.** `price_anomaly_baselines` (sentinel, one row for each node, keyed by `subject_id`) and `observations_price_anomaly`.
 - **Registry.** After `gold_prices`, because the detector reads `price_periods`.
 
+### Price separation detector
+
+[#32](https://github.com/joshmcarthur/gridwatch/issues/32) adds a second run detector. It is a thin adapter over the same kit. The config object is `PRICE_SEPARATION_CONFIG` in `publisher/src/gold/price-separation.ts`.
+
+- **Series.** The gold `price_spreads` of the three pairs in `SPREAD_PAIRS`: `OTA2201-HAY2201`, `HAY2201-BEN2201` and `OTA2201-BEN2201`. The value is the signed spread, from-node minus to-node. A null spread is never a hit and ends a run.
+- **Rule.** The same as for prices, on the spread. The baseline is the complete non-null spreads of the pair on the 28 days before the date. The high threshold is the larger of the 99th percentile and the median plus 100 $/MWh. The low threshold is the smaller of the 1st percentile and the median minus 100 $/MWh. A hit is strictly beyond a threshold. A run is at least 2 consecutive periods inside one trading date.
+- **Observation types.** `separation_high` and `separation_low`. They are in the observation ID. Severity is as for prices, and is at least 1.
+- **Subject.** The subject type is `point_of_connection_pair`. The subject ID is the pair, in `SPREAD_PAIRS` order, for example `OTA2201-HAY2201`. `point_of_connection`, `island` and `price_region` are null. They do not hold the dearer node.
+- **Sign convention.** `measured_value` is the extreme signed spread of the run: the maximum for a high run, the minimum for a low run. A positive value means the from-node was dearer. A negative value means the to-node was dearer.
+- **Completeness.** `inputs_complete` is the pair-day: every `price_spreads` row of the pair on the date is complete. A pair with no row on the date is incomplete. `missingPeriods` lists the periods with a null spread. A date with no `price_spreads` partition is `missing`.
+- **No cause.** An observation states that two prices differ. It does not state why.
+- **Config.** The values are provisional. They are checked against the backfill and changed by a version bump.
+
+| Key | Value | Why |
+| --- | --- | --- |
+| `baselineWindowDays` | 28 | As for prices. |
+| `minBaselinePeriods` | 672 | As for prices. |
+| `highPercentile` | 0.99 | As for prices. |
+| `lowPercentile` | 0.01 | As for prices. |
+| `minDeviationFromMedian` | 100 | A spread is a difference of two prices, so its normal range is wider than that of one price. In a flat regime the percentiles fall on the median, and a hit must also differ from it by this much. |
+| `minPeriods` | 2 | As for prices. |
+
+- **Fingerprint.** The registry entry is `goldDataset` with a gold input `{ layer: "gold", table: "price_spreads", windowDays: config.baselineWindowDays }`. `inputs_sha256` is the same `dateFingerprint` that `wantedFingerprints` uses. A revised spread day, a day that enters or leaves the window, and a version bump each change the fingerprint. A config change bumps `ANALYSIS_VERSION`.
+- **Tables.** `price_separation_baselines` (sentinel, one row for each pair, keyed by `subject_id`) and `observations_price_separation`.
+- **Registry.** After `gold_price_anomaly`, because the detector reads `price_spreads`.
+
 ## Alternatives considered
 
 - **One shared `observations` table.** Rejected. The runner reads one sentinel fingerprint for each dataset, and `writeGoldTables` replaces a whole partition. Two detectors in one partition would overwrite each other.
@@ -83,6 +109,7 @@ The shared kit lives in `publisher/src/gold/observation.ts` (`createRunTables`, 
 - **Bridging gaps between runs.** Rejected. A gap would join two runs with an unflagged period between them.
 - **Detection on all points of connection.** Deferred. Issue #22 covers the three reference nodes. Node-level detection is a later issue.
 - **Island on `REFERENCE_NODES`.** Rejected. Main's shape is `{ pointOfConnection, priceRegion }`. The detector holds a local map.
+- **Dearer node in `point_of_connection`, `island` and `price_region`.** Rejected. Pair rows leave those columns null. The sign of `measured_value` records which node was dearer. A zero spread does not write a POC.
 
 ## Consequences
 
@@ -93,5 +120,6 @@ The shared kit lives in `publisher/src/gold/observation.ts` (`createRunTables`, 
 - The first 14 days of history have no baseline. The runner prints them as `partial`. A 12-month backfill gives 14 such lines.
 - There are no severity bands yet.
 - The values are provisional. A change needs a bump of `ANALYSIS_VERSION` and a new pinned hash.
-- Backfill counts are pending. The run over the full backfill has not happened. The counts per month, the days with `baseline_ready = false` and the observations with `inputs_complete = false` will be added here after that run.
-- Issue #32 is a thin adapter over the same kit. Pair rows null the typed POC, island and price_region columns. They do not overload those columns as the dearer node.
+- Backfill counts for the price anomaly detector are pending. The run over the full backfill has not happened. The counts per month, the days with `baseline_ready = false` and the observations with `inputs_complete = false` will be added here after that run.
+- Price separation, backfill of 365 days. Of the 820 complete pair-periods (3 pairs, 488 distinct periods; complete means `inputs_complete`) with a spread above $100/MWh in size, 818 have a baseline and 356 are hit periods before the minimum-run rule. The other 462 are not hit periods. In 457 of them the 28-day 99th (or 1st) percentile lies beyond the median by more than $100. 15 days have `baseline_ready` false: the first 14 days, and 2025-12-04 with 624 samples. 8 runs fall on pair-days that are not complete, so they have `inputs_complete` false.
+- A sustained separation of more than about 2 weeks becomes part of the baseline and stops being flagged. An absolute rule is deferred, as for prices.
