@@ -1,0 +1,66 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+  title="Terms"
+  description="Don't use Gridwatch to guess future electricity prices, or to decide if the power system is safe. We can get things wrong."
+>
+  <article class="prose">
+    <h1>Terms</h1>
+    <h2>Forecasting</h2>
+    <p>
+      Don't use this data for forecasting. Forecasting means guessing what
+      electricity prices will do next, or how much power the country will use or
+      make. Gridwatch looks at what already happened.
+    </p>
+    <h2>Safety-critical decisions</h2>
+    <p>
+      Don't use this data for safety-critical decisions. That's work where a
+      wrong number could hurt people or the power system, like deciding whether
+      the power system is safe, when to run a power station, or how to operate
+      it.
+    </p>
+    <p>
+      Gridwatch is independent. We aren't the Electricity Authority, the
+      government body that sets the rules for the electricity market, and we
+      aren't the grid operator, the people who keep the lights on.
+    </p>
+    <p>
+      The numbers come from EMI (the Authority's public electricity data). We
+      can still get things wrong. If you need an official figure, get it from
+      EMI.
+    </p>
+  </article>
+</Layout>
+
+<style>
+  .prose {
+    max-width: var(--measure-prose);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: var(--text-display);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: var(--text-heading);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--text-body);
+    line-height: 1.55;
+    color: var(--color-ink-muted);
+  }
+</style>
