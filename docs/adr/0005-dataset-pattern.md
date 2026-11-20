@@ -105,6 +105,35 @@ A day is **partial** (written) when one or more periods of the day have no rows.
 
 `trading_date`, `trading_period`, `event_start_utc`, `event_end_utc` (the period span), `source_published_at`, `point_of_connection`, `island` (null when blank in the source), `reserve_class` (`FIR` or `SIR`, the source codes), `dollars_per_megawatt_hour`, `bronze_file_name`, `bronze_sha256`, `retrieved_at`.
 
+### Validation for cleared offers
+
+A row is one 5-minute interval of one RTD case for one point of connection, one unit and one product class. The shape matches nodal prices: `IntervalDateTime` is the interval start, `RunDateTime` is `source_run_at`, and silver keeps every case. Layers after silver keep the latest case for each interval. A day is **invalid** (nothing written) when:
+
+1. The file has no rows, or a row has a `TradingDate` other than the requested date.
+2. A row has a trading period outside the range of the day.
+3. An interval is not on a 5-minute boundary, or lies outside its trading period.
+4. The key `(IntervalDateTime, CaseID, PointOfConnectionCode, UnitCode)` has duplicates.
+5. A period, time, case ID, point of connection or number does not parse, a number is not finite, or a dead or disconnected flag is not `Y` or `N`.
+
+A day is **partial** (written) when one or more periods of the day have no rows. The unit of completeness is the trading period, as for dispatch energy prices. A period with some missing intervals is not partial, because the source omits about ten intervals on most days. Completeness tracking ([#14](https://github.com/joshmcarthur/gridwatch/issues/14)) can count intervals per period from silver.
+
+### Silver columns, nodal prices and volumes
+
+`trading_date`, `trading_period`, `event_start_utc`, `event_end_utc` (the 5-minute interval), `source_run_at` (`RunDateTime`), `case_type`, `case_id`, `point_of_connection`, `unit_code` and `plant_name` (null on point of connection rows, where the source says `N/A`), `island` (null when blank), `load_megawatts`, `initial_megawatts`, `generation_megawatts`, `location_factor`, `dollars_per_megawatt_hour`, `is_dead`, `is_disconnected`, `bronze_file_name`, `bronze_sha256`, `retrieved_at`. Load and generation stay in separate columns. The data stays at source resolution.
+
+4. The key `(IntervalDateTime, CaseID, ProductClass, PointOfConnectionCode, UnitCode)` has duplicates.
+5. A period, time, case ID, point of connection or participant is blank or does not parse.
+6. `ProductClass` is not `Injection` or `Offtake`.
+7. A megawatt value is present but is not a finite number. A blank megawatt value is valid and means none cleared.
+
+A day is **partial** (written) when one or more periods of the day have no rows. A period with some missing intervals is not partial, as for nodal prices.
+
+### Silver columns, cleared offers
+
+`trading_date`, `trading_period`, `event_start_utc`, `event_end_utc` (the 5-minute interval), `source_run_at` (`RunDateTime`), `case_type`, `case_id`, `product_class` (as published), `point_of_connection`, `unit_code` and `plant_name` (null when the source says `N/A`), `island` (null when blank), `participant_code`, `cleared_generation_megawatts`, `cleared_fir_megawatts`, `cleared_sir_megawatts` (null when blank, meaning none cleared), `bronze_file_name`, `bronze_sha256`, `retrieved_at`.
+
+The three megawatt columns stay separate, as in the source. Energy and reserve offers stay distinguishable, and one source row stays one silver row. A long form with a product column would turn one source row into up to three, and many would be null. Readers who want a long form can unpivot the three columns in a query.
+
 ## Consequences
 
 - Five datasets mean five similar files. The shared parts are in `common.ts`, `blob.ts` and `archive.ts`.

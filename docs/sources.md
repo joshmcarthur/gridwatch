@@ -128,11 +128,15 @@ Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricin
 |---|---|
 | Pattern | One CSV per trading day, folder per year, "all RTD cases for the preceding day" ([page](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/ClearedOffers)). |
 | Columns | 15: `TradingDate, TradingPeriodNumber, IntervalDateTime, RunDateTime, CaseTypeCode, CaseID, ProductClass, PointOfConnectionCode, UnitCode, PlantName, Island, ParticipantCode, ClearedGenerationMegawatts, ClearedFIRMegawatts, ClearedSIRMegawatts`. `ProductClass` is `Injection` (22,804 rows on 19 Nov) or `Offtake` (2,111). Reserve columns are blank when none cleared. UTF-8 plant names with macrons. |
-| Resolution | 5-minute RTD interval; 278 intervals, 94 units on 19 Nov. Whether the same slots are missing as in the nodal file: unchecked. |
+| Resolution | 5-minute RTD interval; 278 intervals, 94 units on 19 Nov. **The same slots are missing as in the nodal file.** On 19 Nov 2026 both files have the same 278 intervals, and 04:40, 06:50, 07:55, 10:25, 10:30, 13:30, 15:00, 15:30, 15:35 and 23:45 are absent from both. The two files also hold the same `IntervalDateTime`, `CaseID` and `RunDateTime` triples. |
 | Earliest | **2022-04-01** (the page says RTD-derived files start before real-time pricing). Earlier final-pricing files sit in another folder, unlisted. No missing days to 2026-11-19. |
 | Integrity | Serves `Content-MD5`. |
 | Revisions | Section 2. A forum thread, [reconciling ClearedMW with SPD case file offers](https://www.emi.ea.govt.nz/Forum/thread/reconciling-differences-in-clearedmw-from-cleared-offers-and-offers-obtained-from-spd-case-files/), suggests the two can differ; unread. |
-| Size | About 3.1-3.6 MB per day. |
+| Size | About 3.1-3.9 MB per day. Silver Parquet is 127-138 KB per day (19 Nov 2026: 3.8 MB CSV, 137 KB Parquet), so 12 months is about 50 MB. The size does not justify a different backfill start. |
+| Interval time | As nodal (3.3): `IntervalDateTime` is the interval start and `RunDateTime` is about one minute before it. A `CaseID` belongs to one interval. Six intervals on 18 Nov 2026 have two cases. |
+| Key | `(IntervalDateTime, CaseID, ProductClass, PointOfConnectionCode, UnitCode)`. It has no duplicates on 18 Nov, 19 Nov, 27 Sep and 5 Apr. The key without `ProductClass` also has none on those days, but `ProductClass` stays in the key, because a unit could be both. |
+| Products | One row holds energy and both reserve products. `ClearedGenerationMegawatts` is blank on every `Offtake` row. `ClearedFIRMegawatts` and `ClearedSIRMegawatts` are blank when none cleared. Across the four days, no row has all three blank. |
+| `N/A` and blanks | `Offtake` rows have `PlantName` `N/A`. Most also have `UnitCode` `N/A` (7,187 of 8,083), and the rest have a unit code such as `RHO99`. `Island` is blank on 2,217 `Injection` rows (for example the `PTA` units). Silver stores null for all of these. |
 
 ### 3.5 Generation_MD
 
