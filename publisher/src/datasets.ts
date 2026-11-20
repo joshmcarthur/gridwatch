@@ -16,6 +16,7 @@ import {
 } from "./silver/entity-mappings.ts";
 import { publishGenerationFleet } from "./silver/generation-fleet.ts";
 import { publishGenerationMd } from "./silver/generation-md.ts";
+import { publishHvdcFlows } from "./silver/hvdc-flows.ts";
 import { publishNetworkSupplyPoints } from "./silver/network-supply-points.ts";
 import { publishNodalPricesAndVolumes } from "./silver/nodal-prices-and-volumes.ts";
 
@@ -92,6 +93,12 @@ export const datasets: PublisherDataset[] = [
     partitionKey: "trading_date",
     countsTradingPeriods: true,
     publish: publishGenerationMd,
+  },
+  {
+    id: "hvdc_flows",
+    partitionKey: "trading_date",
+    countsTradingPeriods: true,
+    publish: publishHvdcFlows,
   },
   {
     id: "network_supply_points",
