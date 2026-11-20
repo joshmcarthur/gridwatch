@@ -1,4 +1,5 @@
 import { generation } from "./gold/generation.ts";
+import { hvdc } from "./gold/hvdc.ts";
 import { prices } from "./gold/prices.ts";
 import { reserves } from "./gold/reserves.ts";
 import { publishClearedOffers } from "./silver/cleared-offers.ts";
@@ -16,6 +17,7 @@ import {
 } from "./silver/entity-mappings.ts";
 import { publishGenerationFleet } from "./silver/generation-fleet.ts";
 import { publishGenerationMd } from "./silver/generation-md.ts";
+import { publishHvdcFlows } from "./silver/hvdc-flows.ts";
 import { publishNetworkSupplyPoints } from "./silver/network-supply-points.ts";
 import { publishNodalPricesAndVolumes } from "./silver/nodal-prices-and-volumes.ts";
 
@@ -94,6 +96,12 @@ export const datasets: PublisherDataset[] = [
     publish: publishGenerationMd,
   },
   {
+    id: "hvdc_flows",
+    partitionKey: "trading_date",
+    countsTradingPeriods: true,
+    publish: publishHvdcFlows,
+  },
+  {
     id: "network_supply_points",
     partitionKey: "snapshot_date",
     publish: publishNetworkSupplyPoints,
@@ -117,4 +125,5 @@ export const datasets: PublisherDataset[] = [
   generation,
   prices,
   reserves,
+  hvdc,
 ];

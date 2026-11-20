@@ -14,6 +14,7 @@
     "publish:generation-fleet": "node src/silver/generation-fleet.cli.ts",
     "publish:nodal-prices-and-volumes": "node src/silver/nodal-prices-and-volumes.cli.ts",
     "publish:generation-md": "node src/silver/generation-md.cli.ts",
+    "publish:hvdc-flows": "node src/silver/hvdc-flows.cli.ts",
     "publish:entity-mappings": "node src/silver/entity-mappings.cli.ts",
     "typecheck": "tsc -p ."
   },

@@ -36,7 +36,13 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Grid exit point and grid injection point.** Places where power leaves or enters the grid. The brief lists them as possible entities. No source we use names them, so the model has none. See [ADR-0008](adr/0008-entity-model.md).
 
-**HVDC.** The high-voltage direct current link between the North and South Islands. Its terminals are at Benmore (`BEN2201`) in the South Island and Haywards (`HAY2201`) in the North Island. These two POCs are the only ones in the reserve price files. The brief lists "how does the HVDC link work" as a topic to explain.
+**HVDC.** The high-voltage direct current link between the North and South Islands. Its terminals are at Benmore (`BEN2201`) in the South Island and Haywards (`HAY2201`) in the North Island. These two POCs are the only ones in the reserve price files. The metered flow at both ends is in HVDC_Flows ([sources 3.7](sources.md#37-hvdc-flows), [ADR-0016](adr/0016-hvdc-flows.md)). The brief lists "how does the HVDC link work" as a topic to explain.
+
+**Offtake and injection.** The two directions of metered HVDC flow at a terminal. Offtake (`X`) is energy taken from the AC grid into the link. Injection (`I`) is energy put from the link into the AC grid. Each terminal has both.
+
+**Link losses.** The energy that enters the link and does not leave it. Gold takes it as Benmore offtake plus Haywards offtake, minus Benmore injection and Haywards injection ([ADR-0016](adr/0016-hvdc-flows.md)).
+
+**Northward and southward.** The two directions of transfer across the HVDC link. Northward means from the South Island to the North Island. Gold reports the sign of the transfer as positive when it is northward, measured at Haywards. The direction is `none` when the two ends disagree or the link is idle.
 
 **Island.** `NI` (North Island) or `SI` (South Island). Every point of connection in the model has one. See [ADR-0008](adr/0008-entity-model.md).
 
