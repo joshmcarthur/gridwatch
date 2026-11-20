@@ -13,13 +13,17 @@ mkdir -p "$LOG_DIR"
 stamp="$(date -u +%Y-%m-%dT%H%M%SZ)"
 log="$LOG_DIR/daily-run.$stamp.log"
 
-if ! {
+set +e
+{
   echo "start $stamp"
-  docker compose run --rm collector
-  docker compose run --rm publisher
-  echo "ok"
-} >"$log" 2>&1; then
-  status=$?
+  docker compose run --rm collector &&
+    docker compose run --rm publisher &&
+    echo "ok"
+} >"$log" 2>&1
+status=$?
+set -e
+
+if [ "$status" -ne 0 ]; then
   echo "gridwatch daily-run failed (exit $status). log: $log" >&2
   tail -n 80 "$log" >&2 || true
   exit "$status"
