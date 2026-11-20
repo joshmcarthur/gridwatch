@@ -57,6 +57,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 ## Generation
 
+**Average megawatts (MW).** The power a fuel made, averaged over a trading period. Generation_MD gives MWh for each period, and a period lasts 30 minutes, so average MW is MWh x 2. Gridwatch charts show average MW, not MWh. See [ADR-0017](adr/0017-static-svg-charts.md).
+
 **Battery.** A storage category, not primary energy. A battery charges from the grid and discharges back to it. Gold must show it apart from primary generation and must not add it to the primary total. Source code `ELE`. See [ADR-0008](adr/0008-entity-model.md).
 
 **CCGT.** Combined cycle gas turbine. A gas turbine whose hot exhaust also drives a steam turbine, so it uses less gas per MWh. Huntly 5 is one.
@@ -78,6 +80,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 **Peaking plant.** A plant that runs mainly at times of high demand or high prices. The fleet file marks it with `PeakingPlantFlag` = `Y`.
 
 **Plant.** A generating station. In Generation_MD it is a `Gen_Code` such as `aratiatia`. Its ID is `<site>/<lower-case Gen_Code>`, for example `ARI/arapuni`. See [ADR-0008](adr/0008-entity-model.md).
+
+**Primary generation.** The total of every fuel except battery. Unmapped generation is included, because it is still made power. Battery is storage, so it is never in this total. See [ADR-0014](adr/0014-site-json-contract.md).
 
 **Rankine unit.** A steam unit: fuel boils water, and the steam drives a turbine. The fleet file uses the technology code `RKN`. Huntly Rankine 1, 2 and 4 burn coal or gas, so they are `coal_gas`.
 
