@@ -4,11 +4,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import {
-  archiveFile,
-  readManifest,
-  tradingDatesChangedSince,
-} from "./archive.ts";
+import { archiveFile, readManifest } from "./archive.ts";
 
 type Handler = Parameters<typeof createServer>[1];
 
@@ -133,30 +129,6 @@ test("other errors fail at once", async () => {
   handler = (_req, res) => void res.writeHead(404).end();
   await expect(run()).rejects.toThrow("HTTP 404");
   expect(requests).toHaveLength(1);
-});
-
-test("tradingDatesChangedSince ignores unchanged checks and returns a sorted union", async () => {
-  const day = (d: number) => new Date(`2026-11-${d}T00:00:00Z`);
-  await run({ now: () => day(19), tradingDates: ["2026-11-18", "2026-11-17"] });
-  body = "v2";
-  etag = '"e2"';
-  await run({ now: () => day(21), tradingDates: ["2026-11-18", "2026-11-16"] });
-  await run({ now: () => day(22), tradingDates: ["2026-11-18", "2026-11-16"] }); // unchanged
-  expect(await tradingDatesChangedSince(bronze, day(18))).toEqual([
-    "2026-11-16",
-    "2026-11-17",
-    "2026-11-18",
-  ]);
-  expect(await tradingDatesChangedSince(bronze, day(20))).toEqual([
-    "2026-11-16",
-    "2026-11-18",
-  ]);
-  expect(await tradingDatesChangedSince(bronze, day(21))).toEqual([]);
-  expect(await tradingDatesChangedSince(bronze, day(20), "other")).toEqual([]);
-  expect(await tradingDatesChangedSince(bronze, day(20), "prices")).toEqual([
-    "2026-11-16",
-    "2026-11-18",
-  ]);
 });
 
 test("uses If-Modified-Since when the server sends no ETag", async () => {

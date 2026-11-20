@@ -71,6 +71,32 @@ export async function findBronze(
 }
 
 /**
+ * The SHA-256 of the newest bronze version for every date the manifest lists for `dataset`.
+ * This is `findBronze` for all dates in one pass over the manifest.
+ */
+export async function bronzeVersions(
+  bronzeDir: string,
+  dataset: string,
+): Promise<Map<string, string>> {
+  const versions = new Map<string, string>();
+  let text: string;
+  try {
+    text = await readFile(join(bronzeDir, "manifest.jsonl"), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return versions;
+    throw error;
+  }
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") continue;
+    const record = JSON.parse(line) as ManifestLine;
+    if (record.dataset !== dataset) continue;
+    // The manifest is append-only, so a later line replaces an earlier one.
+    for (const date of record.trading_dates) versions.set(date, record.sha256);
+  }
+  return versions;
+}
+
+/**
  * Write the rows of `selectSql` to `finalPath` as Parquet. Writes a `.tmp` file first and
  * renames it, so a reader never sees a partial file. The SELECT must have a total
  * `ORDER BY`, so the same input gives the same bytes.

@@ -37,12 +37,26 @@ npm run typecheck   # tsc, all workspaces
 npm test            # Vitest
 ```
 
-Run the jobs with Docker Compose. Both are no-ops for now.
+## Run
+
+Two one-shot jobs bring `data/` up to date. Run the collector, then the publisher. The daily cron job does the same ([ADR-0002](docs/adr/0002-daily-run-data-and-site-hosting.md)).
 
 ```bash
-docker compose run --rm collector
-docker compose run --rm publisher
+docker compose run --rm collector && docker compose run --rm publisher
 ```
+
+- **First run.** Each dataset backfills the last 12 months, computed from the run date. This is about 7 GB and about 1.2 hours ([`docs/sources.md`](docs/sources.md) section 4). Make sure the disk has room. `docker compose up` runs the same jobs.
+- **Later runs.** The collector fetches the trailing 5 days, and any date or month of the 12-month window that it does not hold (a failed day, or a gap). Generation_MD months are checked again for the last 3 months. The publisher publishes the days that are new or whose bronze file changed. A run with nothing new changes nothing.
+- **A range.** `--from YYYY-MM-DD --to YYYY-MM-DD` replaces the default range. `--dataset <id>` limits the run (repeat it for more). The publisher also takes `--force` to publish up-to-date days again. Older data is never deleted.
+- **Failures.** One failing dataset does not stop the others. The summary names it and the exit code is 1.
+
+```bash
+docker compose run --rm collector --from 2025-01-01 --to 2025-03-31 --dataset dispatch_energy_prices
+docker compose run --rm publisher --from 2025-01-01 --to 2025-03-31 --dataset dispatch_energy_prices
+docker compose run --rm collector --help
+```
+
+The rules for each kind of dataset are in [ADR-0009](docs/adr/0009-runner-default-mode.md).
 
 Architecture decisions are in [`docs/adr/`](docs/adr/). Copy `0000-template.md` for a new one.
 

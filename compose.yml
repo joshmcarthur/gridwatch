@@ -2,11 +2,11 @@
 services:
   collector:
     build: .
-    command: ["node", "collector/src/main.ts"]
+    entrypoint: ["node", "collector/src/main.ts"]
     volumes:
       - ./data:/data
   publisher:
     build: .
-    command: ["node", "publisher/src/main.ts"]
+    entrypoint: ["node", "publisher/src/main.ts"]
     volumes:
       - ./data:/data
