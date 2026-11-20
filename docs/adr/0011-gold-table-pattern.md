@@ -22,7 +22,7 @@ Gold generation ([#16](https://github.com/joshmcarthur/gridwatch/issues/16)) is 
 | Column | Meaning |
 | --- | --- |
 | `analysis_version` (`INTEGER`) | The `ANALYSIS_VERSION` constant of the module. A person bumps it when the logic changes. We do not use the git SHA. The SHA changes on every commit and would rebuild all of gold each time. The Docker image may not have git. |
-| `inputs_sha256` (`VARCHAR`) | A SHA-256 over the analysis version and, for each silver input, the version of its partition for that date and its `_completeness` status. The version of a silver partition is its `bronze_sha256`. The version of a derived silver table (the entity mappings) is its `inputs_sha256`. |
+| `inputs_sha256` (`VARCHAR`) | A SHA-256 over the analysis version and, for each input, the version of its partition for that date and its `_completeness` status. The version of a silver partition is its `bronze_sha256`. The version of a derived silver table (the entity mappings) is its `inputs_sha256`. The version of a gold input is its `inputs_sha256`. A gold input contributes status `complete`: it has no `_completeness` row. |
 | `inputs_complete` (`BOOLEAN`) | True only when (1) every input listed for the gold table has the `_completeness` status `complete` for that date, and (2) the row-level data rule of the table holds. See "Completeness" below. |
 
 ### When gold rebuilds
@@ -34,9 +34,10 @@ Gold is in the runner registry, after silver (`publisher/src/datasets.ts`). The 
 - silver for the date is rebuilt from a new bronze file;
 - the `_completeness` status of a silver input for the date changes, with no new silver version (for example a revised file that is `invalid`, so silver keeps the old partition);
 - the entity mappings for the date change;
+- an upstream gold table for the date is rebuilt (its `inputs_sha256` changes);
 - someone bumps `ANALYSIS_VERSION`.
 
-A run with nothing new writes nothing. `--force` rebuilds the selected dates. Gold runs after silver in the same run, so one `publish` command brings both layers up to date. A date that lacks any input silver is not wanted, and gold writes nothing for it.
+A run with nothing new writes nothing. `--force` rebuilds the selected dates. Gold runs after silver in the same run, so one `publish` command brings both layers up to date. A date that lacks any input partition is not wanted, and gold writes nothing for it.
 
 ### Completeness: flag, do not drop
 
@@ -73,12 +74,23 @@ The runner shows an incomplete gold day as `PARTIAL` in the run summary, with th
 - `coal_gas` is the category of the Huntly Rankine units ([ADR-0008](0008-entity-model.md)).
 - Silver Generation_MD is the only source of generation here, so the tables have no RTD case. Gold tables that read RTD data keep only the latest case for each interval (owner decision on [#9](https://github.com/joshmcarthur/gridwatch/issues/9)).
 
+### Gold inputs
+
+A gold table can read silver, gold, or both. `GoldInput` is a discriminant union on `layer`, which is required.
+
+- `layer: "silver"`: the fingerprint reads the partition from `silverDir`. `versionColumn` is `bronze_sha256` or `inputs_sha256`. `completenessDataset` is the `_completeness` dataset ID, or `null` when the table has no row (that input counts as complete).
+- `layer: "gold"`: the fingerprint reads the partition from `goldDir`. The type fixes `versionColumn: "inputs_sha256"` and `completenessDataset: null`. Gold has no `_completeness` row (see Completeness above). Its `inputs_sha256` already holds the `_completeness` status of its own inputs and its `ANALYSIS_VERSION`, so a change upstream rebuilds the chain by itself.
+
+`PublisherDataset.wantedVersions` gets `goldDir` as a third argument. The runner computes `wantedVersions` inside the dataset loop. A gold table later in the registry therefore sees the gold that this run has just written. Registry order is the DAG. A gold table that reads gold must come after its inputs. A circular dependency is not detected.
+
+Energy balance ([ADR-0018](0018-energy-balance.md)) is the first table that reads gold only: `generation_by_fuel_period`, `hvdc_transfer_period` and `grid_load_period`. It joins those tables and subtracts. Grid load reads silver nodal prices and the entity points of connection.
+
 ### Adding a gold table
 
 1. Add `publisher/src/gold/<name>.ts`. Export `ANALYSIS_VERSION = 1`, a `TABLES` list (the first is the sentinel) and `publish<Name>(options: GoldPublishOptions)`. Export `<name> = goldDataset({ id, tables, inputs, analysisVersion, publish })`.
-2. List the silver inputs as `GoldInput` values. Set `completenessDataset` on each input that has a `_completeness` row. Read the fingerprint with `inputFingerprint`. Get the input status from `inputStatusesComplete`, and combine it with the row-level rule of the table. Add `goldStamp(...)` as the last columns of every SELECT. Use a total `ORDER BY` and `lit()` for values. Write with `writeGoldTables`.
+2. List the inputs as `GoldInput` values. Set `layer: "silver"` or `layer: "gold"` on each. Set `completenessDataset` on each silver input that has a `_completeness` row. Read the fingerprint with `inputFingerprint`. Get the input status from `inputStatusesComplete`, and combine it with the row-level rule of the table. Add `goldStamp(...)` as the last columns of every SELECT. Use a total `ORDER BY` and `lit()` for values. Write with `writeGoldTables`.
 3. Write rows even when inputs are incomplete. Return `partial` with the missing periods, or `missing` when an input has no partition for the date.
-4. Add the dataset as one line at the end of `datasets` in `publisher/src/datasets.ts`.
+4. Add the dataset in `datasets` in `publisher/src/datasets.ts`, after silver and after any gold table it reads.
 5. Test as in `gold/generation.test.ts`: totals against the silver input, identical bytes on a second run, a flagged incomplete day, and the runner skips an up-to-date date and rebuilds a changed one.
 6. Bump `ANALYSIS_VERSION` in the same commit as any change to the logic.
 
@@ -90,3 +102,4 @@ The runner shows an incomplete gold day as `PARTIAL` in the run summary, with th
 - A gold dataset that reads several silver tables lists them all. A change in any of them rebuilds that date.
 - Plant tables take `island` as `min(island)` over the plant's rows. Units on two islands give `NI`. Units on an unmapped POC are ignored when another unit has an island. The fuel tables split by the unit's own island, so they are exact.
 - The runner has one extra `partitionRoot` field and a `goldDir` option. There is no second runner.
+- A gold table can depend on gold. The registry order is the rule. A circular dependency is not detected.

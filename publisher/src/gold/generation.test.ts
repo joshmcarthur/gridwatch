@@ -169,7 +169,7 @@ test("rows carry the analysis version, the fingerprint and the completeness flag
     date: "2026-09-26",
   });
   const wanted = (
-    await generation.wantedVersions?.(silverDir, completenessView())
+    await generation.wantedVersions?.(silverDir, completenessView(), goldDir)
   )?.get("2026-09-26");
   for (const table of TABLES) {
     const rows = await query(

@@ -25,6 +25,7 @@ export const TABLES = ["hvdc_transfer_period", "hvdc_transfer_day"] as const;
 
 const HVDC: GoldInput = {
   table: "hvdc_flows",
+  layer: "silver",
   versionColumn: "bronze_sha256",
   completenessDataset: "hvdc_flows",
 };
@@ -144,6 +145,7 @@ export async function publishHvdc(
 
     const fingerprint = await inputFingerprint(
       silverDir,
+      goldDir,
       ANALYSIS_VERSION,
       INPUTS,
       view,

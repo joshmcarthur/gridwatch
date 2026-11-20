@@ -48,6 +48,7 @@ export const TABLES = [
 
 const DISPATCH: GoldInput = {
   table: "dispatch_energy_prices",
+  layer: "silver",
   versionColumn: "bronze_sha256",
   completenessDataset: "dispatch_energy_prices",
 };
@@ -88,6 +89,7 @@ export async function publishGoldPrices(
     await connection.run("SET threads = 1");
     const inputsSha256 = await inputFingerprint(
       silverDir,
+      goldDir,
       ANALYSIS_VERSION,
       INPUTS,
       completeness,

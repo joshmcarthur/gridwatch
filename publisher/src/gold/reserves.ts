@@ -28,6 +28,7 @@ export const TABLES = [
 
 const DISPATCH: GoldInput = {
   table: "dispatch_reserve_prices",
+  layer: "silver",
   versionColumn: "bronze_sha256",
   completenessDataset: "dispatch_reserve_prices",
 };
@@ -101,6 +102,7 @@ export async function publishReserves(
 
     const inputsSha256 = await inputFingerprint(
       silverDir,
+      goldDir,
       ANALYSIS_VERSION,
       INPUTS,
       completeness,

@@ -31,6 +31,7 @@ export const TABLES = [
 
 const GENERATION: GoldInput = {
   table: "generation_md",
+  layer: "silver",
   versionColumn: "bronze_sha256",
   completenessDataset: "generation_md",
 };
@@ -41,11 +42,13 @@ export const INPUTS: GoldInput[] = [
   GENERATION,
   {
     table: "entity_plants",
+    layer: "silver",
     versionColumn: "inputs_sha256",
     completenessDataset: "entity_mappings",
   },
   {
     table: "entity_points_of_connection",
+    layer: "silver",
     versionColumn: "inputs_sha256",
     completenessDataset: "entity_mappings",
   },
@@ -112,7 +115,14 @@ export async function publishGeneration(
       periodCheck.complete && inputStatusesComplete(view, INPUTS, date);
     const stamp = goldStamp(
       ANALYSIS_VERSION,
-      await inputFingerprint(silverDir, ANALYSIS_VERSION, INPUTS, view, date),
+      await inputFingerprint(
+        silverDir,
+        goldDir,
+        ANALYSIS_VERSION,
+        INPUTS,
+        view,
+        date,
+      ),
       complete ? "true" : "false",
     );
 
