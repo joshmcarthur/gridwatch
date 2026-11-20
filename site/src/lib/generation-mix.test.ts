@@ -181,16 +181,15 @@ test("a 46-period day has 46 points and starts at 00:00", () => {
   if (!mix) throw new Error("expected a mix");
   expect(mix.points).toHaveLength(46);
   expect(mix.points[0]?.time).toBe("00:00");
-  expect(mix.ticks[0]?.label).toBe("00:00");
   expect(mix.ticks.map((tick) => tick.label)).toEqual([
-    "00:00",
-    "03:00",
-    "06:00",
-    "09:00",
-    "12:00",
-    "15:00",
-    "18:00",
-    "21:00",
+    "00",
+    "03",
+    "06",
+    "09",
+    "12",
+    "15",
+    "18",
+    "21",
   ]);
 });
 

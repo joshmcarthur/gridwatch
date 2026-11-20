@@ -43,12 +43,15 @@ function renderChart(data: GenerationMix): {
   );
   const plot = Plot.plot({
     document: document as unknown as Document,
-    width: 960,
-    height: 340,
-    marginLeft: 72,
-    marginBottom: 40,
+    width: 400,
+    height: 260,
+    marginLeft: 56,
+    marginBottom: 36,
+    style: { fontSize: "12px" },
     x: {
-      label: null,
+      label: "Hour (New Zealand time)",
+      domain: [data.points[0]?.start, data.points.at(-1)?.start],
+      nice: false,
       ticks: data.ticks.map((tick) => tick.at),
       tickFormat: (value: Date) => labelAt.get(value.getTime()) ?? "",
     },
@@ -69,7 +72,7 @@ function renderChart(data: GenerationMix): {
       Plot.ruleX(data.points, {
         x: "start",
         stroke: "transparent",
-        strokeWidth: 14,
+        strokeWidth: 8,
         title: "title",
       }),
     ],
@@ -178,6 +181,7 @@ const table = mix ? generationMixTable(mix) : null;
 
   .chart :global(svg) {
     width: 100%;
+    max-width: 560px;
     height: auto;
     display: block;
   }
@@ -215,11 +219,17 @@ const table = mix ? generationMixTable(mix) : null;
     flex-direction: column;
     gap: var(--space-2);
     font-size: var(--text-label);
+    font-weight: 400;
+    line-height: 1.5;
     color: var(--color-ink-muted);
   }
 
   figcaption p {
     margin: 0;
+    font-size: var(--text-label);
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--color-ink-muted);
   }
 
   .chart-table summary {

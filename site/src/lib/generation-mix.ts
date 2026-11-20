@@ -89,7 +89,7 @@ export interface GenerationMix {
   layers: MixLayer[];
   points: MixPoint[];
   areas: MixArea[];
-  /** Every third local hour, for the time axis. */
+  /** Every third local hour, as two digits, for the time axis. */
   ticks: Array<{ at: Date; label: string }>;
 }
 
@@ -171,7 +171,7 @@ export function generationMix(day: SiteDay): GenerationMix | null {
     layers,
     points,
     areas,
-    ticks: timeTicks(day, clockOf),
+    ticks: timeTicks(day),
   };
 }
 
@@ -267,15 +267,15 @@ function clockText(zoned: Temporal.ZonedDateTime): string {
   return `${String(zoned.hour).padStart(2, "0")}:${String(zoned.minute).padStart(2, "0")}`;
 }
 
-function timeTicks(
-  day: SiteDay,
-  clockOf: (zoned: Temporal.ZonedDateTime) => string,
-): Array<{ at: Date; label: string }> {
+function timeTicks(day: SiteDay): Array<{ at: Date; label: string }> {
   const ticks: Array<{ at: Date; label: string }> = [];
   for (const period of day.periods) {
     const zoned = zonedAt(period.start_utc);
     if (zoned.minute !== 0 || zoned.hour % 3 !== 0) continue;
-    ticks.push({ at: new Date(period.start_utc), label: clockOf(zoned) });
+    ticks.push({
+      at: new Date(period.start_utc),
+      label: String(zoned.hour).padStart(2, "0"),
+    });
   }
   return ticks;
 }
