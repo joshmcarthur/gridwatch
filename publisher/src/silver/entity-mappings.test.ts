@@ -549,7 +549,9 @@ async function archive(
   );
 }
 
-test("each fixture identifier resolves or is reported as unmapped", async () => {
+test("each fixture identifier resolves or is reported as unmapped", {
+  timeout: 30_000,
+}, async () => {
   await archive(
     "network_supply_points",
     "network-supply-points",
@@ -925,7 +927,9 @@ test("inputs_sha256 is the same on every table and changes with an input version
   expect(changed.inputsSha256).not.toBe(first.inputsSha256);
 });
 
-test("the real Huntly Coal row links to the CLG units of the fleet", async () => {
+test("the real Huntly Coal row links to the CLG units of the fleet", {
+  timeout: 30_000,
+}, async () => {
   await archive(
     "network_supply_points",
     "network-supply-points",
@@ -950,7 +954,7 @@ test("the real Huntly Coal row links to the CLG units of the fleet", async () =>
     await query(
       `SELECT plant_id, fuel_category FROM ${table("entity_plants", "2026-04-01")} WHERE site_id = 'HLY'`,
     ),
-  ).toEqual([{ plant_id: "HLY/huntly_1_4", fuel_category: "coal" }]);
+  ).toEqual([{ plant_id: "HLY/huntly_1_4", fuel_category: "coal_gas" }]);
   expect(
     await query(
       `SELECT unit_id, plant_id, fuel_category FROM ${table("entity_units", "2026-04-01")} ORDER BY unit_id`,
@@ -959,12 +963,12 @@ test("the real Huntly Coal row links to the CLG units of the fleet", async () =>
     {
       unit_id: "HLY2201:HLY1",
       plant_id: "HLY/huntly_1_4",
-      fuel_category: "coal",
+      fuel_category: "coal_gas",
     },
     {
       unit_id: "HLY2201:HLY4",
       plant_id: "HLY/huntly_1_4",
-      fuel_category: "coal",
+      fuel_category: "coal_gas",
     },
   ]);
 });

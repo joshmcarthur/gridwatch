@@ -1,10 +1,10 @@
-/** The Gridwatch fuel categories (brief section 8.1 plus `battery`, ADR-0008). */
+/** The Gridwatch fuel categories (brief section 8.1 with `coal_gas` for `coal` and `battery` added, ADR-0008). */
 export const FUEL_CATEGORIES = [
   "hydro",
   "geothermal",
   "wind",
   "gas",
-  "coal",
+  "coal_gas",
   "solar",
   "battery",
   "other",
@@ -26,7 +26,7 @@ export const FUEL_MAP: Record<string, FuelCategory> = {
   Geo: "geothermal",
   Solar: "solar",
   Gas: "gas",
-  Coal: "coal",
+  Coal: "coal_gas", // only huntly_1_4 at HLY2201 has this code; see ADR-0008
   Diesel: "other",
   Wood: "other",
   // Generation_MD, short vocabulary; the fleet file uses the same short codes
@@ -38,5 +38,5 @@ export const FUEL_MAP: Record<string, FuelCategory> = {
   // Fleet file only
   GAS: "gas",
   DSL: "other",
-  CLG: "coal", // Huntly Rankine units burn coal and gas; see ADR-0008
+  CLG: "coal_gas", // the fleet file says "Coal/Gas"; see ADR-0008
 };
