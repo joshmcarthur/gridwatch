@@ -127,6 +127,17 @@ Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/MappingsAndGeospa
 
 Each NSP snapshot is a full table with history in `Start date`/`End date`/`Current flag`, so the latest snapshot rebuilds history; archive every snapshot because old ones are dropped. Coverage gap: section 6, item 7.
 
+**Files chosen for [#7](https://github.com/joshmcarthur/gridwatch/issues/7)** (silver pattern: [ADR-0006](adr/0006-mapping-datasets-snapshots.md)):
+
+| Silver table | Source file | Gives |
+|---|---|---|
+| `network_supply_points` | `NetworkSupplyPointsTable/<yyyymmdd>_NetworkSupplyPointsTable.csv`, every snapshot | POC to island, network reporting region, zone and NZTM coordinates (also as WGS84 lat/lon), with validity dates. Dispatch energy prices and nodal prices join on the POC. |
+| `generation_fleet` | [`WH/Generation/GenerationFleet/Existing/DispatchedGenerationPlant.csv`](https://emidatasets.blob.core.windows.net/publicdata/Datasets/Wholesale/Generation/GenerationFleet/Existing/DispatchedGenerationPlant.csv) | Plant and unit to POC, fuel, technology, operator (owner), capacity, with effective dates. Measured on 20 Nov 2026: 20 KB, 161 rows, 96 POCs, 9 fuel codes, 29 operators. Serves `Content-MD5`. The source overwrites it in place (stamped 19 Nov 2026 19:38 UTC). It is in the Generation folder, not the Mappings folder. |
+
+Not chosen: `NetworkRegionShapefiles/` (region polygons are for the map issue) and `NetworkRegionsToMeshblocks/` (no dataset needs it). The `Proposed/` fleet files are an investment pipeline, not a mapping.
+
+**Why 18 priced POCs have no NSP row (measured 20 Nov 2026).** None of the 18 appears in any of the 186 snapshots, closed rows included. None is in the fleet file either. The table lists network supply points, which are connections where a network or load takes energy from the grid. The 18 are grid nodes (`BEN2201`, `HAY2201`, `INV2201` and others, mostly 220 kV) that carry a price but are not such a connection (inferred; the source gives no reason). The source has no other POC table with island or coordinates: the Transmission folder holds only PDF line diagrams. The dispatch energy prices file gives an `Island` for all 18 on 19 Nov 2026. Every one of the 18 also shares its three-letter site code with an NSP POC on the same island, but we do not use that as a mapping. Another 6 priced POCs (`BPD1101`, `HWB1101`, `MDN1101`, `SWN2201`, `TMU1101`, `WAI0501`) appear only in closed NSP rows (`Current flag` 0), so a lookup that keeps only current rows loses them. So 228 of 246 resolve to an island when the lookup uses every row. Silver does not guess the other 18.
+
 ## 4. Backfill start dates and sizes
 
 The owner limited the backfill to the last 12 months for now ([#13](https://github.com/joshmcarthur/gridwatch/issues/13#issuecomment-7025571389)). The default start for every dataset is 12 months before the run date. The runner computes it; it is not a fixed date. Older bronze is not deleted, and `collect --from` can fetch earlier data later.
