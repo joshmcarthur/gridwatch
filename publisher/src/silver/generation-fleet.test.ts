@@ -223,6 +223,15 @@ test.each([
     ],
     "1 overlapping ranges for the same unit",
   ],
+  [
+    "a bad commissioning date",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace(",1964-01-01,", ",1964,"),
+      ...lines.slice(2),
+    ],
+    "1 rows have a missing or non-numeric value",
+  ],
   ["no rows", (lines: string[]) => lines.slice(0, 1), "no rows"],
   [
     "a missing column",

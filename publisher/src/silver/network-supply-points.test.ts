@@ -340,6 +340,27 @@ test.each([
     ],
     "1 rows have coordinates that are not a pair of numbers",
   ],
+  [
+    "a bad region ID",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace(
+        ",32,South Canterbury",
+        ",x,South Canterbury",
+      ),
+      ...lines.slice(2),
+    ],
+    "1 rows have a missing or non-numeric value",
+  ],
+  [
+    "a bad end period",
+    (lines: string[]) => [
+      ...lines.slice(0, 6),
+      (lines[6] as string).replace(",2008-04-30,48,", ",2008-04-30,late,"),
+      ...lines.slice(7),
+    ],
+    "1 rows have a missing or non-numeric value",
+  ],
   ["no rows", (lines: string[]) => lines.slice(0, 1), "no rows"],
   [
     "a missing column",
