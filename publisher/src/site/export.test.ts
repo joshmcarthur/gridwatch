@@ -108,9 +108,52 @@ test("a valid day passes, with and without the optional extensions", () => {
     assertSiteDay({
       ...day,
       reserves: { state: "missing" },
-      sankey: { state: "complete" },
+      sankey: {
+        state: "missing",
+        missing_periods: [],
+        analysis_version: null,
+        inputs_sha256: null,
+        silver_tables: [],
+        gold_tables: [],
+        datasets: [],
+        islands: [],
+        link_losses_megawatt_hours: null,
+        inputs_complete: null,
+      },
+      observations: { state: "incomplete" },
     }),
   ).not.toThrow();
+});
+
+test("the validator rejects a missing sankey that carries zeros", () => {
+  const day = sampleDay();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      sankey: {
+        state: "missing",
+        missing_periods: [],
+        analysis_version: null,
+        inputs_sha256: null,
+        silver_tables: [],
+        gold_tables: [],
+        datasets: [],
+        islands: [
+          {
+            island: "NI",
+            generation_megawatt_hours: 0,
+            hvdc_import_megawatt_hours: 0,
+            load_megawatt_hours: 0,
+            residual_megawatt_hours: 0,
+            residual_percent_of_load: 0,
+            inputs_complete: false,
+          },
+        ],
+        link_losses_megawatt_hours: null,
+        inputs_complete: null,
+      },
+    }),
+  ).toThrow("sankey.islands: a missing section has no entries");
 });
 
 test("the validator rejects a truncated array, a missing state, a bad state and an unknown dataset", () => {
@@ -364,6 +407,53 @@ async function writePrices(
 
 const NODES = ["OTA2201", "HAY2201", "BEN2201"];
 
+/** Energy-balance gold for a date. The period table is the sankey sentinel. */
+async function writeSankeyGold(
+  date: string,
+  {
+    period = [],
+    day = [],
+    hvdcDay,
+    stamp = {},
+  }: {
+    period?: Row[];
+    day?: Row[];
+    hvdcDay?: Row[];
+    stamp?: Row;
+  } = {},
+) {
+  await writeGold(
+    "energy_balance_period",
+    date,
+    {
+      trading_period: "INTEGER",
+      island: "VARCHAR",
+      residual_mwh: "DOUBLE",
+    },
+    period.map((row) => ({ ...stamp, ...row })),
+  );
+  await writeGold(
+    "energy_balance_day",
+    date,
+    {
+      island: "VARCHAR",
+      generation_mwh: "DOUBLE",
+      hvdc_import_mwh: "DOUBLE",
+      load_mwh: "DOUBLE",
+      residual_mwh: "DOUBLE",
+      residual_pct_of_load: "DOUBLE",
+    },
+    day.map((row) => ({ ...stamp, ...row })),
+  );
+  if (hvdcDay)
+    await writeGold(
+      "hvdc_transfer_day",
+      date,
+      { losses_mwh: "DOUBLE" },
+      hvdcDay.map((row) => ({ ...stamp, ...row })),
+    );
+}
+
 /** One price row for each reference node and period. `price` gives null for a null price. */
 function pricePeriods(
   periods: number,
@@ -600,7 +690,152 @@ test("a section without gold is written as missing, with empty arrays, and the d
   expect(day.prices.distribution.median).toEqual([]);
   expect(day.datasets.dispatch_energy_prices?.status).toBe("missing");
   expect(day.complete).toBe(false);
+  expect(day.sankey).toMatchObject({
+    state: "missing",
+    islands: [],
+    link_losses_megawatt_hours: null,
+    inputs_complete: null,
+    analysis_version: null,
+    inputs_sha256: null,
+  });
   expect(() => assertSiteDay(day)).not.toThrow();
+});
+
+test("sankey carries the gold day table, with residual sign and percent of load", async () => {
+  // Hand values from the #23 / ADR-0018 base case: 48 periods, NI 6+1-5=2 per period,
+  // SI 4-1.2-2.5=0.3, link losses 0.2. Day sums: NI 288, 48, 240, 96 (40% of load);
+  // SI 192, -57.6, 120, 14.4 (12% of load); losses 9.6.
+  await writeSankeyGold(DATE, {
+    period: [
+      { trading_period: 1, island: "NI", residual_mwh: 2 },
+      { trading_period: 1, island: "SI", residual_mwh: 0.3 },
+    ],
+    day: [
+      {
+        island: "NI",
+        generation_mwh: 288,
+        hvdc_import_mwh: 48,
+        load_mwh: 240,
+        residual_mwh: 96,
+        residual_pct_of_load: 40,
+      },
+      {
+        island: "SI",
+        generation_mwh: 192,
+        hvdc_import_mwh: -57.6,
+        load_mwh: 120,
+        residual_mwh: 14.4,
+        residual_pct_of_load: 12,
+      },
+    ],
+    hvdcDay: [{ losses_mwh: 9.6 }],
+  });
+  const day = await buildSiteDay({
+    goldDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  expect(day.sankey).toMatchObject({
+    state: "complete",
+    inputs_complete: true,
+    link_losses_megawatt_hours: 9.6,
+    missing_periods: [],
+  });
+  expect(day.sankey?.islands).toEqual([
+    {
+      island: "NI",
+      generation_megawatt_hours: 288,
+      hvdc_import_megawatt_hours: 48,
+      load_megawatt_hours: 240,
+      residual_megawatt_hours: 96,
+      residual_percent_of_load: 40,
+      inputs_complete: true,
+    },
+    {
+      island: "SI",
+      generation_megawatt_hours: 192,
+      hvdc_import_megawatt_hours: -57.6,
+      load_megawatt_hours: 120,
+      residual_megawatt_hours: 14.4,
+      residual_percent_of_load: 12,
+      inputs_complete: true,
+    },
+  ]);
+  expect(day.complete).toBe(false);
+  expect(() => assertSiteDay(day)).not.toThrow();
+});
+
+test("a day with no energy-balance row exports sankey as missing, never zeros", async () => {
+  const day = await buildSiteDay({
+    goldDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  expect(day.sankey?.state).toBe("missing");
+  expect(day.sankey?.islands).toEqual([]);
+  expect(day.sankey?.link_losses_megawatt_hours).toBeNull();
+  expect(day.sankey?.inputs_complete).toBeNull();
+});
+
+test("HVDC gold alone does not invent a sankey transfer during the month lag", async () => {
+  await writeGold("hvdc_transfer_day", DATE, { losses_mwh: "DOUBLE" }, [
+    { losses_mwh: 400 },
+  ]);
+  const day = await buildSiteDay({
+    goldDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  expect(day.sankey?.state).toBe("missing");
+  expect(day.sankey?.link_losses_megawatt_hours).toBeNull();
+  expect(day.sankey?.islands).toEqual([]);
+});
+
+test("an incomplete energy-balance day is incomplete, lists null-residual periods, and keeps a negative residual", async () => {
+  await writeSankeyGold(DATE, {
+    stamp: { inputs_complete: false },
+    period: [
+      { trading_period: 5, island: "NI", residual_mwh: null },
+      { trading_period: 5, island: "SI", residual_mwh: 0.3 },
+    ],
+    day: [
+      {
+        island: "NI",
+        generation_mwh: 288,
+        hvdc_import_mwh: -96,
+        load_mwh: null,
+        residual_mwh: null,
+        residual_pct_of_load: null,
+        inputs_complete: false,
+      },
+      {
+        island: "SI",
+        generation_mwh: 192,
+        hvdc_import_mwh: 105.6,
+        load_mwh: 120,
+        residual_mwh: 177.6,
+        residual_pct_of_load: 148,
+        inputs_complete: false,
+      },
+    ],
+    hvdcDay: [{ losses_mwh: 9.6, inputs_complete: false }],
+  });
+  const day = await buildSiteDay({
+    goldDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  expect(day.sankey?.state).toBe("incomplete");
+  expect(day.sankey?.inputs_complete).toBe(false);
+  expect(day.sankey?.missing_periods).toEqual([5]);
+  expect(day.sankey?.islands[0]).toMatchObject({
+    island: "NI",
+    hvdc_import_megawatt_hours: -96,
+    load_megawatt_hours: null,
+    residual_megawatt_hours: null,
+    residual_percent_of_load: null,
+    inputs_complete: false,
+  });
 });
 
 test("a null price on an incomplete row makes the section incomplete, and lists that period", async () => {
@@ -779,6 +1014,34 @@ test("nodes and spreads follow the reference order, and the distribution keeps p
   expect(day.prices.distribution.median.slice(0, 2)).toEqual([50, 6]);
 });
 
+test("the index records which days have a complete sankey", async () => {
+  await writePrices(DATE, { periods: pricePeriods(48, (_n, p) => p) });
+  await writeSankeyGold(DATE, {
+    period: [{ trading_period: 1, island: "NI", residual_mwh: 1 }],
+    day: [
+      {
+        island: "NI",
+        generation_mwh: 1,
+        hvdc_import_mwh: 0,
+        load_mwh: 1,
+        residual_mwh: 0,
+        residual_pct_of_load: 0,
+      },
+    ],
+    hvdcDay: [{ losses_mwh: 0 }],
+  });
+  const summary = await exportSite({
+    goldDir,
+    completeness: completenessView(),
+    registry: datasets,
+  });
+  expect(summary.failed).toEqual([]);
+  const index = await readIndex();
+  assertSiteIndex(index);
+  expect(index.days[0]?.sections.sankey).toBe("complete");
+  expect(index.latest_complete_sections.sankey).toBe(DATE);
+});
+
 test("the index gives the latest complete date for each dataset, and null when there is none", async () => {
   await writePrices(DATE, { periods: pricePeriods(48, (_n, p) => p) });
   await writePrices("2026-11-17", { periods: pricePeriods(48, (_n, p) => p) });
@@ -800,6 +1063,11 @@ test("the index gives the latest complete date for each dataset, and null when t
   expect(index.latest_complete.generation_md).toBe("2026-11-17");
   expect(index.latest_complete.dispatch_energy_prices).toBe(DATE);
   expect(index.latest_complete.cleared_offers).toBeNull();
+  expect(index.days.map((d) => d.sections.sankey)).toEqual([
+    "missing",
+    "missing",
+  ]);
+  expect(index.latest_complete_sections.sankey).toBeNull();
 });
 
 test("a range never removes a day from the index, and a changed day outside the range is not rebuilt", async () => {
@@ -1104,4 +1372,15 @@ test("the committed sample day matches the exporter end to end, on real generati
     (s) => s.from === "OTA2201" && s.to === "BEN2201",
   );
   expect(otaBen?.spread.every((value) => value === 20)).toBe(true);
+  // 2026-09-27 has generation and prices, but no HVDC_Flows: the month-lag day.
+  expect(built.sankey).toMatchObject({
+    state: "missing",
+    islands: [],
+    link_losses_megawatt_hours: null,
+    inputs_complete: null,
+  });
+  const parsedIndex: unknown = JSON.parse(index);
+  assertSiteIndex(parsedIndex);
+  expect(parsedIndex.days[0]?.sections.sankey).toBe("missing");
+  expect(parsedIndex.latest_complete_sections.sankey).toBeNull();
 });
