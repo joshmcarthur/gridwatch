@@ -8,6 +8,7 @@
     "collect:network-supply-points": "node src/electricity-authority/network-supply-points.cli.ts",
     "collect:generation-fleet": "node src/electricity-authority/generation-fleet.cli.ts",
     "collect:nodal-prices-and-volumes": "node src/electricity-authority/nodal-prices-and-volumes.cli.ts",
+    "collect:generation-md": "node src/electricity-authority/generation-md.cli.ts",
     "typecheck": "tsc -p ."
   }
 }
