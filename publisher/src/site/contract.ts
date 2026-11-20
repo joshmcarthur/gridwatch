@@ -48,7 +48,10 @@ export interface SiteDatasetStatus {
 export interface SectionBase {
   /** `missing`: no gold partition. `incomplete`: see ADR-0014. `complete`: neither. */
   state: SectionState;
-  /** Periods with no gold row, or with a null value. Empty when the section is missing. */
+  /**
+   * Generation: periods with no row in the fuel period table. Prices: periods where a reference
+   * node has a null price. Empty when the section is missing.
+   */
   missing_periods: number[];
   /** From the gold rows. Null when the section is missing. */
   analysis_version: number | null;

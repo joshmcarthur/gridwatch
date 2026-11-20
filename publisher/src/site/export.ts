@@ -64,16 +64,14 @@ const PRICES_SECTION: Section = {
 };
 const SECTIONS: readonly Section[] = [GENERATION_SECTION, PRICES_SECTION];
 
+/** The `_completeness` datasets that a section reads. */
+const sectionDatasets = (section: Section) =>
+  section.inputs.flatMap((input) =>
+    input.completenessDataset === null ? [] : [input.completenessDataset],
+  );
+
 /** Every silver dataset that a section reads, sorted. */
-const DATASET_IDS = [
-  ...new Set(
-    SECTIONS.flatMap((section) =>
-      section.inputs.flatMap((input) =>
-        input.completenessDataset === null ? [] : [input.completenessDataset],
-      ),
-    ),
-  ),
-].sort();
+const DATASET_IDS = [...new Set(SECTIONS.flatMap(sectionDatasets))].sort();
 
 /** Round half away from zero. The sign is kept, and -0 becomes 0. */
 export function round(value: number, places: number): number {
@@ -185,11 +183,6 @@ function sectionState(
   );
   return stamp.inputs_complete && inputs ? "complete" : "incomplete";
 }
-
-const sectionDatasets = (section: Section) =>
-  section.inputs.flatMap((input) =>
-    input.completenessDataset === null ? [] : [input.completenessDataset],
-  );
 
 async function buildGeneration(
   connection: DuckDBConnection,
