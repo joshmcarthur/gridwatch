@@ -1,11 +1,11 @@
-# ADR-0011: Gold price tables, reference nodes and aggregation
+# ADR-0012: Gold price tables, reference nodes and aggregation
 
 - Status: Accepted
 - Date: 2026-11-20
 
 ## Context
 
-[#17](https://github.com/joshmcarthur/gridwatch/issues/17) builds the gold price tables. They answer "why do prices differ between regions?" and feed the price chart and the price-separation detector. They need a small fixed set of reference nodes, and a rule that turns irregular 5-minute dispatch prices into a price for a trading period. The owner decided on [#9](https://github.com/joshmcarthur/gridwatch/issues/9) that dispatch energy prices are the price at a node, and that layers after silver keep only the latest RTD case for each interval. [ADR-0008](0008-entity-model.md) defines region as the NSP network reporting region.
+[#17](https://github.com/joshmcarthur/gridwatch/issues/17) builds the gold price tables. They answer "why do prices differ between regions?" and feed the price chart and the price-separation detector. They need a small fixed set of reference nodes, and a rule that turns irregular 5-minute dispatch prices into a price for a trading period. The owner decided on [#9](https://github.com/joshmcarthur/gridwatch/issues/9) that dispatch energy prices are the price at a node, and that layers after silver keep only the latest RTD case for each interval. [ADR-0008](0008-entity-model.md) defines region as the NSP network reporting region. The module follows the gold table pattern in [ADR-0011](0011-gold-table-pattern.md): `goldDataset`, `writeGoldTables`, `goldStamp` and `inputFingerprint`.
 
 ## Decision
 
@@ -34,7 +34,7 @@ All three codes are in the dispatch energy prices file of 2026-11-18, with 288 r
 
 ### Tables
 
-Gold Parquet at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. The write is atomic and the `ORDER BY` is total, as in silver.
+Gold Parquet at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. `writeGoldTables` writes every table to a `.tmp` file, then renames them, with the sentinel (`price_periods`) last ([ADR-0011](0011-gold-table-pattern.md)). The `ORDER BY` is total. The module sets `SET threads = 1` because the daily summary sums floating-point values.
 
 | Table | One row per |
 | --- | --- |
@@ -46,8 +46,8 @@ Gold Parquet at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. The write i
 Every row has `trading_date`, `analysis_version`, `inputs_sha256` and `inputs_complete`. There is no `processed_at`, so a second run on the same input gives identical bytes ([ADR-0003](0003-time-column-naming.md) amendment). Period tables keep `trading_period`, `event_start_utc` and `event_end_utc`.
 
 - **`analysis_version`** is `ANALYSIS_VERSION` in `prices.ts`. Change it by hand when the logic changes.
-- **`inputs_sha256`** is a SHA-256 over the `bronze_sha256` values of the silver input partitions (with their paths) and the analysis version. It is modelled on [ADR-0008](0008-entity-model.md).
-- **`inputs_complete`** flags a row. No row is dropped. A node row is complete when the period has 6 intervals. A spread row is complete when both node rows are. A distribution row is complete when the period has 6 distinct intervals with a price from any POC. It does not mean that every POC has all 6, and a proxy price counts as a price. A daily summary is complete when every period is. Every expected period has a row, with null prices when silver has none. Silver `_completeness` ([#14](https://github.com/joshmcarthur/gridwatch/issues/14)) does not exist yet. The flag comes from the silver data now, and can move to `_completeness` later.
+- **`inputs_sha256`** is `inputFingerprint` over the analysis version and the silver `dispatch_energy_prices` partition's `bronze_sha256` ([ADR-0011](0011-gold-table-pattern.md)).
+- **`inputs_complete`** flags a row. No row is dropped. A node row is complete when the period has 6 intervals. A spread row is complete when both node rows are. A distribution row is complete when the period has 6 distinct intervals with a price from any POC. It does not mean that every POC has all 6, and a proxy price counts as a price. A daily summary is complete when every period is. Every expected period has a row, with null prices when silver has none. Completeness for gold prices is this 6-interval count, not `inputsComplete()` in [ADR-0011](0011-gold-table-pattern.md) (that helper counts trading-period presence in silver fact files, the wrong grain here). The publish result is `partial` with those incomplete periods, or `complete` when every period has 6 intervals. [#14](https://github.com/joshmcarthur/gridwatch/issues/14) landed as [ADR-0010](0010-completeness.md). Gold still flags from interval counts. Gold is not a row in `silver/_completeness`: `partitionRoot` sends the runner to `gold/`, and `fillHeldCompleteness` reads `silverDir`.
 
 ## Consequences
 

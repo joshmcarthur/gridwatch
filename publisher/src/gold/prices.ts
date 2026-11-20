@@ -1,14 +1,23 @@
-import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { join, relative } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
-import { lit, writeParquetAtomically } from "../silver/common.ts";
+import { lit, type PublishResult } from "../silver/common.ts";
 import { periodsInTradingDate, periodToUtc } from "../trading-time.ts";
+import {
+  type GoldInput,
+  goldDataset,
+  goldPartitionPath,
+  goldStamp,
+  inputFingerprint,
+  silverPartitionPath,
+  writeGoldTables,
+} from "./common.ts";
 
-/** Bump by hand when the logic of any table here changes. Every gold row carries it. */
+/**
+ * Bump by hand when the logic of any table in this file changes. The runner then rebuilds every
+ * date (ADR-0011).
+ */
 export const ANALYSIS_VERSION = 1;
 
-const SILVER_DATASET = "dispatch_energy_prices";
 /** A trading period is 30 minutes and a dispatch interval is 5. */
 const INTERVALS_PER_PERIOD = 6;
 
@@ -16,7 +25,7 @@ const OTA = "OTA2201";
 const HAY = "HAY2201";
 const BEN = "BEN2201";
 
-/** The reference nodes of ADR-0011. */
+/** The reference nodes of ADR-0012. */
 export const REFERENCE_NODES = [
   { pointOfConnection: OTA, priceRegion: "upper_north_island" },
   { pointOfConnection: HAY, priceRegion: "lower_north_island" },
@@ -30,29 +39,24 @@ export const SPREAD_PAIRS = [
   [OTA, BEN],
 ] as const;
 
+/** The gold tables of this module. The first is the sentinel: the runner reads it and it is written last. */
 export const TABLES = [
   "price_periods",
   "price_daily_summary",
   "price_spreads",
   "price_distribution",
 ] as const;
-type Table = (typeof TABLES)[number];
 
-export type GoldPricesResult =
-  | { date: string; status: "missing" }
-  | {
-      date: string;
-      status: "written";
-      /** False when any row of any table has `inputs_complete = false`. */
-      inputsComplete: boolean;
-      inputsSha256: string;
-      rows: Record<Table, number>;
-    };
+const DISPATCH: GoldInput = {
+  table: "dispatch_energy_prices",
+  versionColumn: "bronze_sha256",
+};
+const INPUTS: GoldInput[] = [DISPATCH];
 
 /**
  * Publish the gold price tables for one trading date, from the silver dispatch energy prices
- * of that date: `<goldDir>/<table>/trading_date=<date>/data.parquet` for each of `TABLES`.
- * Returns `missing` and writes nothing when silver has no partition for the date.
+ * of that date: `<goldDir>/<table>/trading_date=<date>/data.parquet` for each of `TABLES`
+ * (ADR-0011, ADR-0012).
  *
  * Silver keeps every RTD case. Here one dispatch interval has one price: the case with the
  * latest `source_published_at` (owner decision on #9). Silver has no interval column, so the
@@ -63,38 +67,40 @@ export type GoldPricesResult =
  * Every interval is 5 minutes, so this is the mean of the intervals that exist. Rows are
  * flagged, not dropped: a node with fewer than 6 intervals in a period has
  * `inputs_complete = false`, and a period with no price still has a row with null prices.
+ * Completeness is this 6-interval count, not `inputsComplete()` (that helper counts trading
+ * periods in silver fact files).
+ *
+ * Missing (nothing written): the date has no dispatch energy prices silver.
+ * Repeatable: no `processed_at`. A total `ORDER BY` and one thread make the same inputs give
+ * the same bytes (floating-point sums depend on the order of addition).
  */
 export async function publishGoldPrices(options: {
   silverDir: string;
   goldDir: string;
   date: string;
-}): Promise<GoldPricesResult> {
+}): Promise<PublishResult> {
   const { silverDir, goldDir, date } = options;
   const periods = periodsInTradingDate(date); // also rejects a malformed date
-  const input = join(
-    silverDir,
-    SILVER_DATASET,
-    `trading_date=${date}`,
-    "data.parquet",
-  );
+  const input = silverPartitionPath(silverDir, DISPATCH.table, date);
   if (!existsSync(input)) return { date, status: "missing" };
 
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
     await connection.run("SET TimeZone = 'UTC'");
+    await connection.run("SET threads = 1");
     const query = async (sql: string) =>
       (await connection.runAndReadAll(sql)).getRowObjectsJson() as Array<
         Record<string, unknown>
       >;
 
-    const inputsSha256 = fingerprint(
-      (
-        await query(
-          `SELECT DISTINCT bronze_sha256 FROM read_parquet(${lit(input)}) ORDER BY 1`,
-        )
-      ).map((row) => `${relative(silverDir, input)} ${row.bronze_sha256}`),
+    const inputsSha256 = await inputFingerprint(
+      silverDir,
+      ANALYSIS_VERSION,
+      INPUTS,
+      date,
     );
-    const stamp = `DATE ${lit(date)} AS trading_date, ${ANALYSIS_VERSION}::INTEGER AS analysis_version, ${lit(inputsSha256)} AS inputs_sha256`;
+    const stamp = (complete: boolean | string) =>
+      goldStamp(ANALYSIS_VERSION, inputsSha256, complete);
 
     const spans = Array.from({ length: periods }, (_, i) => {
       const span = periodToUtc(date, i + 1);
@@ -163,12 +169,14 @@ export async function publishGoldPrices(options: {
          ON p.point_of_connection = n.point_of_connection AND p.trading_period = s.trading_period`,
     );
 
-    const selects: Record<Table, string> = {
-      price_periods: `SELECT ${stamp}, trading_period, event_start_utc, event_end_utc,
+    const tradingDate = `DATE ${lit(date)} AS trading_date`;
+    const selects: Record<(typeof TABLES)[number], string> = {
+      price_periods: `SELECT ${tradingDate}, trading_period, event_start_utc, event_end_utc,
          point_of_connection, price_region, price, min_interval_price, max_interval_price,
-         intervals_present, intervals_expected, has_proxy_price, inputs_complete
+         intervals_present, intervals_expected, has_proxy_price,
+         ${stamp("inputs_complete")}
        FROM node_periods ORDER BY point_of_connection, trading_period`,
-      price_daily_summary: `SELECT ${stamp}, point_of_connection, price_region,
+      price_daily_summary: `SELECT ${tradingDate}, point_of_connection, price_region,
          avg(price) AS mean_price,
          sum(price * intervals_present) / nullif(sum(intervals_present), 0) AS time_weighted_mean_price,
          min(min_interval_price) AS min_price,
@@ -177,22 +185,22 @@ export async function publishGoldPrices(options: {
          ${periods}::INTEGER AS periods_expected,
          sum(intervals_present)::INTEGER AS intervals_present,
          ${periods * INTERVALS_PER_PERIOD}::INTEGER AS intervals_expected,
-         bool_and(inputs_complete) AS inputs_complete
+         ${stamp("bool_and(inputs_complete)")}
        FROM node_periods GROUP BY point_of_connection, price_region
        ORDER BY point_of_connection`,
-      price_spreads: `SELECT ${stamp}, a.trading_period, a.event_start_utc, a.event_end_utc,
+      price_spreads: `SELECT ${tradingDate}, a.trading_period, a.event_start_utc, a.event_end_utc,
          a.point_of_connection AS from_point_of_connection,
          b.point_of_connection AS to_point_of_connection,
          a.price_region AS from_price_region, b.price_region AS to_price_region,
          a.price AS from_price, b.price AS to_price,
          a.price - b.price AS spread,
-         a.inputs_complete AND b.inputs_complete AS inputs_complete
+         ${stamp("a.inputs_complete AND b.inputs_complete")}
        FROM (VALUES ${pairs}) pair(from_poc, to_poc)
        JOIN node_periods a ON a.point_of_connection = pair.from_poc
        JOIN node_periods b ON b.point_of_connection = pair.to_poc
          AND b.trading_period = a.trading_period
        ORDER BY from_point_of_connection, to_point_of_connection, a.trading_period`,
-      price_distribution: `SELECT ${stamp}, s.trading_period, s.event_start_utc, s.event_end_utc,
+      price_distribution: `SELECT ${tradingDate}, s.trading_period, s.event_start_utc, s.event_end_utc,
          count(p.price)::INTEGER AS poc_count,
          min(p.price) AS min_price,
          quantile_cont(p.price, 0.05) AS p05_price,
@@ -203,7 +211,7 @@ export async function publishGoldPrices(options: {
          max(p.price) AS max_price,
          coalesce(max(i.intervals_present), 0)::INTEGER AS intervals_present,
          ${INTERVALS_PER_PERIOD}::INTEGER AS intervals_expected,
-         coalesce(max(i.intervals_present), 0) = ${INTERVALS_PER_PERIOD} AS inputs_complete
+         ${stamp(`coalesce(max(i.intervals_present), 0) = ${INTERVALS_PER_PERIOD}`)}
        FROM spans s
        LEFT JOIN poc_periods p ON p.trading_period = s.trading_period
        LEFT JOIN period_intervals i ON i.trading_period = s.trading_period
@@ -211,43 +219,38 @@ export async function publishGoldPrices(options: {
        ORDER BY s.trading_period`,
     };
 
-    for (const table of TABLES) {
-      await writeParquetAtomically(
-        connection,
-        selects[table],
-        join(goldDir, table, `trading_date=${date}`, "data.parquet"),
-      );
-    }
-    // Every table has a row for each expected period, so the counts follow from the inputs.
-    const [flags] = await query(
-      `SELECT
-         (SELECT count(*) FROM node_periods WHERE NOT inputs_complete) = 0
-         AND (SELECT count(*) FROM spans s
-              LEFT JOIN period_intervals i USING (trading_period)
-              WHERE coalesce(i.intervals_present, 0) < ${INTERVALS_PER_PERIOD}) = 0 AS complete`,
-    );
-    return {
+    await writeGoldTables(
+      connection,
+      TABLES.map((table) => [table, selects[table]] as const),
+      goldDir,
       date,
-      status: "written",
-      inputsComplete: flags?.complete === true,
-      inputsSha256,
-      rows: {
-        price_periods: REFERENCE_NODES.length * periods,
-        price_daily_summary: REFERENCE_NODES.length,
-        price_spreads: SPREAD_PAIRS.length * periods,
-        price_distribution: periods,
-      },
-    };
+    );
+    const path = goldPartitionPath(goldDir, TABLES[0], date);
+    const missingPeriods = (
+      await query(
+        `SELECT s.trading_period AS period FROM spans s
+         WHERE EXISTS (
+           SELECT 1 FROM node_periods n
+           WHERE n.trading_period = s.trading_period AND NOT n.inputs_complete)
+            OR coalesce((
+              SELECT i.intervals_present FROM period_intervals i
+              WHERE i.trading_period = s.trading_period), 0) < ${INTERVALS_PER_PERIOD}
+         ORDER BY 1`,
+      )
+    ).map((row) => Number(row.period));
+    const rows = REFERENCE_NODES.length * periods;
+    return missingPeriods.length === 0
+      ? { date, status: "complete", rows, path }
+      : { date, status: "partial", rows, path, missingPeriods };
   } finally {
     connection.closeSync();
   }
 }
 
-/** `inputs_sha256`: the bronze version behind each input partition, plus the analysis version. */
-function fingerprint(inputs: string[]): string {
-  return createHash("sha256")
-    .update(
-      [...inputs.sort(), `analysis_version ${ANALYSIS_VERSION}`].join("\n"),
-    )
-    .digest("hex");
-}
+export const prices = goldDataset({
+  id: "gold_prices",
+  tables: TABLES,
+  inputs: INPUTS,
+  analysisVersion: ANALYSIS_VERSION,
+  publish: publishGoldPrices,
+});

@@ -127,6 +127,7 @@ test("records complete days, including a 46-period DST day, and a gap day stays 
   expect(lines[0]).toBe(`${DISPATCH}: latest complete 2026-11-18`);
   expect(lines).toContain("generation_md: latest complete none");
   expect(lines.some((line) => line.startsWith("gold_generation:"))).toBe(false);
+  expect(lines.some((line) => line.startsWith("gold_prices:"))).toBe(false);
 
   const table = completenessPath(silverDir);
   const mtime = (await stat(table)).mtimeMs;

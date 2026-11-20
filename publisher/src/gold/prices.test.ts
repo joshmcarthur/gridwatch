@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  rename,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -12,12 +13,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { afterEach, beforeEach, expect, test } from "vitest";
+import { runPublish } from "../runner.ts";
 import { lit } from "../silver/common.ts";
 import {
   DATASET,
   publishDispatchEnergyPrices,
 } from "../silver/dispatch-energy-prices.ts";
-import { ANALYSIS_VERSION, publishGoldPrices, TABLES } from "./prices.ts";
+import { fingerprint, goldPartitionPath } from "./common.ts";
+import {
+  ANALYSIS_VERSION,
+  prices,
+  publishGoldPrices,
+  TABLES,
+} from "./prices.ts";
 
 const DATE = "2026-11-18";
 // Trading period 1 of 2026-11-18 starts at 00:00 NZDT, which is 11:00 UTC the day before.
@@ -120,7 +128,10 @@ const synthetic: SilverRow[] = [
 test("price per reference node per period keeps the latest case and flags gaps", async () => {
   await writeSilver(synthetic);
   const result = await publishGoldPrices({ silverDir, goldDir, date: DATE });
-  expect(result).toMatchObject({ status: "written", inputsComplete: false });
+  expect(result.status).toBe("partial");
+  if (result.status !== "partial") throw new Error("expected partial");
+  expect(result.missingPeriods).toContain(2);
+  expect(result.rows).toBe(3 * 48);
 
   const rows = await readGold("price_periods");
   expect(rows).toHaveLength(3 * 48);
@@ -243,28 +254,32 @@ test("national distribution of period prices across all nodes", async () => {
 });
 
 test("inputs_sha256 follows the bronze version and the analysis version", async () => {
+  const shaOf = async () => {
+    const [row] = await readGold("price_periods");
+    return row?.inputs_sha256;
+  };
   await writeSilver(synthetic, "sha-a");
-  const first = await publishGoldPrices({ silverDir, goldDir, date: DATE });
-  const again = await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  expect(
+    await publishGoldPrices({ silverDir, goldDir, date: DATE }),
+  ).toMatchObject({ status: "partial" });
+  const first = await shaOf();
+  expect(
+    await publishGoldPrices({ silverDir, goldDir, date: DATE }),
+  ).toMatchObject({ status: "partial" });
+  expect(await shaOf()).toBe(first);
   await writeSilver(synthetic, "sha-b");
-  const changed = await publishGoldPrices({ silverDir, goldDir, date: DATE });
-  if (
-    first.status !== "written" ||
-    again.status !== "written" ||
-    changed.status !== "written"
-  )
-    throw new Error("expected written");
-  expect(again.inputsSha256).toBe(first.inputsSha256);
-  expect(changed.inputsSha256).not.toBe(first.inputsSha256);
-  const expected = createHash("sha256")
-    .update(
-      `dispatch_energy_prices/trading_date=${DATE}/data.parquet sha-b\nanalysis_version ${ANALYSIS_VERSION}`,
-    )
-    .digest("hex");
-  expect(changed.inputsSha256).toBe(expected);
+  expect(
+    await publishGoldPrices({ silverDir, goldDir, date: DATE }),
+  ).toMatchObject({ status: "partial" });
+  const expected = fingerprint(ANALYSIS_VERSION, [
+    ["dispatch_energy_prices", "sha-b"],
+  ]);
+  expect(await shaOf()).toBe(expected);
+  expect(expected).not.toBe(first);
+  expect((await prices.wantedVersions?.(silverDir))?.get(DATE)).toBe(expected);
   for (const table of TABLES)
     for (const row of await readGold(table))
-      expect(row.inputs_sha256).toBe(changed.inputsSha256);
+      expect(row.inputs_sha256).toBe(expected);
 });
 
 test("two runs on the same input write identical bytes", async () => {
@@ -296,16 +311,10 @@ test("a DST-start day has 46 periods in every table, and a proxy price is flagge
   ];
   await writeSilver(rows, "sha-a", date, dayStart);
   const result = await publishGoldPrices({ silverDir, goldDir, date });
-  expect(result).toMatchObject({
-    status: "written",
-    inputsComplete: false,
-    rows: {
-      price_periods: 3 * 46,
-      price_daily_summary: 3,
-      price_spreads: 3 * 46,
-      price_distribution: 46,
-    },
-  });
+  expect(result.status).toBe("partial");
+  if (result.status !== "partial") throw new Error("expected partial");
+  expect(result.rows).toBe(3 * 46);
+  expect(result.path).toBe(goldPartitionPath(goldDir, TABLES[0], date));
   const periods = await readGold("price_periods", date);
   expect(periods).toHaveLength(3 * 46);
   expect(Math.max(...periods.map((r) => Number(r.trading_period)))).toBe(46);
@@ -358,7 +367,8 @@ test("real data: HAY2201 period prices match hand sums, and spreads equal from m
   await publishDispatchEnergyPrices({ bronzeDir, silverDir, date: DATE });
 
   const result = await publishGoldPrices({ silverDir, goldDir, date: DATE });
-  expect(result).toMatchObject({ status: "written", inputsComplete: false });
+  expect(result.status).toBe("partial");
+  if (result.status !== "partial") throw new Error("expected partial");
 
   const periods = await readGold("price_periods");
   const hay = (period: number) =>
@@ -397,4 +407,36 @@ test("real data: HAY2201 period prices match hand sums, and spreads equal from m
   const dist = await readGold("price_distribution");
   expect(dist[0]?.poc_count).toBe(4);
   expect(dist[1]?.max_price).toBeGreaterThanOrEqual(Number(hay(2)?.price));
+});
+
+test("the runner builds gold_prices, skips it when silver is unchanged and rebuilds it when the dispatch fingerprint changes", async () => {
+  const other = "2026-09-27";
+  await writeSilver(synthetic);
+  await writeSilver(
+    synthetic,
+    "sha-a",
+    other,
+    Date.parse("2026-09-26T12:00:00Z"),
+  );
+  const run = () =>
+    runPublish({
+      bronzeDir: join(root, "bronze"),
+      silverDir,
+      goldDir,
+      only: ["gold_prices"],
+    }).then((s) => s[0]);
+  expect(await run()).toMatchObject({ published: 2, upToDate: 0, failed: [] });
+  expect(await run()).toMatchObject({ published: 0, upToDate: 2 });
+  const file = join(silverDir, DATASET, `trading_date=${DATE}`, "data.parquet");
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    await connection.run(
+      `COPY (SELECT * REPLACE ('new-sha' AS bronze_sha256) FROM read_parquet(${lit(file)}))
+       TO ${lit(`${file}.new`)} (FORMAT parquet)`,
+    );
+  } finally {
+    connection.closeSync();
+  }
+  await rename(`${file}.new`, file);
+  expect(await run()).toMatchObject({ published: 1, upToDate: 1 });
 });

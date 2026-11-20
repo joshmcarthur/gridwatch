@@ -212,11 +212,12 @@ export async function inputsComplete(
 
 /**
  * The three columns that every gold row ends with, as a SQL select list. Put them last in the
- * SELECT, after the data columns.
+ * SELECT, after the data columns. `inputsAreComplete` is a boolean for a date-level flag, or a
+ * SQL expression for a per-row flag (gold prices: 6 intervals per period).
  */
 export const goldStamp = (
   analysisVersion: number,
   inputsSha256: string,
-  inputsAreComplete: boolean,
+  inputsAreComplete: boolean | string,
 ) =>
-  `${analysisVersion}::INTEGER AS analysis_version, ${lit(inputsSha256)} AS inputs_sha256, ${inputsAreComplete}::BOOLEAN AS inputs_complete`;
+  `${analysisVersion}::INTEGER AS analysis_version, ${lit(inputsSha256)} AS inputs_sha256, (${inputsAreComplete})::BOOLEAN AS inputs_complete`;
