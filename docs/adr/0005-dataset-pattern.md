@@ -112,15 +112,6 @@ A row is one 5-minute interval of one RTD case for one point of connection, one 
 1. The file has no rows, or a row has a `TradingDate` other than the requested date.
 2. A row has a trading period outside the range of the day.
 3. An interval is not on a 5-minute boundary, or lies outside its trading period.
-4. The key `(IntervalDateTime, CaseID, PointOfConnectionCode, UnitCode)` has duplicates.
-5. A period, time, case ID, point of connection or number does not parse, a number is not finite, or a dead or disconnected flag is not `Y` or `N`.
-
-A day is **partial** (written) when one or more periods of the day have no rows. The unit of completeness is the trading period, as for dispatch energy prices. A period with some missing intervals is not partial, because the source omits about ten intervals on most days. Completeness tracking ([#14](https://github.com/joshmcarthur/gridwatch/issues/14)) can count intervals per period from silver.
-
-### Silver columns, nodal prices and volumes
-
-`trading_date`, `trading_period`, `event_start_utc`, `event_end_utc` (the 5-minute interval), `source_run_at` (`RunDateTime`), `case_type`, `case_id`, `point_of_connection`, `unit_code` and `plant_name` (null on point of connection rows, where the source says `N/A`), `island` (null when blank), `load_megawatts`, `initial_megawatts`, `generation_megawatts`, `location_factor`, `dollars_per_megawatt_hour`, `is_dead`, `is_disconnected`, `bronze_file_name`, `bronze_sha256`, `retrieved_at`. Load and generation stay in separate columns. The data stays at source resolution.
-
 4. The key `(IntervalDateTime, CaseID, ProductClass, PointOfConnectionCode, UnitCode)` has duplicates.
 5. A period, time, case ID, point of connection or participant is blank or does not parse.
 6. `ProductClass` is not `Injection` or `Offtake`.

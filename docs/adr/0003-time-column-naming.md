@@ -32,9 +32,7 @@ The module `publisher/src/trading-time.ts` implements the model with `Temporal` 
 ## Consequences
 
 - The repeated hour on the DST-end day has two distinct UTC instants and distinct periods. No data merges across it.
-- The model treats an interval timestamp as the interval start. We have not verified whether `IntervalDateTime` in the nodal and cleared offers files is the start or the end. The dataset issues must check this before they apply the model. Issue #9 checked the nodal file: `IntervalDateTime` is the interval start. Cleared offers is still unchecked.
-
-- The model treats an interval timestamp as the interval start. In the cleared offers file `IntervalDateTime` is the interval start (period 1 starts at 00:00, the last interval is 23:55; checked on 18 Nov, 27 Sep and 5 Apr). The nodal file must still be checked.
+- The model treats an interval timestamp as the interval start. We have not verified whether `IntervalDateTime` in the nodal and cleared offers files is the start or the end. The dataset issues must check this before they apply the model. Issue #9 checked the nodal file: `IntervalDateTime` is the interval start. Issue #12 checked the cleared offers file: `IntervalDateTime` is the interval start (period 1 starts at 00:00, the last interval is 23:55; checked on 18 Nov, 27 Sep and 5 Apr).
 - Dispatch energy prices use an irregular `PublishDateTime` with an NZ offset (see `docs/sources.md` section 3.1). `dispatchIntervalToUtc` does not cover that case, so #6 must not assume it fits.
 - Dataset issues apply the model. This ADR only fixes the names and the rules.
 
