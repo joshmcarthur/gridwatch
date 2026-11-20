@@ -96,7 +96,7 @@ export async function publishNodalPricesAndVolumes(options: {
              OR n.disconnected_flag IS DISTINCT FROM 'Y' AND n.disconnected_flag IS DISTINCT FROM 'N') AS bad_flags,
            count(*) FILTER (WHERE n.trading_period NOT BETWEEN 1 AND ${periods}) AS bad_periods,
            count(*) FILTER (WHERE s.trading_period IS NOT NULL AND n.event_start_utc IS NOT NULL
-             AND (epoch(n.event_start_utc)::BIGINT % 300 <> 0
+             AND (epoch_ms(n.event_start_utc) % 300000 <> 0
                OR n.event_start_utc < s.event_start_utc OR n.event_start_utc >= s.event_end_utc)) AS bad_intervals,
            count(*) - count(DISTINCT (n.event_start_utc, n.case_id, n.point_of_connection, n.unit_code)) AS duplicates,
            list(DISTINCT n.trading_period) FILTER (WHERE n.trading_period BETWEEN 1 AND ${periods}) AS present

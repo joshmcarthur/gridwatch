@@ -149,6 +149,30 @@ test("publishes a 46-period DST day", async () => {
   });
 });
 
+test("publishes a 50-period DST-end day across the repeated hour", async () => {
+  await archive("2026-04-05", await fixture("2026-04-05"));
+  const result = await publish("2026-04-05");
+  expect(result).toMatchObject({ status: "complete", rows: 867 });
+  if (result.status !== "complete") return;
+  // Local 02:00 to 03:00 happens twice: periods 5 and 6 (NZDT), then 7 and 8 (NZST).
+  const [row] = await query(
+    result.path,
+    `SELECT count(DISTINCT trading_period) AS periods,
+            strftime(min(event_start_utc), '%Y-%m-%dT%H:%M:%SZ') AS first_start,
+            strftime(max(event_end_utc), '%Y-%m-%dT%H:%M:%SZ') AS last_end,
+            strftime(min(event_start_utc) FILTER (WHERE trading_period = 5), '%Y-%m-%dT%H:%M:%SZ') AS p5_start,
+            strftime(min(event_start_utc) FILTER (WHERE trading_period = 7), '%Y-%m-%dT%H:%M:%SZ') AS p7_start
+     FROM read_parquet($FILE)`,
+  );
+  expect(row).toEqual({
+    periods: "50",
+    first_start: "2026-04-04T11:00:00Z",
+    last_end: "2026-04-05T12:00:00Z",
+    p5_start: "2026-04-04T13:00:00Z",
+    p7_start: "2026-04-04T14:00:00Z",
+  });
+});
+
 test("publishing the same day again gives identical bytes", async () => {
   await archive("2026-11-18", await fixture("2026-11-18"));
   const first = await publish("2026-11-18");
@@ -235,6 +259,33 @@ test.each([
       ...lines.slice(2),
     ],
     "1 rows have an interval that is not on a 5-minute boundary inside its trading period",
+  ],
+  [
+    "an interval with a sub-second offset",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace("T00:00:00.000+", "T00:00:00.400+"),
+      ...lines.slice(2),
+    ],
+    "1 rows have an interval that is not on a 5-minute boundary inside its trading period",
+  ],
+  [
+    "an unparseable interval",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace("2026-11-18T00:00:00.000+13:00,", "soon,"),
+      ...lines.slice(2),
+    ],
+    "1 rows have a missing or non-numeric value",
+  ],
+  [
+    "a bad disconnected flag",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      setField(lines[1] as string, DEAD_FLAG + 1, "X"),
+      ...lines.slice(2),
+    ],
+    "1 rows have a dead or disconnected flag that is not Y or N",
   ],
   [
     "a bad dead flag",
