@@ -153,6 +153,44 @@ Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/Generation/Genera
 | Lag | Measured: the `202610` file is stamped 10 Nov 2026, `202608` 9 Oct, `202607` 11 Aug (all UTC), and no file exists for November. **Inferred:** metered data is 10 days to about 6 weeks behind. The page says the series "will be replaced" by a richer one; timing **unknown**. |
 | Revisions | Section 2. Earlier months get re-stamped: `202609` was rewritten 17 Nov, a week after `202610` appeared. Bulk rewrites: 28 Jul 2024 (2024-01 to 06), 16 Dec 2024 (2024-08 to 11), 18 Sep 2025 (2025-07, 08). |
 | Size | About 0.7-0.9 MB per month now. |
+| Coverage | Plants missing, zero-filled, or defined differently from real-time dispatch (RTD). Table below. |
+
+#### Coverage vs RTD (measured 2026-11-21)
+
+Window: 2025-11-20 to 2026-10-31, read-only. Generation_MD versus real-time dispatch (RTD) at the same point of connection (POC). Figures are GWh in the window. Each row is one case. Missing energy is not estimated beyond the measured totals.
+
+Generation_MD meters a station at its embedded network supply point. RTD dispatches it at the parent grid POC. Both Waipori POCs are in the South Island, so island totals are not affected.
+
+Class: `omission` (no Generation_MD row while RTD has energy), `zero-fill` (Generation_MD row is zero while RTD has energy), `definition` (both files report the plant, but at a different POC or under a different fuel), `calibration` (Generation_MD is systematically above RTD at fully metered stations), `unresolved` (difference measured, cause unknown), `not-a-gap` (an earlier note was wrong).
+
+| Plant / POC | Class | Generation_MD GWh | RTD GWh | Verdict | Evidence |
+|---|---|---:|---:|---|---|
+| Waipori `WPG0331` vs parent `HWB0331` | definition | 124.1 | 108.8 | Different POCs, not a mapping error. NSP `WPG0331` is embedded under `HWB0331`. | **Measured.** RTD at `HWB0331` is `MAH0` Mahinerangi 94.4 + `WPI0` Deep Stream 14.4. Period correlation with `MAH0` is 0.995. |
+| Waipori fuel at `WPG0331` | definition | ~94 of 124.1 labelled Hydro | `MAH0` 94.4 wind | Hydro label includes Mahinerangi wind. | **Inferred** from the 0.995 correlation. `MAH0` is 36 MW wind. No source statement. |
+| Waipori `BWK1101` | not-a-gap | 107.1 | 105.5 (`WPI0`) | The two files match. | **Measured.** |
+| Matahina `MAT1101` (`MAT0`) | omission | 0 | ~285 | Omitted from Generation_MD since about October 2021. | **Measured** unless marked. Fleet has `MAT0` (80 MW hydro) and `ANI0` Aniwhenua (25 MW) at `MAT1101`. Generation_MD has only Aniwhenua (BOPD): 139.9 GWh vs RTD `ANI0` 134.6, correlation 0.984; adding `MAT0` drops it to 0.17. No Matahina row in the 12 months of silver. Files 202001 and 202109 have `MAT,MAT1101,TRUS,matahina,Hydro`; 202112 and 202309 have none. Fleet ownership of `MAT0` changed from TRUS to CNIR on 2021-10-01. File 202110 was not fetched, so the exact month is **inferred**. Cause not documented by EMI that was found. |
+| Ngawha `KOE1101` | definition | 420.6 | 221.2 (`NGB0`) | Generation_MD includes generation that was not dispatched. | **Measured** volumes. The extra energy is **inferred** from the difference. |
+| Twin Rivers solar `TRS0` | omission | none | ~29 | No Generation_MD row. | **Measured.** |
+| Pukenui | omission | none before 2026-04 | — | In Generation_MD from 2026-04. | **Measured.** |
+| Maraetai `MTI2201` | unresolved | 830 | 911 | RTD is higher in every month, by 5% to 25%. Cause unknown. | **Measured.** |
+| Glenbrook-Ohurua battery `GLB0` | omission | none | 23.2 | No Generation_MD row. | **Measured.** |
+| Huntly Battery `HLY11` | omission | none | 5.5 | No Generation_MD row. | **Measured.** |
+| Taiohi Solar `TOH0` at `HLY0331` | omission | none | 38.3 | No Generation_MD row. | **Measured.** |
+| Kumara `KUM0661` | omission | none | 22.9 | No Generation_MD row. | **Measured.** |
+| Kowhai Park Solar `ISL0661` from 2026-08-01 | zero-fill | 0 | 27.7 | Generation_MD row is zero. | **Measured.** |
+| Kaiwaikawe wind `MPE1101` | zero-fill | 0 | 23.9 | Generation_MD row is zero. | **Measured.** |
+| Clandeboye solar `TMK0331` | zero-fill | 0 | 10.6 | Generation_MD row is zero. | **Measured.** |
+| Whitianga solar `KPU0661` | zero-fill | 0 | 41.1 | Generation_MD row is zero. | **Measured.** |
+| Huntly 6 | not-a-gap | 37.2 (`huntly_p40`) | 41.0 | Present in Generation_MD. An earlier ADR note that it was absent was wrong. | **Inferred** mapping to `huntly_p40`. |
+| Glenbrook Steel `GLN0332` | not-a-gap | 421 (`glenbrook_kilns`) | 275 | Present in Generation_MD. An earlier ADR note that it was absent was wrong. | **Inferred** mapping to `glenbrook_kilns`. |
+| `KAW0112` | unresolved | — | +98 vs MD | RTD exceeds Generation_MD by more than 20 GWh. Not investigated further. | **Measured.** |
+| `STK0661` | unresolved | — | +92 vs MD | Same. | **Measured.** |
+| `MHO0331` | unresolved | — | +76 vs MD | Same. | **Measured.** |
+| `HWA1102` | unresolved | — | +65 vs MD | Same. | **Measured.** |
+| `TAB0331` | unresolved | — | +45 vs MD | Same. | **Measured.** |
+| Large stations (example Manapouri) | calibration | 4,964 (Manapouri); window 39,243 | 4,741 (Manapouri); window 37,866 | Generation_MD is about 4% to 5% above RTD at large fully metered stations. Metered versus dispatch, cause unconfirmed. | **Measured.** Window totals include the omissions above. |
+
+This table is the canonical list. Later ADRs cite it; they do not recopy the plants.
 
 ### 3.6 Mappings and Geospatial
 
@@ -234,6 +272,7 @@ Website content, including these datasets, is licensed under Creative Commons At
 12. The backfill covers the last 12 months only (owner direction). If it is extended, start the dispatch datasets no earlier than 2022-11-01: Nodal exists from 2020-09-10 and Cleared Offers from 2022-04-01, but the settlement relevance of earlier data is inferred (see 3.3). Affects #9, #12, #13.
 13. Trading days can have 46 or 50 periods (checked in energy prices, Generation_MD and cleared offers; other datasets unchecked), so never assume 48. Affects #6, #8, #9, #11, #12.
 14. HVDC_Flows lags metered data by the same month as Generation_MD (the 202610 file is stamped 10 Nov 2026, section 3.7). Gold transfer is therefore a month behind. A live estimate from island residuals is 60 to 90 MW off the metered flow, so it is not used ([ADR-0016](adr/0016-hvdc-flows.md)). Affects #19, #23.
+15. Generation_MD and real-time dispatch disagree on several plants (section 3.5 coverage table): Matahina omitted since about 2021, Waipori metered at an embedded POC, Generation_MD about 4% to 5% above RTD at large stations. Affects #16, #20, #23, #27, #99.
 
 ## 7. Generator outage information
 
