@@ -1,10 +1,6 @@
-import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { DuckDBInstance } from "@duckdb/node-api";
 import { datasets, type PublisherDataset } from "./datasets.ts";
-import { bronzeVersions, lit } from "./silver/common.ts";
+import { bronzeVersions, partitionVersions } from "./silver/common.ts";
 import {
   completenessKey,
   fillHeldCompleteness,
@@ -16,6 +12,8 @@ import {
 export interface RunOptions {
   bronzeDir: string;
   silverDir: string;
+  /** Where gold tables are written (ADR-0010). Silver datasets do not use it. */
+  goldDir: string;
   /** Publish only dates in this range (inclusive). Default: every date in the manifest. */
   range?: { from: string; to: string };
   /** Publish dates again even when silver is up to date. */
@@ -41,60 +39,19 @@ export interface DatasetSummary {
 
 const nzToday = () => Temporal.Now.plainDateISO("Pacific/Auckland").toString();
 
-/**
- * The SHA-256 of the bronze file behind each silver partition of a dataset, by date. Every
- * silver row carries `bronze_sha256` (ADR-0005), so silver says which bronze version it holds.
- * The entity mappings carry `inputs_sha256` instead (ADR-0008).
- */
-async function silverVersions(
-  silverDir: string,
-  dataset: PublisherDataset,
-): Promise<Map<string, string>> {
-  const versions = new Map<string, string>();
-  const dir = join(silverDir, dataset.table ?? dataset.id);
-  // A folder without `data.parquet` is not a partition. A failed first write leaves one.
-  const folders = await readdir(dir, { withFileTypes: true }).catch(
-    (error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return [];
-      throw error;
-    },
-  );
-  const files = folders
-    .filter(
-      (f) => f.isDirectory() && f.name.startsWith(`${dataset.partitionKey}=`),
-    )
-    .map((f) => join(dir, f.name, "data.parquet"))
-    .filter((file) => existsSync(file));
-  if (files.length === 0) return versions;
-  const connection = await (await DuckDBInstance.create(":memory:")).connect();
-  try {
-    const reader = await connection.runAndReadAll(
-      `SELECT DISTINCT
-         regexp_extract(filename, '${dataset.partitionKey}=(\\d{4}-\\d{2}-\\d{2})', 1) AS date,
-         ${dataset.versionColumn ?? "bronze_sha256"} AS version
-       FROM read_parquet([${files.map(lit).join(", ")}], filename = true)`,
-    );
-    for (const row of reader.getRowObjectsJson() as Array<{
-      date: string;
-      version: string;
-    }>)
-      versions.set(row.date, row.version);
-  } finally {
-    connection.closeSync();
-  }
-  return versions;
-}
+const isGold = (dataset: PublisherDataset) => dataset.layer === "gold";
 
 /**
- * Publish every dataset, in registry order. A date is published when its silver partition is
- * missing or holds an older bronze version than the manifest names. A run that publishes
- * nothing, and already has a completeness row for each skipped date, writes nothing (ADR-0010).
- * A failing dataset or date does not stop the others.
+ * Publish every dataset, in registry order (silver first, then gold). A date is published when its
+ * partition is missing or holds a different input version than wanted: the newest bronze
+ * version for silver, the silver fingerprint for gold (ADR-0010). Completeness rows are silver
+ * only (ADR-0010). A run that publishes nothing, and already has a completeness row for each
+ * skipped silver date, writes nothing. A failing dataset or date does not stop the others.
  */
 export async function runPublish(
   options: RunOptions,
 ): Promise<DatasetSummary[]> {
-  const { bronzeDir, silverDir, range } = options;
+  const { bronzeDir, silverDir, goldDir, range } = options;
   const completeness = await loadCompleteness(silverDir);
   const processedAt = new Date().toISOString();
   let dirty = false;
@@ -116,7 +73,12 @@ export async function runPublish(
         : await bronzeVersions(bronzeDir, dataset.id);
       const held = options.force
         ? new Map<string, string>()
-        : await silverVersions(silverDir, dataset);
+        : await partitionVersions(
+            isGold(dataset) ? goldDir : silverDir,
+            dataset.table ?? dataset.id,
+            dataset.partitionKey,
+            dataset.versionColumn ?? "bronze_sha256",
+          );
       const dates = [...wanted.keys()]
         .filter((d) => !range || (d >= range.from && d <= range.to))
         .sort();
@@ -124,12 +86,20 @@ export async function runPublish(
       for (const date of dates) {
         if (held.get(date) === wanted.get(date)) {
           summary.upToDate++;
-          if (!completeness.has(completenessKey(dataset.id, date)))
+          if (
+            !isGold(dataset) &&
+            !completeness.has(completenessKey(dataset.id, date))
+          )
             skipped.push(date);
           continue;
         }
         try {
-          const result = await dataset.publish({ bronzeDir, silverDir, date });
+          const result = await dataset.publish({
+            bronzeDir,
+            silverDir,
+            goldDir,
+            date,
+          });
           switch (result.status) {
             case "missing":
               summary.missing++;
@@ -155,14 +125,16 @@ export async function runPublish(
               );
             }
           }
-          recordCompleteness(
-            completeness,
-            dataset,
-            wanted.get(date),
-            result,
-            processedAt,
-          );
-          dirty = true;
+          if (!isGold(dataset)) {
+            recordCompleteness(
+              completeness,
+              dataset,
+              wanted.get(date),
+              result,
+              processedAt,
+            );
+            dirty = true;
+          }
         } catch (error) {
           summary.failed.push(`${date}: ${(error as Error).message}`);
         }

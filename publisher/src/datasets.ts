@@ -1,3 +1,7 @@
+import {
+  generationWantedVersions,
+  publishGeneration,
+} from "./gold/generation.ts";
 import { publishClearedOffers } from "./silver/cleared-offers.ts";
 import type { PublishResult } from "./silver/common.ts";
 import { publishDispatchEnergyPrices } from "./silver/dispatch-energy-prices.ts";
@@ -16,6 +20,8 @@ export interface PublisherDataset {
   id: string;
   /** The partition folder is `<partitionKey>=YYYY-MM-DD`. */
   partitionKey: "trading_date" | "snapshot_date";
+  /** `silver` (default) or `gold`. The runner reads held versions from that layer (ADR-0010). */
+  layer?: "silver" | "gold";
   /**
    * The silver folder that holds the partitions, when it differs from `id`. The entity mappings
    * write several tables, and the runner reads the first.
@@ -34,17 +40,18 @@ export interface PublisherDataset {
   countsTradingPeriods?: boolean;
   /** The version each date should hold, from silver. Default: the manifest (bronze). */
   wantedVersions?(silverDir: string): Promise<Map<string, string>>;
-  /** Publish the silver partition of one date. */
+  /** Publish the partition of one date. */
   publish(options: {
     bronzeDir: string;
     silverDir: string;
+    goldDir: string;
     date: string;
   }): Promise<PublishResult>;
 }
 
 /**
- * The datasets the runner publishes. A new dataset adds one entry here and one in
- * `collector/src/datasets.ts`.
+ * The datasets the runner publishes. A new silver dataset adds one entry here and one in
+ * `collector/src/datasets.ts`. A gold table adds one entry at the end (ADR-0010).
  */
 export const datasets: PublisherDataset[] = [
   {
@@ -96,5 +103,15 @@ export const datasets: PublisherDataset[] = [
     wantedVersions: entityWantedVersions,
     publish: ({ silverDir, date }) =>
       publishEntityMappings({ silverDir, date }),
+  },
+  // Gold runs after silver in the same run (ADR-0010). Its tables read the silver above.
+  {
+    id: "gold_generation",
+    layer: "gold",
+    table: "generation_by_plant_period",
+    versionColumn: "inputs_sha256",
+    partitionKey: "trading_date",
+    wantedVersions: generationWantedVersions,
+    publish: publishGeneration,
   },
 ];

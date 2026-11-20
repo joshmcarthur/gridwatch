@@ -1,6 +1,7 @@
-import { mkdir, readFile, rename, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import type { DuckDBConnection } from "@duckdb/node-api";
+import { type DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 
 export type PublishResult =
   | { date: string; status: "complete"; rows: number; path: string }
@@ -116,4 +117,47 @@ export async function writeParquetAtomically(
   } finally {
     await rm(temp, { force: true });
   }
+}
+
+/**
+ * The value of `versionColumn` in each partition of a table, by partition date. Works for any
+ * layer: `root` is the silver or gold directory. A folder without `data.parquet` is not a
+ * partition (a failed first write leaves one). Every row of a partition holds one value.
+ */
+export async function partitionVersions(
+  root: string,
+  table: string,
+  partitionKey: string,
+  versionColumn: string,
+): Promise<Map<string, string>> {
+  const versions = new Map<string, string>();
+  const dir = join(root, table);
+  const folders = await readdir(dir, { withFileTypes: true }).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    },
+  );
+  const files = folders
+    .filter((f) => f.isDirectory() && f.name.startsWith(`${partitionKey}=`))
+    .map((f) => join(dir, f.name, "data.parquet"))
+    .filter((file) => existsSync(file));
+  if (files.length === 0) return versions;
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    const reader = await connection.runAndReadAll(
+      `SELECT DISTINCT
+         regexp_extract(filename, '${partitionKey}=(\\d{4}-\\d{2}-\\d{2})', 1) AS date,
+         ${versionColumn} AS version
+       FROM read_parquet([${files.map(lit).join(", ")}], filename = true)`,
+    );
+    for (const row of reader.getRowObjectsJson() as Array<{
+      date: string;
+      version: string;
+    }>)
+      versions.set(row.date, row.version);
+  } finally {
+    connection.closeSync();
+  }
+  return versions;
 }
