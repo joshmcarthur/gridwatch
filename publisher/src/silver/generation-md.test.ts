@@ -325,6 +325,14 @@ test.each([
     ],
     expect.stringContaining("cannot read the file"),
   ],
+  [
+    "a missing site code column",
+    (lines: string[]) => [
+      (lines[0] as string).replace("Site_Code", "SiteCode"),
+      ...lines.slice(1),
+    ],
+    expect.stringContaining("cannot read the file"),
+  ],
 ])(
   "marks a day with %s as invalid and writes nothing",
   async (_name, mutate, error) => {
