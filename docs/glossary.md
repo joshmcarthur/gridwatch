@@ -24,6 +24,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Price anomaly.** A run of at least 2 trading periods when the price at a reference node is above the 99th percentile, or below the 1st percentile, of the node's last 28 days. The price must also be at least $25/MWh from the median. See [ADR-0019](adr/0019-observations-and-price-anomaly-detector.md).
 
+**Price separation.** A run of at least 2 trading periods when the spread between two reference nodes is above the 99th percentile, or below the 1st percentile, of the pair's last 28 days, and at least $100/MWh from the median. It describes the data. It says nothing about the cause. See [ADR-0019](adr/0019-observations-and-price-anomaly-detector.md).
+
 **Proxy price.** A price copied from a nearby point of connection after an outage. The `IsProxyPriceFlag` column marks it (`Y`). Silver keeps it as a flag.
 
 **Reserve.** The market prices and clears reserve as well as energy. The brief lists reserve prices as something the site should explain. See FIR and SIR for the two classes.
@@ -119,7 +121,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Backfill.** Collecting history. The first run of each dataset collects the last 12 months. See [ADR-0009](adr/0009-runner-default-mode.md).
 
-**Baseline window.** The earlier days whose complete values set the percentiles of a detector. It does not include the day under test. The price anomaly detector uses the 28 days before the date. See [ADR-0019](adr/0019-observations-and-price-anomaly-detector.md).
+**Baseline window.** The earlier days whose complete values set the percentiles of a detector. It does not include the day under test. The price anomaly and price separation detectors use the 28 days before the date. See [ADR-0019](adr/0019-observations-and-price-anomaly-detector.md).
 
 **Bronze.** The raw archive: source files exactly as published, plus the manifest. See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md) and [ADR-0004](adr/0004-bronze-archive-and-manifest.md).
 
@@ -139,7 +141,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **`analysis_version`.** An integer in every gold row. Each gold module has a constant of this name, and a person bumps it when the logic changes. The runner then rebuilds the gold tables. See [ADR-0011](adr/0011-gold-table-pattern.md).
 
-**`inputs_complete`.** A boolean in every gold row. Gold flags incomplete rows and does not drop them. It is true only when every input of the gold table has the `_completeness` status `complete` for the date, and the row-level data rule holds ([ADR-0011](adr/0011-gold-table-pattern.md)). The data rule for generation is rows in every expected trading period. For gold prices and reserves it is at least one silver row for the node, or the class and island, in the period ([ADR-0012](adr/0012-gold-prices.md), [ADR-0013](adr/0013-gold-reserve-prices.md)). Gold is not a row in `silver/_completeness` ([ADR-0010](adr/0010-completeness.md)). For an observation table, the flag is the gold price day of the node: an observation is complete when that node's day is complete in `price_periods` ([ADR-0019](adr/0019-observations-and-price-anomaly-detector.md)).
+**`inputs_complete`.** A boolean in every gold row. Gold flags incomplete rows and does not drop them. It is true only when every input of the gold table has the `_completeness` status `complete` for the date, and the row-level data rule holds ([ADR-0011](adr/0011-gold-table-pattern.md)). The data rule for generation is rows in every expected trading period. For gold prices and reserves it is at least one silver row for the node, or the class and island, in the period ([ADR-0012](adr/0012-gold-prices.md), [ADR-0013](adr/0013-gold-reserve-prices.md)). Gold is not a row in `silver/_completeness` ([ADR-0010](adr/0010-completeness.md)). For an observation table, the flag is the subject-day of the gold input: a node in `price_periods` for the price anomaly detector, a pair in `price_spreads` for the price separation detector ([ADR-0019](adr/0019-observations-and-price-anomaly-detector.md)).
 
 **`inputs_sha256`.** A column in every entity table and every gold table. It is a hash of the version of each silver input that built the table (and, in gold, the `analysis_version`). The runner rebuilds a date when it changes. See [ADR-0008](adr/0008-entity-model.md) and [ADR-0011](adr/0011-gold-table-pattern.md).
 

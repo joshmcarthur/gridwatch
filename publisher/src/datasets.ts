@@ -3,6 +3,7 @@ import { generation } from "./gold/generation.ts";
 import { gridLoad } from "./gold/grid-load.ts";
 import { hvdc } from "./gold/hvdc.ts";
 import { priceAnomaly } from "./gold/price-anomaly.ts";
+import { priceSeparation } from "./gold/price-separation.ts";
 import { prices } from "./gold/prices.ts";
 import { reserves } from "./gold/reserves.ts";
 import { publishClearedOffers } from "./silver/cleared-offers.ts";
@@ -139,4 +140,6 @@ export const datasets: PublisherDataset[] = [
   energyBalance,
   // After gold_prices: the detector reads price_periods (ADR-0019).
   priceAnomaly,
+  // After gold_price_anomaly: the detector reads price_spreads (ADR-0019).
+  priceSeparation,
 ];

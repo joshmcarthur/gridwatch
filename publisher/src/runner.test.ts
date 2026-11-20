@@ -309,7 +309,7 @@ test("entity mappings build last, settle, and rebuild when an input partition ch
     );
 
   const first = await run();
-  expect(first.map((x) => x.id).slice(-9)).toEqual([
+  expect(first.map((x) => x.id).slice(-10)).toEqual([
     "entity_mappings",
     "gold_generation",
     "gold_prices",
@@ -318,6 +318,7 @@ test("entity mappings build last, settle, and rebuild when an input partition ch
     "gold_grid_load",
     "gold_energy_balance",
     "gold_price_anomaly",
+    "gold_price_separation",
     "site_days",
   ]);
   expect(entity(first)).toMatchObject({
