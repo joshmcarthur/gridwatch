@@ -29,10 +29,11 @@ export const DATASET = "generation_md";
  * parse; a blank site, point of connection, network or generation code; a duplicate
  * (site, point of connection, network, generation code) unit; a value that is not a finite
  * number; a non-empty value outside the periods of the day (TP47+ on a 46-period day, TP49+
- * on a 48-period day) or in a column whose number does not parse; a blank cell inside the
- * periods of the day. The source writes 0 for no generation, so a blank is missing data.
- * Expected cells are units x periods.
- * A day is never partial: every expected cell has a value, or the day is invalid or missing.
+ * on a 48-period day) or in a column whose number does not parse; a blank cell for some units
+ * in a period that other units fill. The source writes 0 for no generation, so such a blank
+ * is missing data.
+ * Partial day (written): one or more periods 1..N are blank for every unit. The result lists
+ * them (the owner's decision on #6, ADR-0005).
  */
 export async function publishGenerationMd(options: {
   bronzeDir: string;
@@ -114,6 +115,7 @@ export async function publishGenerationMd(options: {
            count(*) FILTER (WHERE trading_period NOT BETWEEN 1 AND ${periods}
              OR trading_period IS NULL) AS bad_periods,
            count(*) FILTER (WHERE trading_period BETWEEN 1 AND ${periods}) AS in_period,
+           list(DISTINCT trading_period) FILTER (WHERE trading_period BETWEEN 1 AND ${periods}) AS present,
            count(*) FILTER (WHERE kilowatt_hours IS NULL OR NOT isfinite(kilowatt_hours)) AS bad_values,
            count(*) AS cells
          FROM cells`,
@@ -134,10 +136,12 @@ export async function publishGenerationMd(options: {
       );
     if (n("bad_values") > 0)
       errors.push(`${n("bad_values")} values are not finite numbers`);
-    const blanks = n("units") * periods - n("in_period");
+    // A period that is blank for every unit is partial. A blank for some units is invalid.
+    const present = new Set(((check?.present ?? []) as unknown[]).map(Number));
+    const blanks = n("units") * present.size - n("in_period");
     if (blanks > 0)
       errors.push(
-        `${blanks} blank cells inside trading periods 1 to ${periods}`,
+        `${blanks} blank cells in trading periods that other units fill`,
       );
     if (errors.length > 0) return { date, status: "invalid", errors };
 
@@ -168,7 +172,15 @@ export async function publishGenerationMd(options: {
        ORDER BY c.trading_period, c.site_code, c.point_of_connection, c.network_code, c.gen_code`,
       path,
     );
-    return { date, status: "complete", rows: n("cells"), path };
+    // Missing periods do not make a day invalid. The partition holds the rows that exist.
+    const missingPeriods = Array.from(
+      { length: periods },
+      (_, i) => i + 1,
+    ).filter((period) => !present.has(period));
+    const rows = n("cells");
+    return missingPeriods.length === 0
+      ? { date, status: "complete", rows, path }
+      : { date, status: "partial", rows, path, missingPeriods };
   } finally {
     connection.closeSync();
   }

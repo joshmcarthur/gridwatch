@@ -197,6 +197,27 @@ test("accepts the lower-case date header of older files", async () => {
   });
 });
 
+test("publishes a day with a period blank for every unit as partial", async () => {
+  const lines = await linesOf("202604");
+  const day = rowsFor(lines, "2026-04-01");
+  const blanked = lines.map((l) => (day.includes(l) ? setCell(l, 5, "") : l));
+  await archive("202604", toCsv(blanked));
+  const result = await publish("2026-04-01");
+  expect(result).toMatchObject({
+    status: "partial",
+    rows: 288 - 6,
+    missingPeriods: [5],
+  });
+  if (result.status !== "partial") return;
+  const [row] = await query(
+    result.path,
+    `SELECT count(DISTINCT trading_period) AS periods,
+            count(*) FILTER (WHERE trading_period = 5) AS gap
+     FROM read_parquet($FILE)`,
+  );
+  expect(row).toEqual({ periods: "47", gap: "0" });
+});
+
 test("marks a day with a blank cell for one unit as invalid", async () => {
   const lines = await linesOf("202604");
   const index = lines.findIndex((l) => l.split(",")[6] === "2026-04-01");
@@ -205,7 +226,7 @@ test("marks a day with a blank cell for one unit as invalid", async () => {
   const result = await publish("2026-04-01");
   expect(result).toMatchObject({
     status: "invalid",
-    errors: ["1 blank cells inside trading periods 1 to 48"],
+    errors: ["1 blank cells in trading periods that other units fill"],
   });
   expect(existsSync(join(silverDir, DATASET))).toBe(false);
 });
