@@ -129,19 +129,21 @@ Each NSP snapshot is a full table with history in `Start date`/`End date`/`Curre
 
 ## 4. Backfill start dates and sizes
 
-Per-day sizes are in section 3. Totals are from the blob listings (measured); gzip is an estimate from one sample file per dataset.
+The owner limited the backfill to the last 12 months for now ([#13](https://github.com/joshmcarthur/gridwatch/issues/13#issuecomment-7025571389)). The default start for every dataset is 12 months before the run date. The runner computes it; it is not a fixed date. Older bronze is not deleted, and `collect --from` can fetch earlier data later.
 
-| Dataset | Backfill start | Why | Raw size from start | Gzip (est.) | Growth per year (raw) |
-|---|---|---|---|---|---|
-| Dispatch Energy Prices | 2022-11-01 | First file | 6.31 GB (1,458 files) | 0.55 GB | 1.5 GB |
-| Dispatch Reserve Prices | 2022-11-01 | First file | 0.05 GB | under 0.01 GB | 0.01 GB |
-| Nodal Prices and Volumes | 2022-11-01 | Matches real-time pricing. Files from 2020-09-10 add 8.6 GB. | 16.07 GB (1,480 files) | 2.0 GB | 4.0 GB |
-| Cleared Offers | 2022-11-01 | Same. Files from 2022-04-01 add 0.7 GB. | 4.96 GB (1,480 files) | 0.2 GB | 1.3 GB |
-| Generation_MD | 1997-08 | Small, take all | 0.24 GB (351 files) | 0.08 GB | 0.01 GB |
-| Mappings | All 186 NSP snapshots and static files | Cheap; old snapshots dropped | 0.09 GB | 0.02 GB | small |
-| **Total** | | | **27.7 GB** | **3 GB** | **6.8 GB raw, 0.7 GB gzip** |
+Sizes below are derived from the measured growth per year in the blob listings (one year of files); gzip is an estimate from one sample file per dataset.
 
-One 11.5 MB nodal file downloaded at about 1.6 MB/s on a single stream (one measurement), so the backfill of about 6,400 files is about 5 hours (nodal about 2.8).
+| Dataset | Raw size, 12 months | Files | Gzip (est.) | Earliest available |
+|---|---|---|---|---|
+| Dispatch Energy Prices | 1.5 GB | about 365 | 0.14 GB | 2022-11-01 |
+| Dispatch Reserve Prices | 0.01 GB | about 365 | under 0.01 GB | 2022-11-01 |
+| Nodal Prices and Volumes | 4.0 GB | about 365 | 0.5 GB | 2020-09-10 (settlement-relevant from 2022-11-01, inferred) |
+| Cleared Offers | 1.3 GB | about 365 | 0.05 GB | 2022-04-01 |
+| Generation_MD | 0.01 GB | 12 monthly files | under 0.01 GB | 1997-08 |
+| Mappings | 0.09 GB | all NSP snapshots (first 2026-01-06) and static files | 0.02 GB | 2026-01-06 |
+| **Total** | **about 6.9 GB** | **about 1,700** | **about 0.7 GB** | |
+
+One 11.5 MB nodal file downloaded at about 1.6 MB/s on a single stream (one measurement), so the 12-month backfill is about 1.2 hours (nodal about 45 minutes). Growth after that is about 6.8 GB raw per year.
 
 ## 5. Licence and attribution
 
@@ -152,13 +154,13 @@ Website content, including these datasets, is licensed under Creative Commons At
 1. EMI is being decommissioned; build on the blob container and record the new hub URLs. Affects #5, #6-#12, #15.
 2. Only Cleared Offers serves `Content-MD5`, so the manifest needs `ETag`, `Last-Modified`, size and our own SHA-256. Affects #5.
 3. Files are overwritten in place; keep every version seen, and re-fetch the trailing five days each run. Affects #5, #13, #14, #15.
-4. Dispatch energy and reserve prices miss 2025-09-11 to 2025-10-02, so completeness tracking and price charts need a fallback rule. Affects #6, #11, #14, #17, #18, #28.
+4. Dispatch energy and reserve prices miss 2025-09-11 to 2025-10-02, so completeness tracking and price charts need a fallback rule. This gap is outside the 12-month backfill from November 2026. Affects #6, #11, #14, #17, #18, #28.
 5. Dispatch prices are interim; settled prices are in Final energy prices ([daily files and ByMonth back to 1996-10](https://emidatasets.blob.core.windows.net/publicdata?restype=container&comp=list&prefix=Datasets/Wholesale/DispatchAndPricing/FinalEnergyPrices/ByMonth/), about 330 KB per day), outside the six; the owner should decide on scope (issue #2). Affects #6, #17, #28.
 6. Generation_MD lags metered data by weeks (see 3.5), so recent generation must come from Nodal or Cleared Offers dispatch results, which makes those two needed for the generation mix. Affects #8, #16, #20, #23, #27, #30.
 7. The NSP table lacks 18 of 246 priced POCs (including `BEN2201`, `HAY2201`) and 376 of 750 current POCs have no coordinates; a location source for grid-level nodes is unknown. Affects #7, #10, #17, #32, #49.
 8. Generation_MD uses two fuel-code vocabularies and a changing header case; a fuel map is needed. Affects #8, #10, #16.
 9. The NSP table keeps snapshots only from 2026-01-06; archive every one from day one. Affects #5, #7, #10.
 10. Nodal and Cleared Offers are 5-minute cases with missing intervals (10 of 288 on the day checked) while dispatch prices arrive at irregular times, so the silver layer needs one rule to reach trading periods. Affects #6, #9, #11, #12, #17.
-11. The backfill is about 28 GB raw (three-quarters Nodal) but about 3 GB gzip; time, not storage, is the cost. Affects #5, #13 and the hosting spike.
-12. I recommend 2022-11-01 for all four dispatch datasets, though Nodal exists from 2020-09-10 and Cleared Offers from 2022-04-01 (settlement relevance of earlier data is inferred, see 3.3). Affects #9, #12, #13.
+11. The 12-month backfill is about 6.9 GB raw (more than half Nodal) and about 0.7 GB gzip; it takes about 1.2 hours on one stream. Affects #5, #13 and the hosting spike.
+12. The backfill covers the last 12 months only (owner direction). If it is extended, start the dispatch datasets no earlier than 2022-11-01: Nodal exists from 2020-09-10 and Cleared Offers from 2022-04-01, but the settlement relevance of earlier data is inferred (see 3.3). Affects #9, #12, #13.
 13. Trading days can have 46 or 50 periods (checked in energy prices and Generation_MD; other datasets unchecked), so never assume 48. Affects #6, #8, #9, #11, #12.
