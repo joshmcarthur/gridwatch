@@ -1,0 +1,93 @@
+import { mkdir, readFile, rename, rm } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import type { DuckDBConnection } from "@duckdb/node-api";
+
+export type PublishResult =
+  | { date: string; status: "complete"; rows: number; path: string }
+  /** Some expected trading periods have no rows. The partition holds the rows that exist. */
+  | {
+      date: string;
+      status: "partial";
+      rows: number;
+      path: string;
+      missingPeriods: number[];
+    }
+  | { date: string; status: "missing" }
+  | { date: string; status: "invalid"; errors: string[] };
+
+/** A SQL string literal. File paths cannot be bound as parameters in COPY. */
+export const lit = (value: string) => `'${value.replaceAll("'", "''")}'`;
+
+export interface BronzeFile {
+  /** Absolute path of the stored file. */
+  path: string;
+  fileName: string;
+  sha256: string;
+  /** When the collector first stored this version. */
+  retrievedAt: string | null;
+}
+
+interface ManifestLine {
+  dataset: string;
+  retrieved_at?: string;
+  sha256: string;
+  path: string;
+  trading_dates: string[];
+}
+
+/**
+ * The newest bronze version that covers `date`, or undefined. The manifest is append-only,
+ * so the last matching line is the newest. The field names are a contract with the
+ * collector (ADR-0004).
+ */
+export async function findBronze(
+  bronzeDir: string,
+  dataset: string,
+  date: string,
+): Promise<BronzeFile | undefined> {
+  let text: string;
+  try {
+    text = await readFile(join(bronzeDir, "manifest.jsonl"), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+  const lines = text
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => JSON.parse(line) as ManifestLine)
+    .filter((line) => line.dataset === dataset);
+  const latest = lines.findLast((line) => line.trading_dates.includes(date));
+  if (!latest) return undefined;
+  const stored = lines.find(
+    (line) => line.sha256 === latest.sha256 && line.retrieved_at,
+  );
+  return {
+    path: join(bronzeDir, latest.path),
+    fileName: basename(latest.path),
+    sha256: latest.sha256,
+    retrievedAt: stored?.retrieved_at ?? null,
+  };
+}
+
+/**
+ * Write the rows of `selectSql` to `finalPath` as Parquet. Writes a `.tmp` file first and
+ * renames it, so a reader never sees a partial file. The SELECT must have a total
+ * `ORDER BY`, so the same input gives the same bytes.
+ */
+export async function writeParquetAtomically(
+  connection: DuckDBConnection,
+  selectSql: string,
+  finalPath: string,
+): Promise<void> {
+  const temp = `${finalPath}.tmp`;
+  await mkdir(dirname(finalPath), { recursive: true });
+  try {
+    await connection.run(
+      `COPY (${selectSql}) TO ${lit(temp)} (FORMAT parquet)`,
+    );
+    await rename(temp, finalPath);
+  } finally {
+    await rm(temp, { force: true });
+  }
+}

@@ -71,3 +71,4 @@ The archive retries network errors, truncated bodies, 408, 429 and 5xx up to thr
 - A corrupt manifest line (for example from a crash during an append) makes `readManifest` throw with the line number. Fix or remove the line by hand.
 - The manifest has one writer at a time. Run the collector for one dataset file at a time.
 - Remote storage sync is out of scope. It needs a later decision.
+- The publisher reads the manifest field names (`dataset`, `path`, `sha256`, `retrieved_at`, `trading_dates`), so those names are a contract. Renaming one needs a change in `publisher/src/silver/common.ts`.
