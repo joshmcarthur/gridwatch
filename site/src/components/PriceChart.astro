@@ -1,0 +1,266 @@
+---
+import * as Plot from "@observablehq/plot";
+import type { SiteDay } from "@gridwatch/publisher/site-contract";
+import ChartFigure from "./ChartFigure.astro";
+import { renderPlot } from "../lib/chart-svg";
+import {
+  PRICE_MISSING,
+  PRICE_NOTICE,
+  type PriceChart,
+  type PriceNodeLine,
+  type PriceSpreadLine,
+  priceChart,
+  priceChartDaily,
+  priceChartSummary,
+  priceChartTable,
+  priceSpreadSummary,
+} from "../lib/price-chart";
+
+interface Props {
+  day: SiteDay;
+}
+
+const { day } = Astro.props;
+const chart = priceChart(day);
+
+/**
+ * Island colours from the Landscape tokens (ADR-0015). North Island is Tarn and South Island is
+ * amber. North Island has two nodes, so OTA is solid and HAY is dashed, both in Tarn.
+ */
+const ISLAND_COLOUR: Record<PriceNodeLine["island"], string> = {
+  NI: "var(--color-island-north)",
+  SI: "var(--color-island-south)",
+};
+
+function spreadColour(spread: PriceSpreadLine): string {
+  return spread.dashed ? "var(--color-ink-muted)" : "var(--color-ink)";
+}
+
+function dash(dashed: boolean): string {
+  return dashed ? "4 3" : "none";
+}
+
+/** Rows for one line: one per period, with null where the node has no price. */
+function rowsFor(
+  data: PriceChart,
+  values: Array<number | null>,
+  lone: boolean[],
+  proxy: boolean[] = [],
+) {
+  return data.periods.map((period, index) => ({
+    start: period.start,
+    title: period.title,
+    value: values[index] ?? null,
+    lone: lone[index] ?? false,
+    proxy: proxy[index] ?? false,
+  }));
+}
+
+function axisX(data: PriceChart) {
+  const labelAt = new Map(
+    data.ticks.map((tick) => [tick.at.getTime(), tick.label]),
+  );
+  return {
+    label: "Hour (New Zealand time)",
+    domain: [data.periods[0]?.start, data.periods.at(-1)?.start],
+    nice: false,
+    ticks: data.ticks.map((tick) => tick.at),
+    tickFormat: (value: Date) => labelAt.get(value.getTime()) ?? "",
+  };
+}
+
+/** Line, lone-point dots and proxy markers for one node. A gap breaks only this line. */
+function nodeMarks(data: PriceChart, node: PriceNodeLine) {
+  const rows = rowsFor(data, node.values, node.lone, node.proxy);
+  const colour = ISLAND_COLOUR[node.island];
+  return [
+    Plot.line(rows, {
+      x: "start",
+      y: "value",
+      stroke: colour,
+      strokeWidth: 2,
+      strokeDasharray: dash(node.dashed),
+    }),
+    Plot.dot(
+      rows.filter((row) => row.lone),
+      { x: "start", y: "value", fill: colour, r: 2.5 },
+    ),
+    Plot.dot(
+      rows.filter((row) => row.proxy && row.value !== null),
+      {
+        x: "start",
+        y: "value",
+        fill: "var(--color-card)",
+        stroke: colour,
+        strokeWidth: 1.5,
+        r: 3.5,
+      },
+    ),
+  ];
+}
+
+function spreadMarks(data: PriceChart, spread: PriceSpreadLine) {
+  const rows = rowsFor(data, spread.values, spread.lone);
+  const colour = spreadColour(spread);
+  return [
+    Plot.line(rows, {
+      x: "start",
+      y: "value",
+      stroke: colour,
+      strokeWidth: 2,
+      strokeDasharray: dash(spread.dashed),
+    }),
+    Plot.dot(
+      rows.filter((row) => row.lone),
+      { x: "start", y: "value", fill: colour, r: 2.5 },
+    ),
+  ];
+}
+
+/** The hover layer: one transparent rule per period, with its title as the tooltip. */
+function hoverMark(data: PriceChart) {
+  return Plot.ruleX(data.periods, {
+    x: "start",
+    stroke: "transparent",
+    strokeWidth: 8,
+    title: "title",
+  });
+}
+
+function priceSvg(data: PriceChart): string {
+  return renderPlot(
+    {
+      width: 330,
+      height: 260,
+      marginTop: 28,
+      marginLeft: 56,
+      marginBottom: 36,
+      style: { fontSize: "14px" },
+      x: axisX(data),
+      y: {
+        label: "Wholesale price ($ per megawatt-hour, $/MWh)",
+        domain: data.priceDomain,
+        grid: true,
+        nice: true,
+      },
+      marks: [
+        ...data.nodes.flatMap((node) => nodeMarks(data, node)),
+        hoverMark(data),
+      ],
+    },
+    {
+      id: "price-chart",
+      title: "Wholesale price at three reference nodes",
+      summary: priceChartSummary(data),
+    },
+  );
+}
+
+function spreadSvg(data: PriceChart): string {
+  const drawn = data.spreads.filter((spread) => spread.drawn);
+  return renderPlot(
+    {
+      width: 330,
+      height: 260,
+      marginTop: 28,
+      marginLeft: 56,
+      marginBottom: 36,
+      style: { fontSize: "14px" },
+      x: axisX(data),
+      y: {
+        label: "Spread ($/MWh), first node minus second",
+        domain: data.spreadDomain,
+        grid: true,
+        nice: true,
+      },
+      marks: [
+        Plot.ruleY([0], { stroke: "var(--color-ink-muted)" }),
+        ...drawn.flatMap((spread) => spreadMarks(data, spread)),
+        hoverMark(data),
+      ],
+    },
+    {
+      id: "price-spread-chart",
+      title: "Spread between reference nodes",
+      summary: priceSpreadSummary(data),
+    },
+  );
+}
+
+const table = chart ? priceChartTable(chart) : null;
+const svgs = chart ? `${priceSvg(chart)}${spreadSvg(chart)}` : null;
+const daily = chart ? priceChartDaily(chart) : [];
+---
+
+{
+  chart === null || svgs === null || table === null ? (
+    <p class="chart-missing">{PRICE_MISSING}</p>
+  ) : (
+    <ChartFigure
+      svg={svgs}
+      tableCaptionId="wholesale-prices-table-caption"
+      tableCaption="Wholesale prices in $/MWh for each 30-minute period. Spreads are the first node minus the second, so a positive spread means the first node is dearer."
+      headers={table.headers}
+      rows={table.rows}
+      legendLabel="Lines in the price and spread charts"
+      notice={chart.incomplete ? PRICE_NOTICE : undefined}
+    >
+      <Fragment slot="legend">
+        {chart.nodes.map((node) => (
+          <li>
+            <span
+              class="line-key"
+              style={`border-top-color: ${ISLAND_COLOUR[node.island]}; border-top-style: ${node.dashed ? "dashed" : "solid"}`}
+              aria-hidden="true"
+            />
+            {node.poc}, {node.label}
+          </li>
+        ))}
+        {chart.spreads
+          .filter((spread) => spread.drawn)
+          .map((spread) => (
+            <li>
+              <span
+                class="line-key"
+                style={`border-top-color: ${spreadColour(spread)}; border-top-style: ${spread.dashed ? "dashed" : "solid"}`}
+                aria-hidden="true"
+              />
+              Spread {spread.name}, first node minus second
+            </li>
+          ))}
+      </Fragment>
+      <Fragment slot="caption">
+        <p>
+          Each point is the average price over a 30-minute period. A short
+          spike inside a period is smoothed out, so the highest price of the day
+          can be above the line.
+        </p>
+        {daily.map((line) => (
+          <p>{line}</p>
+        ))}
+        <p>
+          Source: Electricity Authority dispatch energy prices at three reference
+          nodes. Prices are interim and may be revised.
+        </p>
+      </Fragment>
+    </ChartFigure>
+  )
+}
+
+<style>
+  .chart-missing {
+    margin: 0;
+  }
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .line-key {
+    width: 1.5rem;
+    flex: none;
+    border-top-width: 3px;
+  }
+</style>

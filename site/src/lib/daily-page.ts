@@ -29,11 +29,6 @@ export const PRICE_REGIONS: Record<string, string> = {
 
 export const CHART_SLOTS = [
   {
-    id: "wholesale-prices",
-    title: "What it sold for",
-    body: "A chart of wholesale prices, and how they differed between regions, will sit here. It is not drawn yet.",
-  },
-  {
     id: "energy-flow",
     title: "Where the energy went",
     body: "A chart of how energy moved through the system will sit here. It is not drawn yet.",

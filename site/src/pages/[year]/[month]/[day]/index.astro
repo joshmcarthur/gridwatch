@@ -1,5 +1,6 @@
 ---
 import GenerationMixChart from "../../../../components/GenerationMixChart.astro";
+import PriceChart from "../../../../components/PriceChart.astro";
 import Layout from "../../../../layouts/Layout.astro";
 import {
   CHART_SLOTS,
@@ -58,6 +59,11 @@ const months = monthGroups(index);
     <section class="slot" aria-labelledby="generation-mix">
       <h2 id="generation-mix">What made the power</h2>
       <GenerationMixChart day={day} />
+    </section>
+
+    <section class="slot" aria-labelledby="wholesale-prices">
+      <h2 id="wholesale-prices">What it sold for</h2>
+      <PriceChart day={day} />
     </section>
 
     {

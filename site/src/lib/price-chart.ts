@@ -49,6 +49,8 @@ export interface PriceSpreadLine {
   name: string;
   /** First minus second, in $/MWh. */
   values: Array<number | null>;
+  /** A valid period with both neighbours null. See `PriceNodeLine.lone`. */
+  lone: boolean[];
   /** Only two spreads are drawn. The third is in the table and in the hover text. */
   drawn: boolean;
   dashed: boolean;
@@ -103,12 +105,7 @@ export function priceChart(day: SiteDay): PriceChart | null {
       dashed: style.dashed,
       values,
       proxy: day.periods.map((period) => proxyPeriods.has(period.period)),
-      lone: values.map(
-        (value, index) =>
-          value !== null &&
-          (values[index - 1] ?? null) === null &&
-          (values[index + 1] ?? null) === null,
-      ),
+      lone: lonePoints(values),
       daily: {
         mean: node.daily.mean_price,
         min: node.daily.min_price,
@@ -125,6 +122,7 @@ export function priceChart(day: SiteDay): PriceChart | null {
       to: spread.to,
       name: `${spread.from.slice(0, 3)}-${spread.to.slice(0, 3)}`,
       values: spread.spread,
+      lone: lonePoints(spread.spread),
       drawn: !undrawn,
       dashed: spread.from === "OTA2201" && spread.to === "HAY2201",
     };
@@ -278,6 +276,16 @@ function priceCell(value: number | null, proxy: boolean): string {
 function signedMoney(value: number): string {
   const sign = value < 0 ? "-" : "";
   return `${sign}$${money.format(Math.abs(value))}`;
+}
+
+/** A valid period whose neighbours are both null (or outside the day). A line draws nothing for it. */
+export function lonePoints(values: Array<number | null>): boolean[] {
+  return values.map(
+    (value, index) =>
+      value !== null &&
+      (values[index - 1] ?? null) === null &&
+      (values[index + 1] ?? null) === null,
+  );
 }
 
 /** Zero is always in the domain. An empty list gives a unit domain, so the axis still draws. */

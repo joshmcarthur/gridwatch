@@ -40,3 +40,28 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain("Show the numbers as a table");
   },
 );
+
+test.skipIf(!existsSync(builtPage))(
+  "built daily page labels both price charts and keeps ids unique",
+  () => {
+    const html = readFileSync(builtPage, "utf8");
+    expect(html).toContain('aria-labelledby="wholesale-prices"');
+    expect(html).toMatch(
+      /<h2 id="wholesale-prices"[^>]*>What it sold for<\/h2>/,
+    );
+    expect(html).toContain(
+      'aria-labelledby="price-chart-title price-chart-summary"',
+    );
+    expect(html).toContain(
+      'aria-labelledby="price-spread-chart-title price-spread-chart-summary"',
+    );
+    expect(html).toContain("$/MWh");
+    expect(html).toContain("OTA2201");
+    expect(html).toContain("HAY2201");
+    expect(html).toContain("BEN2201");
+    expect(html).toContain("Electricity Authority dispatch energy prices");
+    expect(html.match(/role="img"/g)?.length).toBe(3);
+    const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+  },
+);
