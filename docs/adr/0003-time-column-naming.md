@@ -35,3 +35,7 @@ The module `publisher/src/trading-time.ts` implements the model with `Temporal` 
 - The model treats an interval timestamp as the interval start. We have not verified whether `IntervalDateTime` in the nodal and cleared offers files is the start or the end. The dataset issues must check this before they apply the model.
 - Dispatch energy prices use an irregular `PublishDateTime` with an NZ offset (see `docs/sources.md` section 3.1). `dispatchIntervalToUtc` does not cover that case, so #6 must not assume it fits.
 - Dataset issues apply the model. This ADR only fixes the names and the rules.
+
+## Amendment (2026-11-20, [ADR-0005](0005-dataset-pattern.md))
+
+Silver tables omit `processed_at` so that re-publishing a day gives byte-identical Parquet. Only gold tables use `processed_at`.

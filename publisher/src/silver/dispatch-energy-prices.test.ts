@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
@@ -27,7 +34,11 @@ beforeEach(async () => {
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 /** Store `csv` in bronze the way the collector does, and add its manifest record. */
-async function archive(date: string, csv: string) {
+async function archive(
+  date: string,
+  csv: string,
+  checkedAt = "2026-11-20T00:00:00.000Z",
+) {
   const sha256 = createHash("sha256").update(csv).digest("hex");
   const name = `${date.replaceAll("-", "")}_DispatchEnergyPrices.csv`;
   const path = `${DATASET}/${sha256}/${name}`;
@@ -36,13 +47,13 @@ async function archive(date: string, csv: string) {
   const record = {
     dataset: DATASET,
     status: "new",
-    checked_at: "2026-11-20T00:00:00.000Z",
+    checked_at: checkedAt,
     retrieved_at: "2026-11-20T00:00:01.000Z",
     sha256,
     path,
     trading_dates: [date],
   };
-  await writeFile(
+  await appendFile(
     join(bronzeDir, "manifest.jsonl"),
     `${JSON.stringify(record)}\n`,
   );
@@ -159,6 +170,23 @@ test.each([
     "1 rows have a missing or non-numeric value",
   ],
   [
+    "a trading period outside the day",
+    (lines: string[]) => [
+      ...lines,
+      (lines[1] as string).replace("2026-11-18,1,", "2026-11-18,49,"),
+    ],
+    "1 rows have a trading period outside 1 to 48",
+  ],
+  [
+    "a bad proxy flag",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace(/,[YN],([^,]+)$/, ",X,$1"),
+      ...lines.slice(2),
+    ],
+    "1 rows have a proxy flag that is not Y or N",
+  ],
+  [
     "a row for another day",
     (lines: string[]) => [
       ...lines,
@@ -177,3 +205,35 @@ test.each([
     expect(existsSync(join(silverDir, DATASET))).toBe(false);
   },
 );
+
+test("uses the version with the newer manifest record", async () => {
+  const csv = await fixture("2026-11-18");
+  await archive("2026-11-18", csv, "2026-11-19T00:00:00.000Z");
+  const newer = await archive(
+    "2026-11-18",
+    csv.replace(/,[0-9.]+\n/, ",999.5\n"),
+    "2026-11-20T00:00:00.000Z",
+  );
+  const result = await publish("2026-11-18");
+  if (result.status !== "ok") throw new Error("expected ok");
+  const [row] = await query(
+    result.path,
+    "SELECT any_value(bronze_sha256) AS sha, max(dollars_per_megawatt_hour) AS top FROM read_parquet($FILE)",
+  );
+  expect(row).toMatchObject({ sha: newer.sha256, top: 999.5 });
+});
+
+test("an invalid day leaves the older partition untouched", async () => {
+  const lines = (await fixture("2026-11-18")).trimEnd().split("\n");
+  await archive("2026-11-18", `${lines.join("\n")}\n`);
+  const first = await publish("2026-11-18");
+  if (first.status !== "ok") throw new Error("expected ok");
+  const before = await readFile(first.path);
+  await archive(
+    "2026-11-18",
+    `${lines.slice(0, -1).concat("2026-11-18,5,x,x,,N,n/a").join("\n")}\n`,
+    "2026-11-21T00:00:00.000Z",
+  );
+  expect(await publish("2026-11-18")).toMatchObject({ status: "invalid" });
+  expect(await readFile(first.path)).toEqual(before);
+});

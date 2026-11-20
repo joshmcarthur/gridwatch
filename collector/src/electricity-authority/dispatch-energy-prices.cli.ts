@@ -1,23 +1,14 @@
-import { parseArgs } from "node:util";
 import { dataPaths } from "../data-root.ts";
+import { parseDateRange } from "../date-range.ts";
 import { collectDispatchEnergyPrices } from "./dispatch-energy-prices.ts";
 
 // npm run collect:dispatch-energy-prices -- [--from YYYY-MM-DD] [--to YYYY-MM-DD]
-// Both default to yesterday in NZ. The backfill runner picks wider ranges.
-const yesterday = Temporal.Now.plainDateISO("Pacific/Auckland")
-  .subtract({ days: 1 })
-  .toString();
-const { values } = parseArgs({
-  options: {
-    from: { type: "string" },
-    to: { type: "string", default: yesterday },
-  },
-});
-
-const { records, missing } = await collectDispatchEnergyPrices({
+// Exit code 1 if any download failed.
+const { from, to } = parseDateRange();
+const { records, missing, failed } = await collectDispatchEnergyPrices({
   bronzeDir: dataPaths().bronze,
-  from: values.from ?? values.to ?? yesterday,
-  to: values.to ?? yesterday,
+  from,
+  to,
 });
 const count = (status: string) =>
   records.filter((r) => r.status === status).length;
@@ -26,3 +17,5 @@ console.log(
 );
 if (missing.length > 0)
   console.log(`not listed by source: ${missing.join(", ")}`);
+for (const f of failed) console.error(`${f.date}: FAILED ${f.error}`);
+process.exitCode = failed.length > 0 ? 1 : 0;
