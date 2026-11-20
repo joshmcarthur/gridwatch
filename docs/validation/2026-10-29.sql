@@ -151,6 +151,19 @@ ORDER BY island;
 SELECT Direction, "Energy transfer (GWh)" AS energy_gwh, "Peak flow (MW)" AS peak_mw, "Average flow (MW)" AS average_mw
 FROM read_csv('data/emi/w_hvdc_c/w_hvdc_c.csv', skip = 10, header = true);
 
+-- Regional prices: silver row count per node (report says 286 per node, 858 in total)
+-- and proxy flag on gold price_periods (report says false for each node).
+SELECT point_of_connection, count(*) AS silver_rows
+FROM read_parquet('data/silver/dispatch_energy_prices/trading_date=2026-10-29/data.parquet')
+WHERE point_of_connection IN ('OTA2201', 'HAY2201', 'BEN2201')
+GROUP BY point_of_connection
+ORDER BY point_of_connection;
+
+SELECT point_of_connection, bool_or(has_proxy_price) AS any_proxy, count(*) AS periods
+FROM read_parquet('data/gold/price_periods/trading_date=2026-10-29/data.parquet')
+GROUP BY point_of_connection
+ORDER BY point_of_connection;
+
 -- =====================================================================
 -- Daily prices: gold price_daily_summary vs EMI G42MES (Regional prices, daily table)
 -- Gold min/max are published-row extrema (ADR-0012). The G42MES average is compared to gold mean_price.
