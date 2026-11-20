@@ -13,6 +13,7 @@ The repository is a TypeScript monorepo. To add a dataset, follow [ADR-0005](doc
 | `data/`       | The data. Gitignored. [`data/README.md`](data/README.md) explains the layers                     |
 | `site/`       | Astro site (placeholder). Reads `data/gold/site/` at build time                                  |
 | `compose.yml` | Runs `collector` and `publisher` as one-shot jobs                                                |
+| `scripts/`    | Daily cron wrapper (`daily-run.sh`)                                                              |
 
 Processing is per NZ trading day. Dataset code lives in `collector/src/electricity-authority/<dataset>.ts`, `publisher/src/silver/<dataset>.ts` and `publisher/src/gold/`.
 
@@ -41,20 +42,46 @@ npm test            # Vitest
 
 Two one-shot jobs bring `data/` up to date. Run the collector, then the publisher. The daily cron job does the same ([ADR-0002](docs/adr/0002-daily-run-data-and-site-hosting.md)).
 
+### Manual
+
+From the repository root:
+
 ```bash
 docker compose run --rm collector && docker compose run --rm publisher
 ```
 
+Or: `./scripts/daily-run.sh`. That is the cron entry point. It writes a log under `logs/` and is silent on success.
+
 - **First run.** Each dataset backfills the last 12 months, computed from the run date. This is about 7 GB and about 1.2 hours ([`docs/sources.md`](docs/sources.md) section 4). Make sure the disk has room. `docker compose up` runs the same jobs.
 - **Later runs.** The collector fetches the trailing 5 days, and any date or month of the 12-month window that it does not hold (a failed day, or a gap). Generation_MD months are checked again for the last 3 months. The publisher publishes the days that are new or whose bronze file changed. A run with nothing new changes nothing.
-- **A range.** `--from YYYY-MM-DD --to YYYY-MM-DD` replaces the default range. `--dataset <id>` limits the run (repeat it for more). The publisher also takes `--force` to publish up-to-date days again. Older data is never deleted.
 - **Failures.** One failing dataset does not stop the others. The summary names it and the exit code is 1.
+
+### Daily cron
+
+Sources land about 07:08 NZ on D+1 ([`docs/sources.md`](docs/sources.md) section 2). Run at 08:00 NZ. Set `MAILTO`. The script prints to stderr and exits non-zero on failure, so cron mails that output. Success is silent.
+
+```cron
+MAILTO=you@example.com
+CRON_TZ=Pacific/Auckland
+PATH=/usr/local/bin:/usr/bin:/bin
+0 8 * * * /path/to/gridwatch/scripts/daily-run.sh
+```
+
+Replace `MAILTO` and the path. A systemd timer can wrap the same script; cron is the documented default.
+
+### Re-run a date range
+
+`--from YYYY-MM-DD --to YYYY-MM-DD` replaces the default range. `--dataset <id>` limits the run (repeat it for more). The publisher also takes `--force` to publish up-to-date days again. Older data is never deleted.
 
 ```bash
 docker compose run --rm collector --from 2025-01-01 --to 2025-03-31 --dataset dispatch_energy_prices
 docker compose run --rm publisher --from 2025-01-01 --to 2025-03-31 --dataset dispatch_energy_prices
 docker compose run --rm collector --help
 ```
+
+### Logs
+
+Each `scripts/daily-run.sh` run writes `logs/daily-run.<UTC-stamp>.log`. Git ignores `logs/`. Cron mail on failure includes the last 80 lines of that file.
 
 The rules for each kind of dataset are in [ADR-0009](docs/adr/0009-runner-default-mode.md).
 

@@ -5,7 +5,7 @@
 
 ## Context
 
-[#13](https://github.com/joshmcarthur/gridwatch/issues/13) adds one command to bring `data/` up to date, for the collector and for the publisher. The cron job runs `docker compose run --rm collector` and then `publisher` ([ADR-0002](0002-daily-run-data-and-site-hosting.md)). Both must be idempotent. The source rewrites recent files and rewrites monthly files weeks later ([`docs/sources.md`](../sources.md), [ADR-0007](0007-generation-md-monthly-files.md)). The owner limited the first backfill to 12 months.
+[#13](https://github.com/joshmcarthur/gridwatch/issues/13) adds one command to bring `data/` up to date, for the collector and for the publisher. The cron job runs [`scripts/daily-run.sh`](../../scripts/daily-run.sh), which runs `docker compose run --rm collector` and then `publisher` ([ADR-0002](0002-daily-run-data-and-site-hosting.md)). Both must be idempotent. The source rewrites recent files and rewrites monthly files weeks later ([`docs/sources.md`](../sources.md), [ADR-0007](0007-generation-md-monthly-files.md)). The owner limited the first backfill to 12 months.
 
 ## Decision
 
