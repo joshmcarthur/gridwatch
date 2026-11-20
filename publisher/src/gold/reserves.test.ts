@@ -157,10 +157,17 @@ test("period price is the time-weighted mean, and ties sort by price", async () 
   const result = await publishReserves({ silverDir, goldDir, date: DATE });
   expect(result.status).toBe("partial");
   if (result.status !== "partial") throw new Error("expected partial");
-  expect(result.missingPeriods.slice(0, 3)).toEqual([3, 4, 5]);
+  expect(result.missingPeriods.slice(0, 3)).toEqual([2, 3, 4]); // SIR has no period 2
 
   const rows = await readGold("reserve_by_class_island_period");
-  expect(rows).toHaveLength(6); // no period spine: only periods with a row
+  expect(rows).toHaveLength(4 * 48); // 4 class-island pairs on every period
+  expect(at(rows, "SIR", "NI", 2)).toMatchObject({
+    dollars_per_megawatt_hour: null,
+    min_price: null,
+    max_price: null,
+    rows_present: 0,
+    inputs_complete: false,
+  });
   expect(at(rows, "FIR", "NI", 1)).toMatchObject({
     dollars_per_megawatt_hour: 20,
     min_price: 10,
@@ -254,6 +261,38 @@ test("two points of connection on one island and class make the date invalid", a
   });
   for (const table of TABLES)
     expect(existsSync(goldPartitionPath(goldDir, table, DATE))).toBe(false);
+});
+
+test("one island missing a period gets a null-price row, a false day flag and a partial result", async () => {
+  // NI has every period. SI has every period except 7.
+  await writeSilver(
+    Array.from({ length: 48 }, (_, i) => i).flatMap((i) => [
+      row("FIR", "NI", HAY, i * 1800, 1),
+      ...(i === 6 ? [] : [row("FIR", "SI", BEN, i * 1800, 2)]),
+    ]),
+  );
+  const result = await publishReserves({ silverDir, goldDir, date: DATE });
+  expect(result).toMatchObject({ status: "partial", missingPeriods: [7] });
+  const periods = await readGold("reserve_by_class_island_period");
+  expect(at(periods, "FIR", "SI", 7)).toMatchObject({
+    dollars_per_megawatt_hour: null,
+    rows_present: 0,
+    inputs_complete: false,
+  });
+  expect(at(periods, "FIR", "NI", 7)).toMatchObject({
+    dollars_per_megawatt_hour: 1,
+    inputs_complete: true,
+  });
+  const days = await readGold("reserve_by_class_island_day");
+  expect(at(days, "FIR", "SI")).toMatchObject({
+    periods_present: 47,
+    mean_price: 2,
+    inputs_complete: false,
+  });
+  expect(at(days, "FIR", "NI")).toMatchObject({
+    periods_present: 48,
+    inputs_complete: true,
+  });
 });
 
 test("a null island is kept and flagged, not dropped", async () => {

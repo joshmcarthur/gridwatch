@@ -11,7 +11,7 @@ On 2026-11-20 the owner decided that the rule for gold energy prices ([ADR-0012]
 
 ## Decision
 
-The module follows the gold table pattern in [ADR-0011](0011-gold-table-pattern.md): `goldDataset`, `writeGoldTables`, `goldStamp`, `inputFingerprint` and `inputsComplete`. Dataset id `gold_reserves`. `ANALYSIS_VERSION` starts at 1.
+The module follows the gold table pattern in [ADR-0011](0011-gold-table-pattern.md): `goldDataset`, `writeGoldTables`, `goldStamp` and `inputFingerprint`. Dataset id `gold_reserves`. `ANALYSIS_VERSION` starts at 1.
 
 ### Period price
 
@@ -34,9 +34,13 @@ The real files have one point of connection for each island: `HAY2201` for NI an
 
 ### Completeness
 
-- A class-island-period is complete when it has at least one silver row. Gold has no period spine (a row for each expected period with null prices), so a period with no row has no row in gold. Every period row has `inputs_complete = true`.
-- A daily row is complete when its class and island have a row in every expected period (`periods_present = periods_expected`).
-- The publish result is `partial` with the periods that have no row in any class (`inputsComplete()` on the silver file, [ADR-0011](0011-gold-table-pattern.md)), or `complete`, or `missing` when the date has no silver.
+Rows are flagged, not dropped ([ADR-0011](0011-gold-table-pattern.md), the same as [ADR-0012](0012-gold-prices.md)).
+
+- Every (class, island) pair that silver holds has a period row on every expected period (46, 48 or 50). A period with no silver row has null `dollars_per_megawatt_hour`, `min_price` and `max_price`, `rows_present` 0 and `inputs_complete = false`.
+- A class-island-period is complete when it has at least one silver row.
+- A daily row is complete when all its periods are (`bool_and`). `periods_present` counts the periods with a price. `mean_price` ignores null periods.
+- The publish result is `partial` with every period in which any class and island has no row (so a missing period on `BEN2201` alone is `partial`), or `complete`, or `missing` when the date has no silver.
+- This is a row check, not `inputsComplete()` (that helper counts trading-period presence in silver, the wrong grain here). A pair that silver never holds has no rows.
 - Gold does not read `silver/_completeness` ([ADR-0010](0010-completeness.md)). That is [#77](https://github.com/joshmcarthur/gridwatch/issues/77).
 
 ### Tables
@@ -45,7 +49,7 @@ Gold Parquet at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. `writeGoldT
 
 | Table | One row per |
 | --- | --- |
-| `reserve_by_class_island_period` | reserve class, island and trading period that has a row |
+| `reserve_by_class_island_period` | reserve class, island and trading period |
 | `reserve_by_class_island_day` | reserve class and island |
 
 Every row has `trading_date`, `analysis_version`, `inputs_sha256` and `inputs_complete`. Period rows keep `trading_period`, `event_start_utc` and `event_end_utc` ([ADR-0003](0003-time-column-naming.md)).
@@ -56,6 +60,6 @@ Every row has `trading_date`, `analysis_version`, `inputs_sha256` and `inputs_co
 - Gold reserves and gold prices use one rule, so a reserve price and an energy price for the same period have the same weighting.
 - Rule B trusts that a publish time is when a price began to apply. A price published late in a period gets little weight, and a long gap between publishes gives the earlier price a long weight. If the source adds an interval or case column, revisit the rule and bump `ANALYSIS_VERSION`.
 - A second point of connection on one island stops the date from publishing until a person changes the keys. The runner reports the date as failed.
-- A missing period shows as a missing row, not as a null row. A chart has to read the gap from the absent row or from the daily `periods_present`.
+- A missing period shows as a null-price row flagged incomplete, so a chart can draw the gap.
 - The `segments` SQL is copied from `prices.ts`, not shared, because the partition keys differ.
 - Reserve anomaly detection ([#34](https://github.com/joshmcarthur/gridwatch/issues/34)) is out of scope.

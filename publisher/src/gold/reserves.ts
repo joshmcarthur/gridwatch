@@ -1,14 +1,13 @@
 import { existsSync } from "node:fs";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { lit, type PublishResult } from "../silver/common.ts";
-import { periodsInTradingDate } from "../trading-time.ts";
+import { periodsInTradingDate, periodToUtc } from "../trading-time.ts";
 import {
   type GoldInput,
   goldDataset,
   goldPartitionPath,
   goldStamp,
   inputFingerprint,
-  inputsComplete,
   silverPartitionPath,
   writeGoldTables,
 } from "./common.ts";
@@ -49,10 +48,11 @@ const INPUTS: GoldInput[] = [DISPATCH];
  * Two on one island and class are not merged: the result is `invalid` and nothing is written
  * (ADR-0013).
  *
- * Completeness: a class-island-period is complete when it has at least one row. There is no
- * period spine, so a period with no row has no row in gold. A daily row is complete when its
- * class and island have a row in every expected period (46, 48 or 50). The result is `partial`
- * with the periods that have no row in any class (`inputsComplete`).
+ * Rows are flagged, not dropped: every class and island in silver has a row on every expected
+ * period (46, 48 or 50), with null prices and `inputs_complete = false` where silver has none.
+ * A class-island-period is complete when it has at least one row. A daily row is complete when
+ * all its periods are. The result is `partial` with the periods that any class and island
+ * lacks. Completeness is this row check, not `inputsComplete()`.
  *
  * Missing (nothing written): the date has no dispatch reserve prices silver.
  * Repeatable: no `processed_at`. A total `ORDER BY` and one thread make the same inputs give the
@@ -96,7 +96,6 @@ export async function publishReserves(options: {
         ),
       };
 
-    const completeness = await inputsComplete(connection, date, [input]);
     const inputsSha256 = await inputFingerprint(
       silverDir,
       ANALYSIS_VERSION,
@@ -128,7 +127,7 @@ export async function publishReserves(options: {
     );
     // One row per class, island and period that has a row.
     await connection.run(
-      `CREATE TEMP TABLE class_periods AS
+      `CREATE TEMP TABLE row_periods AS
        SELECT reserve_class, island, trading_period,
          min(event_start_utc) AS event_start_utc,
          min(event_end_utc) AS event_end_utc,
@@ -139,23 +138,40 @@ export async function publishReserves(options: {
          count(*)::INTEGER AS rows_present
        FROM segments GROUP BY reserve_class, island, trading_period`,
     );
+    // Every class and island in silver on every expected period, with nulls where silver has no row.
+    const spans = Array.from({ length: periods }, (_, i) => {
+      const span = periodToUtc(date, i + 1);
+      return `(${i + 1}, ${lit(span.eventStartUtc.toString())}::TIMESTAMPTZ, ${lit(span.eventEndUtc.toString())}::TIMESTAMPTZ)`;
+    }).join(", ");
+    await connection.run(
+      `CREATE TEMP TABLE class_periods AS
+       SELECT k.reserve_class, k.island, s.trading_period, s.event_start_utc, s.event_end_utc,
+         p.dollars_per_megawatt_hour, p.min_price, p.max_price,
+         coalesce(p.rows_present, 0)::INTEGER AS rows_present,
+         p.rows_present IS NOT NULL AS inputs_complete
+       FROM (SELECT DISTINCT reserve_class, island FROM read_parquet(${lit(input)})) k
+       CROSS JOIN (VALUES ${spans}) s(trading_period, event_start_utc, event_end_utc)
+       LEFT JOIN row_periods p
+         ON p.reserve_class = k.reserve_class AND p.island IS NOT DISTINCT FROM k.island
+         AND p.trading_period = s.trading_period`,
+    );
 
     const tradingDate = `DATE ${lit(date)} AS trading_date`;
     const selects: Record<(typeof TABLES)[number], string> = {
       reserve_by_class_island_period: `SELECT ${tradingDate}, trading_period,
           event_start_utc, event_end_utc, reserve_class, island,
           dollars_per_megawatt_hour, min_price, max_price, rows_present,
-          ${stamp("true")}
+          ${stamp("inputs_complete")}
         FROM class_periods
         ORDER BY trading_period, reserve_class, island NULLS LAST`,
       reserve_by_class_island_day: `SELECT ${tradingDate}, reserve_class, island,
           avg(dollars_per_megawatt_hour) AS mean_price,
           min(min_price) AS min_price,
           max(max_price) AS max_price,
-          count(*)::INTEGER AS periods_present,
+          count(dollars_per_megawatt_hour)::INTEGER AS periods_present,
           ${periods}::INTEGER AS periods_expected,
           sum(rows_present)::INTEGER AS rows_present,
-          ${stamp(`count(*) = ${periods}`)}
+          ${stamp("bool_and(inputs_complete)")}
         FROM class_periods
         GROUP BY reserve_class, island
         ORDER BY reserve_class, island NULLS LAST`,
@@ -168,21 +184,24 @@ export async function publishReserves(options: {
       date,
     );
     const path = goldPartitionPath(goldDir, TABLES[0], date);
-    const reader = await connection.runAndReadAll(
-      `SELECT count(*) AS n FROM read_parquet(${lit(path)})`,
+    const missingReader = await connection.runAndReadAll(
+      `SELECT DISTINCT trading_period AS period
+       FROM class_periods
+       WHERE NOT inputs_complete
+       ORDER BY 1`,
+    );
+    const missingPeriods = (
+      missingReader.getRowObjectsJson() as Array<{ period: string }>
+    ).map((r) => Number(r.period));
+    const countReader = await connection.runAndReadAll(
+      "SELECT count(*) AS n FROM class_periods",
     );
     const rows = Number(
-      (reader.getRowObjectsJson() as Array<{ n: string }>)[0]?.n,
+      (countReader.getRowObjectsJson() as Array<{ n: string }>)[0]?.n,
     );
-    return completeness.complete
+    return missingPeriods.length === 0
       ? { date, status: "complete", rows, path }
-      : {
-          date,
-          status: "partial",
-          rows,
-          path,
-          missingPeriods: completeness.missingPeriods,
-        };
+      : { date, status: "partial", rows, path, missingPeriods };
   } finally {
     connection.closeSync();
   }
