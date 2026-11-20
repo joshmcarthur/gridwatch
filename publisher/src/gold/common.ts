@@ -128,7 +128,8 @@ const dateFingerprint = (
   );
 
 /**
- * The fingerprint that a build would write, for each date on which every input has a partition. The runner compares it with the value that gold holds (ADR-0009, ADR-0011).
+ * The fingerprint that a build would write, for each date on which every input has a
+ * partition. The runner compares it with the value that gold holds (ADR-0009, ADR-0011).
  * It reads each input table once, not once for each date.
  */
 export async function wantedFingerprints(

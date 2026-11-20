@@ -90,3 +90,7 @@ The runner shows an incomplete gold day as `PARTIAL` in the run summary, with th
 - A gold dataset that reads several silver tables lists them all. A change in any of them rebuilds that date.
 - Plant tables take `island` as `min(island)` over the plant's rows. Units on two islands give `NI`. Units on an unmapped POC are ignored when another unit has an island. The fuel tables split by the unit's own island, so they are exact.
 - The runner has one extra `partitionRoot` field and a `goldDir` option. There is no second runner.
+
+## Amendment (2026-11-21, [ADR-0018](0018-energy-balance.md)): gold inputs
+
+A gold table can read another gold table. A `GoldInput` sets `layer: "gold"`, with `versionColumn: "inputs_sha256"` and `completenessDataset: null`. The fingerprint reads that table's version from `goldDir`, and `PublisherDataset.wantedVersions` gets `goldDir` as a third argument. The upstream `inputs_sha256` already holds its own input statuses and `ANALYSIS_VERSION`, so a change upstream rebuilds the chain. The reading table must come after its inputs in the registry.
