@@ -154,6 +154,69 @@ Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/Generation/Genera
 | Revisions | Section 2. Earlier months get re-stamped: `202609` was rewritten 17 Nov, a week after `202610` appeared. Bulk rewrites: 28 Jul 2024 (2024-01 to 06), 16 Dec 2024 (2024-08 to 11), 18 Sep 2025 (2025-07, 08). |
 | Size | About 0.7-0.9 MB per month now. |
 
+#### Known gaps (measured 2026-11-21)
+
+Source: read-only investigation of 2025-11-20 to 2026-10-31. Each claim is marked **measured** or **inferred**. We do not estimate the missing energy.
+
+**Embedded-POC rule.** Generation_MD meters a station at its embedded NSP's point of connection (POC). RTD dispatches it at the parent grid POC.
+
+- **Waipori (measured).** NSP `WPG0331` (WAIPORI GENERATION) is embedded under `HWB0331`. Generation_MD `WPG0331` "waipori" reports 124.1 GWh. RTD at `HWB0331` reports 108.8 GWh (`MAH0` Mahinerangi 94.4 + `WPI0` Deep Stream 14.4). Period correlation with `MAH0` is 0.995.
+- **Waipori fuel label (inferred).** Generation_MD labels it Hydro. `MAH0` Mahinerangi is wind (36 MW). About 94 GWh of wind sits in the hydro label. This comes from the correlation, not from a source statement.
+- **Island totals (measured).** Both POCs are in the South Island (SI), so island totals are not affected.
+- **Waipori at `BWK1101` (measured).** Generation_MD `BWK1101` "waipori" reports 107.1 GWh. RTD `WPI0` at `BWK1101` reports 105.5 GWh. These match.
+- **Verdict (measured and inferred).** This is a definition difference between the two files. It is not a mapping error in our tables.
+
+**Matahina `MAT1101` (measured unless marked).**
+
+- The fleet file has `MAT0` Matahina (80 MW hydro) and `ANI0` Aniwhenua (25 MW) at `MAT1101`.
+- Generation_MD has only Aniwhenua (BOPD) at `MAT1101`: 139.9 GWh. RTD `ANI0` is 134.6 GWh. Correlation is 0.984. Adding `MAT0` drops the correlation to 0.17.
+- No Matahina row appears in any of the 12 months of silver data.
+- RTD `MAT0` is about 285 GWh in the window.
+- Historical Generation_MD files 202001 and 202109 have a `MAT,MAT1101,TRUS,matahina,Hydro` row. Files 202112 and 202309 have none.
+- Fleet ownership of `MAT0` changed from TRUS to CNIR on 2021-10-01.
+- Omission started about October 2021. The cause is not documented by EMI that we found. File 202110 was not fetched, so the exact month is inferred.
+
+**Ngawha `KOE1101` (measured unless marked).**
+
+- Generation_MD "ngawha" reports 420.6 GWh. RTD `NGB0` reports 221.2 GWh.
+- **Inferred:** Generation_MD includes generation that was not dispatched. This comes from the volume difference.
+- Twin Rivers solar `TRS0` (about 29 GWh in RTD) has no Generation_MD row.
+- Pukenui is in Generation_MD only from 2026-04.
+
+**Maraetai `MTI2201` (measured).** Generation_MD reports 830 GWh. RTD reports 911 GWh. RTD is higher in every month, by 5% to 25%. The cause is unknown and unresolved.
+
+**Absent from Generation_MD (measured).**
+
+- Glenbrook-Ohurua battery `GLB0`: RTD 23.2 GWh.
+- Huntly Battery `HLY11`: RTD 5.5 GWh.
+- Taiohi Solar `TOH0` at `HLY0331`: RTD 38.3 GWh.
+- Kumara `KUM0661`: RTD 22.9 GWh.
+
+**Zero-filled in Generation_MD (measured).**
+
+- Kowhai Park Solar at `ISL0661` from 2026-08-01: RTD 27.7 GWh.
+- Kaiwaikawe wind `MPE1101`: RTD 23.9 GWh.
+- Clandeboye solar `TMK0331`: RTD 10.6 GWh.
+- Whitianga solar `KPU0661`: RTD 41.1 GWh.
+
+**Not absent (measured or inferred).** An earlier ADR note said these were absent. That note was wrong.
+
+- Huntly 6 is probably Generation_MD `huntly_p40` (inferred). It reports 37.2 GWh. RTD reports 41.0 GWh.
+- Glenbrook Steel is probably `glenbrook_kilns` at `GLN0332` (inferred). It reports 421 GWh. RTD reports 275 GWh.
+
+**Other POCs with partial or zero reporting (measured, not investigated further).** RTD exceeds Generation_MD by more than 20 GWh at these POCs:
+
+- `KAW0112` +98 GWh
+- `STK0661` +92 GWh
+- `MHO0331` +76 GWh
+- `HWA1102` +65 GWh
+- `TAB0331` +45 GWh
+- `ISL0661`, `MPE1101`, `KUM0661` (see above)
+
+**Calibration (measured, cause unconfirmed).** Generation_MD is about 4% to 5% above RTD at large fully metered stations. Example: Manapouri 4,964 GWh in Generation_MD and 4,741 GWh in RTD. Window totals are Generation_MD 39,243 GWh and RTD 37,866 GWh, even with the omissions above. This is a metered-versus-dispatch difference. It is a larger term in the #23 residual than any single omission.
+
+**Effect on gold generation (inferred from the above).** Gold generation by fuel under-counts these plants. It also carries the Waipori wind in the hydro label. We do not estimate the missing energy.
+
 ### 3.6 Mappings and Geospatial
 
 Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/MappingsAndGeospatial), [new hub](https://www.ea.govt.nz/data-and-insights/datasets/wholesale/mapping-and-geospatial/).
