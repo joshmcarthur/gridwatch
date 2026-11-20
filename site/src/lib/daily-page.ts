@@ -168,7 +168,7 @@ function generationHeadline(day: HeadlineSource): string {
   const battery = energyFormat.format(totals.battery_megawatt_hours);
   const intro =
     day.generation.state === "incomplete"
-      ? `The generation numbers we do have say power stations made about ${made} megawatt-hours of electricity.`
+      ? `Incomplete generation numbers say power stations made about ${made} megawatt-hours of electricity.`
       : `Power stations made about ${made} megawatt-hours of electricity.`;
   return `${intro} A megawatt-hour is 1,000 kilowatt-hours, the same kWh unit as the line on a power bill. Batteries moved another ${battery} megawatt-hours, charging and discharging rather than making new power.`;
 }
@@ -178,7 +178,7 @@ function pricesHeadline(day: HeadlineSource): string {
     (node) => node.daily.mean_price !== null,
   );
   if (day.prices.state === "missing" || means.length === 0) {
-    return "We do not have wholesale prices for this day.";
+    return "Wholesale prices for this day are missing.";
   }
   const parts = means.map((node) => {
     const region = regionLabel(node.price_region);
@@ -188,7 +188,7 @@ function pricesHeadline(day: HeadlineSource): string {
   const list = joinAnd(parts);
   const prefix =
     day.prices.state === "incomplete"
-      ? "The wholesale prices we do have"
+      ? "Incomplete wholesale prices"
       : "Wholesale prices";
   return `${prefix} (what generators and retailers paid each other, not the rate on a household bill) averaged ${list}. New Zealand's electricity system runs as two islands joined by a cable; those three substations are sample points, not your house.`;
 }
