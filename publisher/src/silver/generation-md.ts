@@ -50,10 +50,21 @@ export async function publishGenerationMd(options: {
     await connection.run("SET TimeZone = 'UTC'");
 
     // Read as text, then TRY_CAST: a bad value becomes NULL and the validation counts it.
-    await connection.run(
-      `CREATE TEMP TABLE wide AS
-       SELECT * FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
-    );
+    // Name the required columns so a wrong header fails here, not later. TP* stay as a pattern.
+    try {
+      await connection.run(
+        `CREATE TEMP TABLE wide AS
+         SELECT Trading_Date, Site_Code, POC_Code, Nwk_Code, Gen_Code, Fuel_Code, Tech_Code,
+           COLUMNS('(?i)^TP[0-9]+$')
+         FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
+      );
+    } catch (error) {
+      return {
+        date,
+        status: "invalid",
+        errors: [`cannot read the file: ${(error as Error).message}`],
+      };
+    }
     const [file] = (
       await connection.runAndReadAll(
         `SELECT count(*) AS rows,

@@ -317,6 +317,22 @@ test.each([
     ],
     "1 rows have a blank site, point of connection, network or generation code",
   ],
+  [
+    "a missing column",
+    (lines: string[]) => [
+      (lines[0] as string).replace("Trading_Date", "TradingDate"),
+      ...lines.slice(1),
+    ],
+    expect.stringContaining("cannot read the file"),
+  ],
+  [
+    "a missing site code column",
+    (lines: string[]) => [
+      (lines[0] as string).replace("Site_Code", "SiteCode"),
+      ...lines.slice(1),
+    ],
+    expect.stringContaining("cannot read the file"),
+  ],
 ])(
   "marks a day with %s as invalid and writes nothing",
   async (_name, mutate, error) => {
@@ -325,7 +341,8 @@ test.each([
     await archive("202604", toCsv(mutate(lines)));
     const result = await publish("2026-04-01");
     expect(result).toMatchObject({ status: "invalid" });
-    if (result.status === "invalid") expect(result.errors).toContain(error);
+    if (result.status === "invalid")
+      expect(result.errors).toContainEqual(error);
     expect(existsSync(join(silverDir, DATASET))).toBe(false);
   },
 );

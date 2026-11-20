@@ -57,25 +57,33 @@ export async function publishClearedOffers(options: {
     // Dataset-specific casts. Read as text, then TRY_CAST: a bad value becomes NULL and
     // the validation counts it. Blank text reads as NULL, and `N/A` becomes NULL here.
     // `bad_number` marks a megawatt value that is present but is not a finite number.
-    await connection.run(
-      `CREATE TEMP TABLE offers AS
-       SELECT
-         TRY_CAST(TradingDate AS DATE) AS trading_date,
-         TRY_CAST(TradingPeriodNumber AS INTEGER) AS trading_period,
-         TRY_CAST(IntervalDateTime AS TIMESTAMPTZ) AS event_start_utc,
-         TRY_CAST(RunDateTime AS TIMESTAMPTZ) AS source_run_at,
-         nullif(CaseTypeCode, '') AS case_type,
-         nullif(CaseID, '') AS case_id,
-         nullif(ProductClass, '') AS product_class,
-         nullif(PointOfConnectionCode, '') AS point_of_connection,
-         nullif(nullif(UnitCode, 'N/A'), '') AS unit_code,
-         nullif(nullif(PlantName, 'N/A'), '') AS plant_name,
-         nullif(Island, '') AS island,
-         nullif(ParticipantCode, '') AS participant_code,
-         ${NUMBERS.map(([name, source]) => `TRY_CAST(${source} AS DOUBLE) AS ${name}`).join(", ")},
-         ${NUMBERS.map(([, source]) => `(${source} IS NOT NULL AND (TRY_CAST(${source} AS DOUBLE) IS NULL OR NOT isfinite(TRY_CAST(${source} AS DOUBLE))))`).join(" OR ")} AS bad_number
-       FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
-    );
+    try {
+      await connection.run(
+        `CREATE TEMP TABLE offers AS
+         SELECT
+           TRY_CAST(TradingDate AS DATE) AS trading_date,
+           TRY_CAST(TradingPeriodNumber AS INTEGER) AS trading_period,
+           TRY_CAST(IntervalDateTime AS TIMESTAMPTZ) AS event_start_utc,
+           TRY_CAST(RunDateTime AS TIMESTAMPTZ) AS source_run_at,
+           nullif(CaseTypeCode, '') AS case_type,
+           nullif(CaseID, '') AS case_id,
+           nullif(ProductClass, '') AS product_class,
+           nullif(PointOfConnectionCode, '') AS point_of_connection,
+           nullif(nullif(UnitCode, 'N/A'), '') AS unit_code,
+           nullif(nullif(PlantName, 'N/A'), '') AS plant_name,
+           nullif(Island, '') AS island,
+           nullif(ParticipantCode, '') AS participant_code,
+           ${NUMBERS.map(([name, source]) => `TRY_CAST(${source} AS DOUBLE) AS ${name}`).join(", ")},
+           ${NUMBERS.map(([, source]) => `(${source} IS NOT NULL AND (TRY_CAST(${source} AS DOUBLE) IS NULL OR NOT isfinite(TRY_CAST(${source} AS DOUBLE))))`).join(" OR ")} AS bad_number
+         FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
+      );
+    } catch (error) {
+      return {
+        date,
+        status: "invalid",
+        errors: [`cannot read the file: ${(error as Error).message}`],
+      };
+    }
 
     // Map each period to its UTC span with the time model.
     const spans = Array.from({ length: periods }, (_, i) => {

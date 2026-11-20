@@ -42,18 +42,26 @@ export async function publishDispatchReservePrices(options: {
 
     // Dataset-specific casts. Read as text, then TRY_CAST: a bad value becomes NULL and
     // the validation counts it.
-    await connection.run(
-      `CREATE TEMP TABLE source AS
-       SELECT
-         TRY_CAST(TradingDate AS DATE) AS trading_date,
-         TRY_CAST(TradingPeriod AS INTEGER) AS trading_period,
-         TRY_CAST(PublishDateTime AS TIMESTAMPTZ) AS source_published_at,
-         nullif(PointOfConnection, '') AS point_of_connection,
-         nullif(Island, '') AS island,
-         TRY_CAST(FIRDollarsPerMegawattHour AS DOUBLE) AS fir,
-         TRY_CAST(SIRDollarsPerMegawattHour AS DOUBLE) AS sir
-       FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
-    );
+    try {
+      await connection.run(
+        `CREATE TEMP TABLE source AS
+         SELECT
+           TRY_CAST(TradingDate AS DATE) AS trading_date,
+           TRY_CAST(TradingPeriod AS INTEGER) AS trading_period,
+           TRY_CAST(PublishDateTime AS TIMESTAMPTZ) AS source_published_at,
+           nullif(PointOfConnection, '') AS point_of_connection,
+           nullif(Island, '') AS island,
+           TRY_CAST(FIRDollarsPerMegawattHour AS DOUBLE) AS fir,
+           TRY_CAST(SIRDollarsPerMegawattHour AS DOUBLE) AS sir
+         FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
+      );
+    } catch (error) {
+      return {
+        date,
+        status: "invalid",
+        errors: [`cannot read the file: ${(error as Error).message}`],
+      };
+    }
     // Long form: one row per reserve class. The class is a value, not a column name.
     await connection.run(
       `CREATE TEMP TABLE prices AS

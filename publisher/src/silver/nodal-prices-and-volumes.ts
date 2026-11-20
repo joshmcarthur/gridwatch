@@ -54,24 +54,32 @@ export async function publishNodalPricesAndVolumes(options: {
 
     // Dataset-specific casts. Read as text, then TRY_CAST: a bad value becomes NULL and
     // the validation counts it. `N/A` and blank text become NULL.
-    await connection.run(
-      `CREATE TEMP TABLE nodal AS
-       SELECT
-         TRY_CAST(TradingDate AS DATE) AS trading_date,
-         TRY_CAST(TradingPeriodNumber AS INTEGER) AS trading_period,
-         TRY_CAST(IntervalDateTime AS TIMESTAMPTZ) AS event_start_utc,
-         TRY_CAST(RunDateTime AS TIMESTAMPTZ) AS source_run_at,
-         nullif(CaseTypeCode, '') AS case_type,
-         nullif(CaseID, '') AS case_id,
-         nullif(PointOfConnectionCode, '') AS point_of_connection,
-         nullif(nullif(UnitCode, 'N/A'), '') AS unit_code,
-         nullif(nullif(PlantName, 'N/A'), '') AS plant_name,
-         nullif(Island, '') AS island,
-         ${NUMBERS.map(([name, source]) => `TRY_CAST(${source} AS DOUBLE) AS ${name}`).join(", ")},
-         IsDeadFlag AS dead_flag,
-         IsDisconnectedFlag AS disconnected_flag
-       FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
-    );
+    try {
+      await connection.run(
+        `CREATE TEMP TABLE nodal AS
+         SELECT
+           TRY_CAST(TradingDate AS DATE) AS trading_date,
+           TRY_CAST(TradingPeriodNumber AS INTEGER) AS trading_period,
+           TRY_CAST(IntervalDateTime AS TIMESTAMPTZ) AS event_start_utc,
+           TRY_CAST(RunDateTime AS TIMESTAMPTZ) AS source_run_at,
+           nullif(CaseTypeCode, '') AS case_type,
+           nullif(CaseID, '') AS case_id,
+           nullif(PointOfConnectionCode, '') AS point_of_connection,
+           nullif(nullif(UnitCode, 'N/A'), '') AS unit_code,
+           nullif(nullif(PlantName, 'N/A'), '') AS plant_name,
+           nullif(Island, '') AS island,
+           ${NUMBERS.map(([name, source]) => `TRY_CAST(${source} AS DOUBLE) AS ${name}`).join(", ")},
+           IsDeadFlag AS dead_flag,
+           IsDisconnectedFlag AS disconnected_flag
+         FROM read_csv(${lit(bronze.path)}, header = true, all_varchar = true)`,
+      );
+    } catch (error) {
+      return {
+        date,
+        status: "invalid",
+        errors: [`cannot read the file: ${(error as Error).message}`],
+      };
+    }
 
     // Map each period to its UTC span with the time model.
     const spans = Array.from({ length: periods }, (_, i) => {
