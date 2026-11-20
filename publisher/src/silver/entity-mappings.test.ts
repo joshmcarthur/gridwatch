@@ -706,12 +706,6 @@ test("each fixture identifier resolves or is reported as unmapped", async () => 
       network_codes: ["DUNE"],
     },
     {
-      plant_id: "HLY/huntly_1_4",
-      fuel_category: "coal",
-      points_of_connection: ["HLY2201"],
-      network_codes: ["GENE"],
-    },
-    {
       plant_id: "KIW/kaiwera_downs_(stage_2)",
       fuel_category: "wind",
       points_of_connection: ["KIW2201"],
@@ -723,7 +717,7 @@ test("each fixture identifier resolves or is reported as unmapped", async () => 
     await query(
       `SELECT count(*) AS n FROM ${table("entity_plants", "2026-09-27")}`,
     ),
-  ).toEqual([{ n: "7" }]);
+  ).toEqual([{ n: "6" }]);
   // Generation_MD POCs and network codes: each resolves or is reported.
   const md = "'$S/generation_md/trading_date=2026-09-27/data.parquet'";
   const [mdIds] = await query(
@@ -873,15 +867,12 @@ test("a unit links to a plant only when the POC has one plant and the fuel agree
     ["ONE", "ONE1101", "NET1", "solo", "HYD"],
     ["TWO", "TWO1101", "NET1", "first", "Hydro"],
     ["TWO", "TWO1101", "NET1", "second", "Hydro"],
-    ["HLY", "HLY2201", "GENE", "huntly_1_4", "Coal"],
     ["BAT", "BAT0331", "NET1", "big_battery", "ELE"],
   ]);
   await writeFleet("2026-11-01", [
     fleetRow("ONE1101", "SOL0", "HYD"), // one plant, same category: linked
     fleetRow("ONE1101", "GAS0", "GAS"), // one plant, category differs: not linked
     fleetRow("TWO1101", "TWO0", "HYD"), // two plants: not linked
-    fleetRow("HLY2201", "HLY1", "CLG"), // Huntly coal and gas units link to the Coal plant
-    fleetRow("HLY2201", "HLY4", "CLG"),
     fleetRow("BAT0331", "BAT0", "ELE"), // battery links to battery
     fleetRow("NON1101", "NON0", "HYD"), // POC not in Generation_MD: not linked
   ]);
@@ -895,16 +886,6 @@ test("a unit links to a plant only when the POC has one plant and the fuel agree
       unit_id: "BAT0331:BAT0",
       plant_id: "BAT/big_battery",
       fuel_category: "battery",
-    },
-    {
-      unit_id: "HLY2201:HLY1",
-      plant_id: "HLY/huntly_1_4",
-      fuel_category: "coal",
-    },
-    {
-      unit_id: "HLY2201:HLY4",
-      plant_id: "HLY/huntly_1_4",
-      fuel_category: "coal",
     },
     { unit_id: "NON1101:NON0", plant_id: null, fuel_category: "hydro" },
     { unit_id: "ONE1101:GAS0", plant_id: null, fuel_category: "gas" },
@@ -942,4 +923,48 @@ test("inputs_sha256 is the same on every table and changes with an input version
   const changed = await build("2026-11-18");
   if (changed.status !== "complete") throw new Error("expected complete");
   expect(changed.inputsSha256).not.toBe(first.inputsSha256);
+});
+
+test("the real Huntly Coal row links to the CLG units of the fleet", async () => {
+  await archive(
+    "network_supply_points",
+    "network-supply-points",
+    "20260106_NetworkSupplyPointsTable.csv",
+    ["2026-01-06"],
+  );
+  await archive("generation_md", "generation-md", "202604_Generation_MD.csv", [
+    "2026-04-01",
+  ]);
+  const args = { bronzeDir, silverDir };
+  await publishNetworkSupplyPoints({ ...args, date: "2026-01-06" });
+  expect(
+    await publishGenerationMd({ ...args, date: "2026-04-01" }),
+  ).toMatchObject({ status: "complete" });
+  // The fleet has the Huntly Rankine units under the code CLG.
+  await writeFleet("2026-04-01", [
+    fleetRow("HLY2201", "HLY1", "CLG"),
+    fleetRow("HLY2201", "HLY4", "CLG"),
+  ]);
+  await build("2026-04-01");
+  expect(
+    await query(
+      `SELECT plant_id, fuel_category FROM ${table("entity_plants", "2026-04-01")} WHERE site_id = 'HLY'`,
+    ),
+  ).toEqual([{ plant_id: "HLY/huntly_1_4", fuel_category: "coal" }]);
+  expect(
+    await query(
+      `SELECT unit_id, plant_id, fuel_category FROM ${table("entity_units", "2026-04-01")} ORDER BY unit_id`,
+    ),
+  ).toEqual([
+    {
+      unit_id: "HLY2201:HLY1",
+      plant_id: "HLY/huntly_1_4",
+      fuel_category: "coal",
+    },
+    {
+      unit_id: "HLY2201:HLY4",
+      plant_id: "HLY/huntly_1_4",
+      fuel_category: "coal",
+    },
+  ]);
 });

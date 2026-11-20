@@ -108,8 +108,8 @@ test("publishes a normal 48-period day: long rows, UTC times, provenance, source
   const lines = await linesOf("202604");
   const { sha256, name } = await archive("202604", toCsv(lines));
   const result = await publish("2026-04-01");
-  // 6 units, 48 periods. TP49 and TP50 are blank.
-  expect(result).toMatchObject({ status: "complete", rows: 288 });
+  // 7 units, 48 periods. TP49 and TP50 are blank.
+  expect(result).toMatchObject({ status: "complete", rows: 336 });
   if (result.status !== "complete") return;
   expect(result.path).toBe(
     join(silverDir, DATASET, "trading_date=2026-04-01", "data.parquet"),
@@ -135,7 +135,7 @@ test("publishes a normal 48-period day: long rows, UTC times, provenance, source
     sha: sha256,
     retrieved: "2026-11-20T00:00:01Z",
     // Both code vocabularies stay as the source wrote them.
-    codes: "ELE/BAT HYD/HYD Hydro/Hydro Solar/Solar WIN/ONW",
+    codes: "Coal/Thrml ELE/BAT HYD/HYD Hydro/Hydro Solar/Solar WIN/ONW",
   });
 });
 
@@ -158,7 +158,7 @@ test("publishes the 46-period DST-start day", async () => {
   const lines = await linesOf("202609");
   await archive("202609", toCsv(lines));
   const result = await publish("2026-09-27");
-  expect(result).toMatchObject({ status: "complete", rows: 368 });
+  expect(result).toMatchObject({ status: "complete", rows: 322 });
   if (result.status !== "complete") return;
   const [row] = await query(result.path, SPAN_SQL);
   expect(row).toEqual({
@@ -176,7 +176,7 @@ test("each day of one monthly file gets its own partition", async () => {
   if (a.status !== "complete" || b.status !== "complete")
     throw new Error("expected ok");
   expect(a.path).not.toBe(b.path);
-  expect(a.rows).toBe(384);
+  expect(a.rows).toBe(336);
 });
 
 test("publishing the same day again gives identical bytes", async () => {
@@ -193,7 +193,7 @@ test("accepts the lower-case date header of older files", async () => {
   await archive("202604", csv);
   expect(await publish("2026-04-01")).toMatchObject({
     status: "complete",
-    rows: 288,
+    rows: 336,
   });
 });
 
@@ -205,7 +205,7 @@ test("publishes a day with a period blank for every unit as partial", async () =
   const result = await publish("2026-04-01");
   expect(result).toMatchObject({
     status: "partial",
-    rows: 288 - 6,
+    rows: 336 - 7,
     missingPeriods: [5],
   });
   if (result.status !== "partial") return;
