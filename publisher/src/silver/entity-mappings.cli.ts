@@ -13,7 +13,7 @@ let missing = 0;
 for (const date of eachDate(from, to)) {
   const result = await publishEntityMappings({ silverDir: silver, date });
   if (result.status === "complete") {
-    const r = result.rows;
+    const r = result.tables;
     console.log(
       `${date}: ${r.entity_points_of_connection} POCs, ${r.entity_plants} plants, ${r.entity_units} units, ${r.entity_unmapped} unmapped`,
     );

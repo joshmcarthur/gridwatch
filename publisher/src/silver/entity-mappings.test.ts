@@ -19,6 +19,7 @@ import { publishGenerationMd } from "./generation-md.ts";
 import { publishNetworkSupplyPoints } from "./network-supply-points.ts";
 import { publishNodalPricesAndVolumes } from "./nodal-prices-and-volumes.ts";
 
+const FIXTURES = join(import.meta.dirname, "fixtures");
 let root: string;
 let bronzeDir: string;
 let silverDir: string;
@@ -49,9 +50,13 @@ const table = (name: string, date: string) =>
 async function silver(
   dataset: string,
   partition: string,
-  schema: Record<string, string>,
-  rows: unknown[][],
+  base: Record<string, string>,
+  baseRows: unknown[][],
+  sha = `sha:${dataset}/${partition}`,
 ) {
+  // Every silver table has `bronze_sha256`. The tests give each partition its own value.
+  const schema: Record<string, string> = { ...base, bronze_sha256: "VARCHAR" };
+  const rows = baseRows.map((row) => [...row, sha]);
   const names = Object.keys(schema);
   const literal = (value: unknown) =>
     value === null ? "NULL" : `'${String(value)}'`;
@@ -120,19 +125,87 @@ const DISPATCH_SCHEMA = {
   point_of_connection: "VARCHAR",
   island: "VARCHAR",
 };
-const writeDispatch = (date: string, rows: Array<[string, string | null]>) =>
+const writeDispatch = (
+  date: string,
+  rows: Array<[string, string | null]>,
+  sha?: string,
+) =>
   silver(
     "dispatch_energy_prices",
     `trading_date=${date}`,
     DISPATCH_SCHEMA,
     rows.map(([poc, island]) => [date, poc, island]),
+    sha,
+  );
+
+const FLEET_SCHEMA = {
+  plant_name: "VARCHAR",
+  point_of_connection: "VARCHAR",
+  unit_code: "VARCHAR",
+  technology_code: "VARCHAR",
+  fuel_code: "VARCHAR",
+  plant_operator_code: "VARCHAR",
+  plant_operator: "VARCHAR",
+  nameplate_megawatts: "DOUBLE",
+  date_commissioned: "DATE",
+  date_decommissioned: "DATE",
+  effective_start_date: "DATE",
+  effective_end_date: "DATE",
+};
+const fleetRow = (
+  poc: string,
+  unit: string,
+  fuel: string,
+  start = "1900-01-01",
+  end = "2099-12-31",
+) => [
+  `${unit} plant`,
+  poc,
+  unit,
+  "TEC",
+  fuel,
+  "OPR1",
+  "Operator One",
+  10,
+  null,
+  null,
+  start,
+  end,
+];
+const writeFleet = (snapshot: string, rows: unknown[][]) =>
+  silver("generation_fleet", `snapshot_date=${snapshot}`, FLEET_SCHEMA, rows);
+
+const GMD_SCHEMA = {
+  trading_date: "DATE",
+  site_code: "VARCHAR",
+  point_of_connection: "VARCHAR",
+  network_code: "VARCHAR",
+  gen_code: "VARCHAR",
+  fuel_code: "VARCHAR",
+  tech_code: "VARCHAR",
+};
+/** Generation_MD unit rows: `[site, poc, network, gen_code, fuel_code]`. */
+const writeGmd = (date: string, rows: string[][]) =>
+  silver(
+    "generation_md",
+    `trading_date=${date}`,
+    GMD_SCHEMA,
+    rows.map(([site, poc, nwk, gen, fuel]) => [
+      date,
+      site,
+      poc,
+      nwk,
+      gen,
+      fuel,
+      "TEC",
+    ]),
   );
 
 const build = (date: string) => publishEntityMappings({ silverDir, date });
 
 test("a POC missing from the NSP table takes its island from the price files", async () => {
   await writeNsp("2026-11-01", [nsp("ABC1101", "NI", "2020-01-01", null)]);
-  // Blank on 17 Nov: the value of another day fills it.
+  // Blank on 17 Nov: the value of another day up to the mapping day fills it.
   await writeDispatch("2026-11-17", [
     ["BEN2201", null],
     ["ABC1101", "NI"],
@@ -143,10 +216,10 @@ test("a POC missing from the NSP table takes its island from the price files", a
   ]);
   await writeDispatch("2026-11-19", [["BEN2201", "SI"]]);
 
-  expect(await build("2026-11-17")).toMatchObject({ status: "complete" });
+  expect(await build("2026-11-18")).toMatchObject({ status: "complete" });
   const pocs = await query(
     `SELECT poc_id, site_id, island, island_source, nsp_row_status, region_id, latitude
-     FROM ${table("entity_points_of_connection", "2026-11-17")} ORDER BY poc_id`,
+     FROM ${table("entity_points_of_connection", "2026-11-18")} ORDER BY poc_id`,
   );
   expect(pocs).toEqual([
     {
@@ -171,9 +244,18 @@ test("a POC missing from the NSP table takes its island from the price files", a
   // BEN2201 is mapped, so it is not in the report.
   expect(
     await query(
-      `SELECT * FROM ${table("entity_unmapped", "2026-11-17")} WHERE dataset = 'dispatch_energy_prices'`,
+      `SELECT * FROM ${table("entity_unmapped", "2026-11-18")} WHERE dataset = 'dispatch_energy_prices'`,
     ),
   ).toEqual([]);
+
+  // Only days up to the mapping day count. BEN2201 is blank on 17 Nov, so it has no island
+  // on that day and the report lists it.
+  await build("2026-11-17");
+  expect(
+    await query(
+      `SELECT source_id FROM ${table("entity_unmapped", "2026-11-17")} WHERE dataset = 'dispatch_energy_prices'`,
+    ),
+  ).toEqual([{ source_id: "BEN2201" }]);
 });
 
 test("a POC with two islands in the price files fails the build", async () => {
@@ -272,13 +354,20 @@ test("a POC with two islands in the NSP rows fails the build", async () => {
   });
 });
 
-test("every fuel code that has a map line gives a Gridwatch category", () => {
+test("every fuel code in the fixtures has a map line", async () => {
   for (const category of Object.values(FUEL_MAP))
     expect(FUEL_CATEGORIES).toContain(category);
-  // The codes seen on live data on 2026-11-20, both vocabularies.
-  const live =
-    "Hydro HYD Wind WIN Geo GEO Solar SOL Gas GAS Diesel DSL Wood ELE CLG";
-  for (const code of live.split(" ")) expect(FUEL_MAP).toHaveProperty(code);
+  const rows = await query(
+    `SELECT DISTINCT Fuel_Code AS code FROM read_csv('${FIXTURES}/generation-md/*.csv', header = true, all_varchar = true)
+     UNION SELECT DISTINCT FuelCode FROM read_csv('${FIXTURES}/generation-fleet/*.csv', header = true, all_varchar = true)
+     ORDER BY 1`,
+  );
+  const codes = rows.map((r) => String(r.code));
+  // The fixtures hold the long and short vocabularies, and Coal.
+  expect(codes).toEqual(
+    expect.arrayContaining(["Hydro", "HYD", "ELE", "Coal"]),
+  );
+  for (const code of codes) expect(FUEL_MAP).toHaveProperty(code);
 });
 
 test("an unknown fuel code, network code, POC and unit are reported, not dropped", async () => {
@@ -443,8 +532,6 @@ test("an unknown fuel code, network code, POC and unit are reported, not dropped
 
 // --- Fixture test: every identifier in the real fixtures resolves or is reported ---
 
-const FIXTURES = join(import.meta.dirname, "fixtures");
-
 async function archive(
   dataset: string,
   folder: string,
@@ -585,15 +672,274 @@ test("each fixture identifier resolves or is reported as unmapped", async () => 
   ).toEqual([]);
   expect(
     await query(
-      `SELECT plant_id, fuel_category FROM ${table("entity_plants", "2026-09-27")} ORDER BY plant_id, network_code`,
+      `SELECT plant_id, fuel_category, points_of_connection, network_codes FROM ${table("entity_plants", "2026-09-27")} ORDER BY plant_id`,
     ),
   ).toEqual([
-    { plant_id: "ARA/aratiatia", fuel_category: "hydro" },
-    { plant_id: "ASB/highbank", fuel_category: "hydro" },
-    { plant_id: "ASB/lauriston", fuel_category: "solar" },
-    { plant_id: "BRB/ruakākā_energy_park", fuel_category: "other" },
-    { plant_id: "BRB/ruakākā_energy_park", fuel_category: "other" },
-    { plant_id: "CML/roaring_meg", fuel_category: "hydro" },
-    { plant_id: "KIW/kaiwera_downs_(stage_2)", fuel_category: "wind" },
+    {
+      plant_id: "ARA/aratiatia",
+      fuel_category: "hydro",
+      points_of_connection: ["ARA2201"],
+      network_codes: ["MRPL"],
+    },
+    {
+      plant_id: "ASB/highbank",
+      fuel_category: "hydro",
+      points_of_connection: ["ASB0661"],
+      network_codes: ["EASH"],
+    },
+    {
+      plant_id: "ASB/lauriston",
+      fuel_category: "solar",
+      points_of_connection: ["ASB0661"],
+      network_codes: ["EASH"],
+    },
+    {
+      plant_id: "BRB/ruakākā_energy_park",
+      fuel_category: "battery",
+      points_of_connection: ["BRB0331"],
+      network_codes: ["MERI", "NPOW"],
+    },
+    {
+      plant_id: "CML/roaring_meg",
+      fuel_category: "hydro",
+      points_of_connection: ["CML0331"],
+      network_codes: ["DUNE"],
+    },
+    {
+      plant_id: "HLY/huntly_1_4",
+      fuel_category: "coal",
+      points_of_connection: ["HLY2201"],
+      network_codes: ["GENE"],
+    },
+    {
+      plant_id: "KIW/kaiwera_downs_(stage_2)",
+      fuel_category: "wind",
+      points_of_connection: ["KIW2201"],
+      network_codes: ["MRPL"],
+    },
   ]);
+  // Plant IDs are unique, and every Generation_MD unit key maps to a plant by the formula.
+  expect(
+    await query(
+      `SELECT count(*) AS n FROM ${table("entity_plants", "2026-09-27")}`,
+    ),
+  ).toEqual([{ n: "7" }]);
+  // Generation_MD POCs and network codes: each resolves or is reported.
+  const md = "'$S/generation_md/trading_date=2026-09-27/data.parquet'";
+  const [mdIds] = await query(
+    `SELECT
+       (SELECT count(DISTINCT point_of_connection) FROM ${md}) AS pocs,
+       (SELECT count(DISTINCT point_of_connection) FROM ${md} WHERE point_of_connection IN (SELECT poc_id FROM ${table("entity_points_of_connection", "2026-09-27")})) AS pocs_mapped,
+       (SELECT count(*) FROM ${table("entity_unmapped", "2026-09-27")} WHERE dataset = 'generation_md' AND id_type = 'point_of_connection') AS pocs_unmapped,
+       (SELECT count(DISTINCT network_code) FROM ${md}) AS networks,
+       (SELECT count(DISTINCT network_code) FROM ${md} WHERE network_code IN (SELECT participant_id FROM ${table("entity_participants", "2026-09-27")})) AS networks_mapped,
+       (SELECT count(*) FROM ${table("entity_unmapped", "2026-09-27")} WHERE dataset = 'generation_md' AND id_type = 'network_code') AS networks_unmapped`,
+  );
+  expect(Number(mdIds?.pocs)).toBeGreaterThan(0);
+  expect(Number(mdIds?.pocs_mapped) + Number(mdIds?.pocs_unmapped)).toBe(
+    Number(mdIds?.pocs),
+  );
+  expect(
+    Number(mdIds?.networks_mapped) + Number(mdIds?.networks_unmapped),
+  ).toBe(Number(mdIds?.networks));
+});
+
+// --- Rules that ADR-0005 and ADR-0008 require ---
+
+const allTables = (date: string) =>
+  TABLES.map((name) =>
+    join(silverDir, name, `trading_date=${date}`, "data.parquet"),
+  );
+
+test("publishing the same day again gives identical bytes", async () => {
+  await writeNsp("2026-11-01", [nsp("ABC1101", "NI", "2020-01-01", null)]);
+  await writeDispatch("2026-11-18", [["BEN2201", "SI"]]);
+  await writeGmd("2026-11-18", [["ABC", "ABC1101", "NET1", "alpha", "Hydro"]]);
+  await build("2026-11-18");
+  const read = () =>
+    Promise.all(allTables("2026-11-18").map((f) => readFile(f)));
+  const first = await read();
+  await build("2026-11-18");
+  const second = await read();
+  expect(second.map((b) => b.toString("hex"))).toEqual(
+    first.map((b) => b.toString("hex")),
+  );
+});
+
+test("an invalid day writes nothing and keeps the older partition", async () => {
+  await writeNsp("2026-11-01", [nsp("ABC1101", "NI", "2020-01-01", null)]);
+  await writeDispatch("2026-11-17", [["BEN2201", "SI"]]);
+  await build("2026-11-17");
+  const older = allTables("2026-11-17")[0] as string;
+  const before = await readFile(older);
+  await writeDispatch("2026-11-18", [["BEN2201", "NI"]]);
+  expect(await build("2026-11-18")).toMatchObject({ status: "invalid" });
+  for (const file of allTables("2026-11-18"))
+    await expect(readFile(file)).rejects.toThrow();
+  expect(await readFile(older)).toEqual(before);
+});
+
+test("a dispatch island must be NI, SI or blank", async () => {
+  await writeNsp("2026-11-01", [nsp("ABC1101", "NI", "2020-01-01", null)]);
+  await writeDispatch("2026-11-18", [["BEN2201", "North"]]);
+  expect(await build("2026-11-18")).toEqual({
+    date: "2026-11-18",
+    status: "invalid",
+    errors: [
+      "BEN2201 has the island North in the dispatch price files (not NI or SI)",
+    ],
+  });
+});
+
+test("an NSP island and a price island must agree", async () => {
+  await writeNsp("2026-11-01", [nsp("ABC1101", "NI", "2020-01-01", null)]);
+  await writeDispatch("2026-11-18", [["ABC1101", "SI"]]);
+  expect(await build("2026-11-18")).toEqual({
+    date: "2026-11-18",
+    status: "invalid",
+    errors: [
+      "ABC1101 has the island NI in the NSP table and SI in the dispatch price files",
+    ],
+  });
+});
+
+test("a region ID with two names fails the build", async () => {
+  await writeNsp("2026-11-01", [
+    nsp("AAA1101", "NI", "2020-01-01", null, [1, "One"]),
+    otherNsp(nsp("BBB1101", "NI", "2020-01-01", null, [1, "Uno"])),
+  ]);
+  expect(await build("2026-11-18")).toMatchObject({
+    status: "invalid",
+    errors: ["region 1 has two names"],
+  });
+});
+
+test("a closed region is marked, not shown as active", async () => {
+  await writeNsp("2026-11-01", [
+    nsp("AAA1101", "NI", "2020-01-01", null, [1, "Active"]),
+    nsp("BBB1101", "SI", "2000-01-01", "2010-01-01", [2, "Gone"]),
+  ]);
+  await build("2026-11-18");
+  expect(
+    await query(
+      `SELECT region_id, has_nsp_in_force FROM ${table("entity_regions", "2026-11-18")} ORDER BY 1`,
+    ),
+  ).toEqual([
+    { region_id: 1, has_nsp_in_force: true },
+    { region_id: 2, has_nsp_in_force: false },
+  ]);
+});
+
+test("the fleet uses the newest snapshot on or before the day, else the oldest", async () => {
+  await writeNsp("2026-08-01", [nsp("AAA1101", "NI", "2020-01-01", null)]);
+  await writeFleet("2026-10-01", [fleetRow("AAA1101", "OLD0", "HYD")]);
+  await writeFleet("2026-12-01", [fleetRow("AAA1101", "NEW0", "HYD")]);
+  const units = async (date: string) => {
+    await build(date);
+    return (
+      await query(
+        `SELECT unit_id, fleet_snapshot_date::VARCHAR AS snapshot FROM ${table("entity_units", date)}`,
+      )
+    ).map((r) => `${r.unit_id} ${r.snapshot}`);
+  };
+  expect(await units("2026-11-18")).toEqual(["AAA1101:OLD0 2026-10-01"]);
+  expect(await units("2026-12-02")).toEqual(["AAA1101:NEW0 2026-12-01"]);
+  // No snapshot is as old as the day: the oldest one still applies.
+  expect(await units("2026-09-01")).toEqual(["AAA1101:OLD0 2026-10-01"]);
+});
+
+test("a fleet row ends on its end date: the end is exclusive", async () => {
+  await writeNsp("2026-08-01", [nsp("AAA1101", "NI", "2020-01-01", null)]);
+  await writeFleet("2026-10-01", [
+    fleetRow("AAA1101", "ENDS", "HYD", "1900-01-01", "2026-11-18"),
+    fleetRow("AAA1101", "NEXT", "HYD", "2026-11-18", "2099-12-31"),
+    fleetRow("AAA1101", "LATE", "HYD", "1900-01-01", "2026-11-19"),
+  ]);
+  const units = async (date: string) => {
+    await build(date);
+    return (
+      await query(
+        `SELECT unit_id FROM ${table("entity_units", date)} ORDER BY 1`,
+      )
+    ).map((r) => r.unit_id);
+  };
+  expect(await units("2026-11-17")).toEqual(["AAA1101:ENDS", "AAA1101:LATE"]);
+  expect(await units("2026-11-18")).toEqual(["AAA1101:LATE", "AAA1101:NEXT"]);
+});
+
+test("a unit links to a plant only when the POC has one plant and the fuel agrees", async () => {
+  await writeNsp("2026-11-01", [nsp("AAA1101", "NI", "2020-01-01", null)]);
+  await writeGmd("2026-11-18", [
+    ["ONE", "ONE1101", "NET1", "solo", "HYD"],
+    ["TWO", "TWO1101", "NET1", "first", "Hydro"],
+    ["TWO", "TWO1101", "NET1", "second", "Hydro"],
+    ["HLY", "HLY2201", "GENE", "huntly_1_4", "Coal"],
+    ["BAT", "BAT0331", "NET1", "big_battery", "ELE"],
+  ]);
+  await writeFleet("2026-11-01", [
+    fleetRow("ONE1101", "SOL0", "HYD"), // one plant, same category: linked
+    fleetRow("ONE1101", "GAS0", "GAS"), // one plant, category differs: not linked
+    fleetRow("TWO1101", "TWO0", "HYD"), // two plants: not linked
+    fleetRow("HLY2201", "HLY1", "CLG"), // Huntly coal and gas units link to the Coal plant
+    fleetRow("HLY2201", "HLY4", "CLG"),
+    fleetRow("BAT0331", "BAT0", "ELE"), // battery links to battery
+    fleetRow("NON1101", "NON0", "HYD"), // POC not in Generation_MD: not linked
+  ]);
+  await build("2026-11-18");
+  expect(
+    await query(
+      `SELECT unit_id, plant_id, fuel_category FROM ${table("entity_units", "2026-11-18")} ORDER BY unit_id`,
+    ),
+  ).toEqual([
+    {
+      unit_id: "BAT0331:BAT0",
+      plant_id: "BAT/big_battery",
+      fuel_category: "battery",
+    },
+    {
+      unit_id: "HLY2201:HLY1",
+      plant_id: "HLY/huntly_1_4",
+      fuel_category: "coal",
+    },
+    {
+      unit_id: "HLY2201:HLY4",
+      plant_id: "HLY/huntly_1_4",
+      fuel_category: "coal",
+    },
+    { unit_id: "NON1101:NON0", plant_id: null, fuel_category: "hydro" },
+    { unit_id: "ONE1101:GAS0", plant_id: null, fuel_category: "gas" },
+    { unit_id: "ONE1101:SOL0", plant_id: "ONE/solo", fuel_category: "hydro" },
+    { unit_id: "TWO1101:TWO0", plant_id: null, fuel_category: "hydro" },
+  ]);
+});
+
+test("inputs_sha256 is the same on every table and changes with an input version", async () => {
+  await writeNsp("2026-11-01", [nsp("ABC1101", "NI", "2020-01-01", null)]);
+  await writeDispatch("2026-11-17", [["BEN2201", "SI"]], "v1");
+  await writeDispatch("2026-11-18", [["BEN2201", "SI"]], "v1");
+  await writeGmd("2026-11-19", [["ABC", "ABC1101", "NET1", "alpha", "Hydro"]]);
+  const first = await build("2026-11-18");
+  if (first.status !== "complete") throw new Error("expected complete");
+  for (const name of TABLES) {
+    const rows = await query(
+      `SELECT DISTINCT inputs_sha256 AS h FROM ${table(name, "2026-11-18")}`,
+    );
+    // An empty table has no row to carry the value.
+    if (first.tables[name] > 0)
+      expect(rows).toEqual([{ h: first.inputsSha256 }]);
+  }
+  // The same inputs give the same hash.
+  expect(await build("2026-11-18")).toMatchObject({
+    inputsSha256: first.inputsSha256,
+  });
+  // A partition after the day is not an input.
+  await writeGmd("2026-11-19", [["ABC", "ABC1101", "NET1", "other", "Hydro"]]);
+  expect(await build("2026-11-18")).toMatchObject({
+    inputsSha256: first.inputsSha256,
+  });
+  // A rewritten earlier dispatch day changes it.
+  await writeDispatch("2026-11-17", [["BEN2201", "SI"]], "v2");
+  const changed = await build("2026-11-18");
+  if (changed.status !== "complete") throw new Error("expected complete");
+  expect(changed.inputsSha256).not.toBe(first.inputsSha256);
 });
