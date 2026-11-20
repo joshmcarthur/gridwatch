@@ -1,0 +1,378 @@
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import {
+  appendFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DuckDBInstance } from "@duckdb/node-api";
+import { afterEach, beforeEach, expect, test } from "vitest";
+import { DATASET, publishClearedOffers } from "./cleared-offers.ts";
+
+const fixtures = join(import.meta.dirname, "fixtures", "cleared-offers");
+let root: string;
+let bronzeDir: string;
+let silverDir: string;
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), "gw-silver-"));
+  bronzeDir = join(root, "bronze");
+  silverDir = join(root, "silver");
+});
+afterEach(() => rm(root, { recursive: true, force: true }));
+
+/** Store `csv` in bronze the way the collector does, and add its manifest record. */
+async function archive(
+  date: string,
+  csv: string,
+  checkedAt = "2026-11-20T00:00:00.000Z",
+) {
+  const sha256 = createHash("sha256").update(csv).digest("hex");
+  const name = `${date.replaceAll("-", "")}_ClearedOffers.csv`;
+  const path = `${DATASET}/${sha256}/${name}`;
+  await mkdir(join(bronzeDir, DATASET, sha256), { recursive: true });
+  await writeFile(join(bronzeDir, path), csv);
+  const record = {
+    dataset: DATASET,
+    status: "new",
+    checked_at: checkedAt,
+    retrieved_at: "2026-11-20T00:00:01.000Z",
+    sha256,
+    path,
+    trading_dates: [date],
+  };
+  await appendFile(
+    join(bronzeDir, "manifest.jsonl"),
+    `${JSON.stringify(record)}\n`,
+  );
+  return { sha256, name };
+}
+
+const fixture = (date: string) =>
+  readFile(
+    join(fixtures, `${date.replaceAll("-", "")}_ClearedOffers.csv`),
+    "utf8",
+  );
+
+/** Replace the comma-separated field at `index` of `line`. */
+const setField = (line: string, index: number, value: string) =>
+  line
+    .split(",")
+    .map((field, i) => (i === index ? value : field))
+    .join(",");
+const PARTICIPANT = 11;
+const GENERATION = 12;
+const FIR = 13;
+
+const publish = (date: string) =>
+  publishClearedOffers({ bronzeDir, silverDir, date });
+
+async function query(file: string, sql: string) {
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    await connection.run("SET TimeZone = 'UTC'");
+    const reader = await connection.runAndReadAll(
+      sql.replace("$FILE", `'${file}'`),
+    );
+    return reader.getRowObjectsJson();
+  } finally {
+    connection.closeSync();
+  }
+}
+
+test("publishes a normal 48-period day with UTC times, null N/A fields and provenance", async () => {
+  const { sha256, name } = await archive(
+    "2026-11-18",
+    await fixture("2026-11-18"),
+  );
+  const result = await publish("2026-11-18");
+  expect(result).toMatchObject({ status: "complete", rows: 928 });
+  if (result.status !== "complete") return;
+  expect(result.path).toBe(
+    join(silverDir, DATASET, "trading_date=2026-11-18", "data.parquet"),
+  );
+  const [row] = await query(
+    result.path,
+    `SELECT count(DISTINCT trading_period) AS periods,
+            strftime(min(event_start_utc), '%Y-%m-%dT%H:%M:%SZ') AS first_start,
+            strftime(max(event_end_utc), '%Y-%m-%dT%H:%M:%SZ') AS last_end,
+            count(*) FILTER (WHERE product_class = 'Offtake' AND unit_code IS NULL AND plant_name IS NULL) AS offtake_no_unit,
+            count(*) FILTER (WHERE unit_code = 'RHO99' AND plant_name IS NULL) AS offtake_unit,
+            count(*) FILTER (WHERE product_class = 'Offtake' AND cleared_generation_megawatts IS NULL) AS offtake_no_energy,
+            count(*) FILTER (WHERE unit_code = 'PTA3' AND island IS NULL) AS no_island,
+            count(DISTINCT case_id) FILTER (WHERE event_start_utc = TIMESTAMPTZ '2026-11-17 21:40:00+00') AS cases_in_rerun_interval,
+            any_value(bronze_file_name) AS file, any_value(bronze_sha256) AS sha,
+            strftime(any_value(retrieved_at), '%Y-%m-%dT%H:%M:%SZ') AS retrieved
+     FROM read_parquet($FILE)`,
+  );
+  expect(row).toEqual({
+    periods: "48",
+    first_start: "2026-11-17T11:00:00Z",
+    last_end: "2026-11-18T11:00:00Z",
+    offtake_no_unit: "288",
+    offtake_unit: "92",
+    offtake_no_energy: "380",
+    no_island: "260",
+    cases_in_rerun_interval: "2",
+    file: name,
+    sha: sha256,
+    retrieved: "2026-11-20T00:00:01Z",
+  });
+});
+
+test("keeps plant names with macrons", async () => {
+  await archive("2026-11-18", await fixture("2026-11-18"));
+  const result = await publish("2026-11-18");
+  if (result.status !== "complete") throw new Error("expected ok");
+  const [row] = await query(
+    result.path,
+    `SELECT list(DISTINCT plant_name ORDER BY plant_name) FILTER (WHERE plant_name IS NOT NULL) AS plants,
+            count(*) FILTER (WHERE plant_name = 'Karāpiro' AND cleared_generation_megawatts IS NOT NULL) AS with_energy
+     FROM read_parquet($FILE)`,
+  );
+  expect(row).toEqual({
+    plants: ["Karāpiro", "Patea unit 3"],
+    with_energy: "288",
+  });
+});
+
+test("publishes a 46-period DST day", async () => {
+  await archive("2026-09-27", await fixture("2026-09-27"));
+  const result = await publish("2026-09-27");
+  expect(result).toMatchObject({ status: "complete", rows: 612 });
+  if (result.status !== "complete") return;
+  const [row] = await query(
+    result.path,
+    `SELECT count(DISTINCT trading_period) AS periods,
+            strftime(min(event_start_utc), '%Y-%m-%dT%H:%M:%SZ') AS first_start,
+            strftime(max(event_end_utc), '%Y-%m-%dT%H:%M:%SZ') AS last_end
+     FROM read_parquet($FILE)`,
+  );
+  expect(row).toEqual({
+    periods: "46",
+    first_start: "2026-09-26T12:00:00Z",
+    last_end: "2026-09-27T11:00:00Z",
+  });
+});
+
+test("publishes a 50-period DST-end day across the repeated hour", async () => {
+  await archive("2026-04-05", await fixture("2026-04-05"));
+  const result = await publish("2026-04-05");
+  expect(result).toMatchObject({ status: "complete", rows: 705 });
+  if (result.status !== "complete") return;
+  // Local 02:00 to 03:00 happens twice: periods 5 and 6 (NZDT), then 7 and 8 (NZST).
+  const [row] = await query(
+    result.path,
+    `SELECT count(DISTINCT trading_period) AS periods,
+            strftime(min(event_start_utc), '%Y-%m-%dT%H:%M:%SZ') AS first_start,
+            strftime(max(event_end_utc), '%Y-%m-%dT%H:%M:%SZ') AS last_end,
+            strftime(min(event_start_utc) FILTER (WHERE trading_period = 5), '%Y-%m-%dT%H:%M:%SZ') AS p5_start,
+            strftime(min(event_start_utc) FILTER (WHERE trading_period = 7), '%Y-%m-%dT%H:%M:%SZ') AS p7_start
+     FROM read_parquet($FILE)`,
+  );
+  expect(row).toEqual({
+    periods: "50",
+    first_start: "2026-04-04T11:00:00Z",
+    last_end: "2026-04-05T12:00:00Z",
+    p5_start: "2026-04-04T13:00:00Z",
+    p7_start: "2026-04-04T14:00:00Z",
+  });
+});
+
+test("publishing the same day again gives identical bytes", async () => {
+  await archive("2026-11-18", await fixture("2026-11-18"));
+  const first = await publish("2026-11-18");
+  if (first.status !== "complete") throw new Error("expected ok");
+  const before = await readFile(first.path);
+  await publish("2026-11-18");
+  expect(await readFile(first.path)).toEqual(before);
+});
+
+test("publishes a day with missing periods as partial, but not a day with missing intervals", async () => {
+  const lines = (await fixture("2026-11-18")).trimEnd().split("\n");
+  // Periods 24 and 25 are gone. Period 26 loses its first interval only.
+  const kept = lines.filter(
+    (l) =>
+      !l.startsWith("2026-11-18,24,") &&
+      !l.startsWith("2026-11-18,25,") &&
+      !l.includes("2026-11-18T12:30:00.000"),
+  );
+  await archive("2026-11-18", `${kept.join("\n")}\n`);
+  const result = await publish("2026-11-18");
+  expect(result).toMatchObject({
+    status: "partial",
+    rows: kept.length - 1,
+    missingPeriods: [24, 25],
+  });
+  if (result.status !== "partial") return;
+  const [row] = await query(
+    result.path,
+    `SELECT count(*) AS n, count(DISTINCT trading_period) AS periods,
+            count(*) FILTER (WHERE trading_period = 26) > 0 AS has_26
+     FROM read_parquet($FILE)`,
+  );
+  expect(row).toEqual({
+    n: String(kept.length - 1),
+    periods: "46",
+    has_26: true,
+  });
+});
+
+test("reports a day with no bronze file as missing", async () => {
+  expect(await publish("2026-11-18")).toEqual({
+    date: "2026-11-18",
+    status: "missing",
+  });
+});
+
+test.each([
+  [
+    "a duplicate key",
+    (lines: string[]) => [...lines, lines[1] as string],
+    "1 duplicate keys",
+  ],
+  [
+    "a duplicate key with different values",
+    (lines: string[]) => [...lines, setField(lines[1] as string, FIR, "9.9")],
+    "1 duplicate keys",
+  ],
+  [
+    "a non-numeric reserve value",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      setField(lines[1] as string, FIR, "n/a"),
+      ...lines.slice(2),
+    ],
+    "1 rows have a missing or non-numeric value",
+  ],
+  [
+    "an infinite energy value",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      setField(lines[1] as string, GENERATION, "Infinity"),
+      ...lines.slice(2),
+    ],
+    "1 rows have a missing or non-numeric value",
+  ],
+  [
+    "a blank participant",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      setField(lines[1] as string, PARTICIPANT, ""),
+      ...lines.slice(2),
+    ],
+    "1 rows have a missing or non-numeric value",
+  ],
+  [
+    "a trading period outside the day",
+    (lines: string[]) => [
+      ...lines,
+      (lines[1] as string).replace("2026-11-18,1,", "2026-11-18,49,"),
+    ],
+    "1 rows have a trading period outside 1 to 48",
+  ],
+  [
+    "an interval outside its trading period",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace("2026-11-18,1,", "2026-11-18,2,"),
+      ...lines.slice(2),
+    ],
+    "1 rows have an interval that is not on a 5-minute boundary inside its trading period",
+  ],
+  [
+    "an interval off the 5-minute boundary",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace("T00:00:00.000+", "T00:01:00.000+"),
+      ...lines.slice(2),
+    ],
+    "1 rows have an interval that is not on a 5-minute boundary inside its trading period",
+  ],
+  [
+    "an interval with a sub-second offset",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace("T00:00:00.000+", "T00:00:00.400+"),
+      ...lines.slice(2),
+    ],
+    "1 rows have an interval that is not on a 5-minute boundary inside its trading period",
+  ],
+  [
+    "an unparseable interval",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace("2026-11-18T00:00:00.000+13:00,", "soon,"),
+      ...lines.slice(2),
+    ],
+    "1 rows have a missing or non-numeric value",
+  ],
+  [
+    "an unknown product class",
+    (lines: string[]) => [
+      ...lines.slice(0, 1),
+      (lines[1] as string).replace(",Offtake,", ",Reserve,"),
+      ...lines.slice(2),
+    ],
+    "1 rows have a product class that is not Injection or Offtake",
+  ],
+  [
+    "a row for another day",
+    (lines: string[]) => [
+      ...lines,
+      (lines[1] as string).replace("2026-11-18,", "2026-11-17,"),
+    ],
+    "1 rows are not for 2026-11-18",
+  ],
+])(
+  "marks a day with %s as invalid and writes nothing",
+  async (_name, mutate, error) => {
+    const lines = (await fixture("2026-11-18")).trimEnd().split("\n");
+    await archive("2026-11-18", `${mutate(lines).join("\n")}\n`);
+    const result = await publish("2026-11-18");
+    expect(result).toMatchObject({ status: "invalid" });
+    if (result.status === "invalid") expect(result.errors).toContain(error);
+    expect(existsSync(join(silverDir, DATASET))).toBe(false);
+  },
+);
+
+test("uses the version with the newer manifest record", async () => {
+  const lines = (await fixture("2026-11-18")).trimEnd().split("\n");
+  await archive(
+    "2026-11-18",
+    `${lines.join("\n")}\n`,
+    "2026-11-19T00:00:00.000Z",
+  );
+  const newer = await archive(
+    "2026-11-18",
+    `${[lines[0], setField(lines[1] as string, FIR, "999.5"), ...lines.slice(2)].join("\n")}\n`,
+    "2026-11-20T00:00:00.000Z",
+  );
+  const result = await publish("2026-11-18");
+  if (result.status !== "complete") throw new Error("expected ok");
+  const [row] = await query(
+    result.path,
+    "SELECT any_value(bronze_sha256) AS sha, max(cleared_fir_megawatts) AS top FROM read_parquet($FILE)",
+  );
+  expect(row).toMatchObject({ sha: newer.sha256, top: 999.5 });
+});
+
+test("an invalid day leaves the older partition untouched", async () => {
+  const lines = (await fixture("2026-11-18")).trimEnd().split("\n");
+  await archive("2026-11-18", `${lines.join("\n")}\n`);
+  const first = await publish("2026-11-18");
+  if (first.status !== "complete") throw new Error("expected ok");
+  const before = await readFile(first.path);
+  await archive(
+    "2026-11-18",
+    `${[...lines, lines[1]].join("\n")}\n`,
+    "2026-11-21T00:00:00.000Z",
+  );
+  expect(await publish("2026-11-18")).toMatchObject({ status: "invalid" });
+  expect(await readFile(first.path)).toEqual(before);
+});
