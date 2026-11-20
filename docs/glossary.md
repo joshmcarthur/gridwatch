@@ -127,7 +127,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Entity.** A thing that appears in several datasets under different IDs, such as a POC, plant, unit or participant. See [ADR-0008](adr/0008-entity-model.md).
 
-**Energy-balance residual.** For an island and a period: generation plus HVDC import, minus grid load (modelled). Gold keeps it as a column and never adjusts it. It holds what the three sources do not explain: AC losses, the gap between RTD model load and metered generation, generation that Generation_MD omits, and embedded generation counted twice. See [ADR-0018](adr/0018-energy-balance.md).
+**Energy-balance residual.** For an island and a period: generation plus HVDC import, minus grid load (modelled). Gold keeps it as a column and never adjusts it. It holds what the three sources do not explain: transmission losses, generation that Generation_MD omits (for example Matahina), the same energy under two point-of-connection codes, embedded generation counted twice, and the gap between RTD model load and metered generation. See [ADR-0018](adr/0018-energy-balance.md).
 
 **`event_start_utc` and `event_end_utc`.** The UTC start (included) and end (excluded) of a trading period or dispatch interval. They are unambiguous across the daylight saving change. See [ADR-0003](adr/0003-time-column-naming.md).
 

@@ -44,16 +44,18 @@ The table has no link-loss column and no battery column. The link loss is not a 
 - The sum is over all nodal rows of the island: point of connection rows and unit rows. Unit rows carry battery and dispatchable load (for example `HLY91`, `GLB99`, `RUK99`, `RHO99`).
 - Each interval uses the latest RTD case: rows with `case_type = 'RTD'`, partitioned by `event_start_utc` (UTC, never local time, because the repeated DST hour shares local times), ordered by `source_run_at` then `case_id`, descending. The case id breaks ties, so the choice is deterministic.
 - Period load = the mean of the interval total MW over the intervals that exist, times 0.5 hours. Every trading period is 30 minutes, also on a DST day, so 0.5 is fixed. The source omits about ten intervals a day, so a period is not required to have 6. A period with no interval has null load.
-- The island is the `island` of `entity_points_of_connection`. When the point of connection is not in that table, the `Island` string of the nodal row maps `North Island` to `NI` and `South Island` to `SI`. Load that still has no island goes to neither row, and sets `inputs_complete = false` on every row of the date.
+- The island is the `island` of `entity_points_of_connection`. When the point of connection is not in that table, the `Island` string of the nodal row maps `North Island` to `NI` and `South Island` to `SI`. Load that still has no island goes to neither row, and sets `inputs_complete = false` on every row of the date. The same holds for generation with a null island.
 
 ### Residual: never adjusted
 
 The residual is a column. Gold does not adjust, clamp or spread it. These terms stay inside it:
 
-- AC transmission and distribution losses, which the load figure does not include.
+- Transmission losses. Load at grid exit points is measured at the transmission boundary, so the losses between generation and that boundary are not in the load. Distribution losses are inside the load.
 - The difference between RTD model load and metered generation.
-- Generation that Generation_MD omits and RTD dispatches (for example Kowhai Park Solar, Glenbrook Steel, Huntly Battery, Huntly 6 and the Glenbrook battery).
-- Embedded generation counted twice. Generation_MD includes embedded plants, and grid-exit load is already net of them.
+- Generation that Generation_MD omits and RTD dispatches. Known cases: Kowhai Park Solar, Glenbrook Steel, Huntly Battery, Huntly 6, the Glenbrook battery, and Matahina. RTD dispatches Matahina (`MAT0`) and Aniwhenua (`ANI0`) at `MAT1101`, and Generation_MD has only Aniwhenua there. On the 2026 backfill this one omission is about three quarters of the net North Island gap between RTD generation and Generation_MD.
+- The same energy under two point-of-connection codes. Generation_MD puts the Waipori plants at `WPG0331`, and RTD dispatches the same units (Mahinerangi `MAH0`, Deep Stream `WPI0`) at `HWB0331`. Gold sums by the point of connection of each source, so both islands' sums are right, but a point-of-connection comparison of the two sources shows a false gap. This is a mismatch of codes, not double counting.
+- Embedded generation counted twice. Generation_MD includes embedded plants, and grid-exit load is already net of them. The one clear case found is `CYD0331` (South Island, about 38 GWh over the backfill).
+- The difference between RTD model load and metered generation, which has not been separated from the terms above.
 
 ### Completeness
 
@@ -62,7 +64,8 @@ A period row is `inputs_complete` when all of these hold:
 - every upstream `generation_by_fuel_period` row of the period has `inputs_complete`, and the `hvdc_transfer_period` row has it;
 - the `_completeness` status of `nodal_prices_and_volumes` and of `entity_mappings` is `complete` for the date;
 - the period has at least one interval;
-- no load is without an island.
+- no energy is without an island: neither load with no island, nor generation (`generation_by_fuel_period`) with a null island. Such energy goes to neither row and flags every row of the date;
+- the residual is not null.
 
 A day term is a sum only when all periods have the term: `CASE WHEN count(term) = <46, 48 or 50> THEN sum(term) END`. A partial sum would give a false residual, so the day residual is built from the day terms. The day `inputs_complete` is true only when every period row of the island is true. A date with no `hvdc_transfer_period` partition is not wanted, and gold writes no row for it. HVDC_Flows has a month lag, so energy balance has the same lag.
 

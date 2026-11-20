@@ -75,7 +75,7 @@ interface Nodal {
   unit: string | null;
   island: string | null;
   load: number;
-  runAt?: string;
+  runAt?: string | null;
   caseId?: string;
   caseType?: string;
 }
@@ -200,7 +200,7 @@ async function writeScenario(s: Scenario, date = DATE) {
       trading_date: date,
       trading_period: n.period,
       event_start_utc: start(n.period, n.interval),
-      source_run_at: n.runAt ?? REFERENCE_RUN,
+      source_run_at: n.runAt === undefined ? REFERENCE_RUN : n.runAt,
       case_type: n.caseType ?? "RTD",
       case_id: n.caseId ?? `case-${n.period}-${n.interval}`,
       point_of_connection: n.poc,
@@ -336,7 +336,12 @@ test("a nodal unit row counts as load, like a battery or a dispatchable unit", a
 
 test("the latest RTD case wins for an interval, and the case id breaks a tie on run time", async () => {
   const s = base();
-  // Period 2, interval 0: an old case (10 MW) and a newer case (40 MW) -> (40 + 5 x 10) / 6 x 0.5.
+  // Period 2, interval 0: an older case (10 MW, case id "z-old") and a newer case (40 MW, case id
+  // "a-new"). The older case has the larger id, so only the run time picks the newer one:
+  // (40 + 5 x 10) / 6 x 0.5.
+  s.nodal = s.nodal.map((n) =>
+    n.period === 2 && n.interval === 0 ? { ...n, caseId: "z-old" } : n,
+  );
   s.nodal.push({
     period: 2,
     interval: 0,
@@ -345,7 +350,7 @@ test("the latest RTD case wins for an interval, and the case id breaks a tie on 
     island: "North Island",
     load: 40,
     runAt: "2026-10-30T11:31:00.000Z",
-    caseId: "new",
+    caseId: "a-new",
   });
   // Period 3, interval 0: same run time, case ids "case-3-0" and "case-3-0-b" -> the larger id (70 MW) wins.
   s.nodal.push({
@@ -380,6 +385,32 @@ test("the latest RTD case wins for an interval, and the case id breaks a tie on 
     12,
   );
   expect(num((await period("NI", 4))?.load_mwh)).toBe(5);
+});
+
+test("a case with no run time loses to a case that has one", async () => {
+  const s = base();
+  // Period 10, interval 0: the base case has no run time (id "z-null", 10 MW); the other has one
+  // (id "a-set", 40 MW) and wins: (40 + 5 x 10) / 6 x 0.5.
+  s.nodal = s.nodal.map((n) =>
+    n.period === 10 && n.interval === 0
+      ? { ...n, runAt: null, caseId: "z-null" }
+      : n,
+  );
+  s.nodal.push({
+    period: 10,
+    interval: 0,
+    poc: "AAA0331",
+    unit: null,
+    island: "North Island",
+    load: 40,
+    caseId: "a-set",
+  });
+  await writeScenario(s);
+  await publish();
+  expect(num((await period("NI", 10))?.load_mwh)).toBeCloseTo(
+    ((40 + 5 * 10) / 6) * 0.5,
+    12,
+  );
 });
 
 test("a period with 3 intervals uses the mean of the intervals times 0.5 hours", async () => {
@@ -484,6 +515,20 @@ test("energy with no island goes to neither row and flags every row of the date"
   // The 3 MW is in neither island: the loads are as in the base case.
   expect(num((await period("NI", 9))?.load_mwh)).toBe(5);
   expect(num((await period("SI", 9))?.load_mwh)).toBe(2.5);
+  const flags = await query(
+    `SELECT DISTINCT inputs_complete FROM ${gold("energy_balance_period")}
+     UNION SELECT DISTINCT inputs_complete FROM ${gold("energy_balance_day")}`,
+  );
+  expect(flags).toEqual([{ inputs_complete: false }]);
+});
+
+test("generation with a null island goes to neither row and flags every row of the date", async () => {
+  const s = base();
+  s.fuel.push({ period: 9, island: null, mwh: 3 });
+  await writeScenario(s);
+  expect(await publish()).toMatchObject({ status: "partial" });
+  expect(num((await period("NI", 9))?.generation_mwh)).toBe(6);
+  expect(num((await period("SI", 9))?.generation_mwh)).toBe(4);
   const flags = await query(
     `SELECT DISTINCT inputs_complete FROM ${gold("energy_balance_period")}
      UNION SELECT DISTINCT inputs_complete FROM ${gold("energy_balance_day")}`,

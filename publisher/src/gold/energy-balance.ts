@@ -53,6 +53,10 @@ export const INPUTS: GoldInput[] = [
   POINTS_OF_CONNECTION,
 ];
 
+/** The residual of an island: generation + HVDC import - load. Null when any term is null. */
+const RESIDUAL = "generation_mwh + hvdc_import_mwh - load_mwh";
+const PERCENT = "residual_mwh / nullif(load_mwh, 0) * 100";
+
 /**
  * Publish the energy balance of each island for one trading date (ADR-0018):
  * `<goldDir>/energy_balance_period/trading_date=<date>/data.parquet` and
@@ -187,10 +191,9 @@ export async function publishEnergyBalance(
       `CREATE TEMP TABLE balance AS
        SELECT trading_date, trading_period, event_start_utc, event_end_utc, island,
          generation_mwh, hvdc_import_mwh, load_mwh, load_intervals,
-         generation_mwh + hvdc_import_mwh - load_mwh AS residual_mwh,
+         ${RESIDUAL} AS residual_mwh,
          ${statusOk} AND ${islandsOk} AND terms_ok
-           AND generation_mwh IS NOT NULL AND hvdc_import_mwh IS NOT NULL
-           AND load_mwh IS NOT NULL AS period_complete
+           AND (${RESIDUAL}) IS NOT NULL AS period_complete
        FROM (
          SELECT DATE ${lit(date)} AS trading_date, s.trading_period, s.event_start_utc,
            s.event_end_utc, isl.island, g.generation_mwh,
@@ -228,19 +231,16 @@ export async function publishEnergyBalance(
       ).getRowObjectsJson() as Array<{ trading_period: string }>
     ).map((row) => Number(row.trading_period));
 
-    const percent = "residual_mwh / nullif(load_mwh, 0) * 100";
     const dayTerm = (column: string) =>
       `CASE WHEN count(${column}) = ${periods} THEN sum(${column}) END AS ${column}`;
     const selects: Record<(typeof TABLES)[number], string> = {
       energy_balance_period: `SELECT trading_date, trading_period, event_start_utc, event_end_utc,
           island, generation_mwh, hvdc_import_mwh, load_mwh, load_intervals, residual_mwh,
-          ${percent} AS residual_pct_of_load,
+          ${PERCENT} AS residual_pct_of_load,
           ${goldStamp(ANALYSIS_VERSION, fingerprint, "period_complete")}
         FROM balance ORDER BY trading_period, island`,
       energy_balance_day: `SELECT trading_date, island, generation_mwh, hvdc_import_mwh, load_mwh,
-          generation_mwh + hvdc_import_mwh - load_mwh AS residual_mwh,
-          (generation_mwh + hvdc_import_mwh - load_mwh) / nullif(load_mwh, 0) * 100
-            AS residual_pct_of_load,
+          ${RESIDUAL} AS residual_mwh, ${PERCENT} AS residual_pct_of_load,
           ${goldStamp(ANALYSIS_VERSION, fingerprint, "day_complete")}
         FROM (
           SELECT trading_date, island, ${dayTerm("generation_mwh")},
