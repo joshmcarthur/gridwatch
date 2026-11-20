@@ -1,0 +1,112 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { formatTradingDate, loadSiteIndex } from "../lib/site-data";
+
+const index = loadSiteIndex();
+const generationDate = index.latest_complete_sections.generation;
+const pricesDate = index.latest_complete_sections.prices;
+---
+
+<Layout
+  title="Gridwatch NZ"
+  description="An independent observatory for the New Zealand electricity market."
+>
+  <section class="intro">
+    <h1>The grid as a country, not a spreadsheet.</h1>
+    <p>
+      Gridwatch turns public market data into plain explanations of what
+      happened on the New Zealand electricity system. This is a placeholder
+      homepage. Daily pages and charts are not on this build.
+    </p>
+  </section>
+
+  <section class="card" aria-labelledby="latest-heading">
+    <h2 id="latest-heading">Latest sample data</h2>
+    <p>Each dataset states its own date. There is no single market score.</p>
+    <dl>
+      <div>
+        <dt>Generation</dt>
+        <dd>
+          {
+            generationDate
+              ? formatTradingDate(generationDate)
+              : "No complete day yet"
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>Prices</dt>
+        <dd>
+          {pricesDate ? formatTradingDate(pricesDate) : "No complete day yet"}
+        </dd>
+      </div>
+    </dl>
+  </section>
+</Layout>
+
+<style>
+  .intro {
+    max-width: var(--measure-prose);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: var(--text-display);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+
+  .intro p,
+  .card p {
+    margin: 0;
+    font-size: var(--text-body);
+    line-height: 1.55;
+    color: var(--color-ink-muted);
+  }
+
+  .card {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-width: var(--measure-prose);
+  }
+
+  h2 {
+    margin: 0;
+    font-size: var(--text-heading);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  dl {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  dl div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  dt {
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  dd {
+    margin: 0;
+    font-size: var(--text-body);
+    font-variant-numeric: tabular-nums;
+  }
+</style>
