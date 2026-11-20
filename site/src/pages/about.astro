@@ -1,0 +1,208 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+  title="What is this site?"
+  description="The Electricity Authority's market files are public, and built for market systems. This page covers how New Zealand's electricity market works, and what Gridwatch is."
+>
+  <article class="prose">
+    <h1>What is this site?</h1>
+    <p>
+      The Electricity Authority publishes the files for New Zealand's wholesale
+      electricity market, and anyone can download them. They're a slog if you
+      don't already work in the industry, because they were written for the
+      systems that run the market.
+    </p>
+    <p>
+      The Authority is the public body that sets the market's rules, and the
+      files are on a site it calls Electricity Market Information, or EMI.
+      Gridwatch reads those files and makes pages from them for anyone curious
+      about how New Zealand's energy market works.
+    </p>
+    <h2>The bill and the wholesale market</h2>
+    <p>
+      Power stations don't bill households. They offer electricity in bulk into
+      a wholesale market, and retailers buy it there. A retailer is the company
+      named on a household bill.
+    </p>
+    <p>
+      Wholesale prices are set in short slices of the day. A half-hour price, or
+      a spot price, is the wholesale number in one of those slices, not a long
+      contract, and it can move a long way from one slice to the next. A
+      household bill is a retail plan, so it doesn't normally jump the same way,
+      because most household plans don't pass every wholesale spike through.
+    </p>
+    <figure class="diagram">
+      <figcaption>From power stations to a household bill</figcaption>
+      <ol class="flow">
+        <li>
+          <strong>Power stations</strong>
+        </li>
+        <li>
+          <strong>Wholesale market</strong>
+          <span class="flow-edge">sell in bulk</span>
+        </li>
+        <li>
+          <strong>Retailer</strong>
+          <span class="flow-edge">retailers buy</span>
+        </li>
+        <li>
+          <strong>Household</strong>
+          <span class="flow-edge">household bill</span>
+        </li>
+      </ol>
+    </figure>
+    <h2>Who publishes the files, who runs the grid</h2>
+    <p>
+      EMI is the Authority's public record of the market. The files are
+      complete, though places still show up as station codes, and each kind of
+      record lives in its own file, which rarely says why a number moved.
+    </p>
+    <p>
+      Running the high-voltage network is a different job. Transpower is the
+      system operator, the organisation that keeps that network working from
+      minute to minute. The Authority sets the rules and publishes EMI,
+      Transpower runs the grid, and this site is separate from both. Gridwatch
+      reads the EMI files after the day is over.
+    </p>
+    <h2>North Island and South Island</h2>
+    <p>
+      A cable under Cook Strait carries power between the North Island and the
+      South Island. That link does not make them one market all the time. If the
+      cable can't carry enough, or one island is short of power, prices on one
+      side can pull away from the other.
+    </p>
+    <h2>Dry years and still days</h2>
+    <p>
+      New Zealand gets a lot of its electricity from hydro lakes and from wind.
+      Lakes run low in a dry year, which means other stations have to make up
+      the difference, and wholesale prices tend to rise. Wind farms produce less
+      on still days, so the market has to find the electricity somewhere else.
+      Those conditions show up in the files this site reads.
+    </p>
+    <h2>What this site looks at</h2>
+    <p>
+      Gridwatch looks at days that have already finished, so tomorrow's prices
+      aren't in these files. For an official source file, go to
+      <a href="https://www.emi.ea.govt.nz/Wholesale/Datasets">EMI</a>.
+    </p>
+    <p>
+      How the pages are built is on How we do this, and what you should and
+      shouldn't use the numbers for is on Terms.
+    </p>
+  </article>
+</Layout>
+
+<style>
+  .prose {
+    max-width: var(--measure-page);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .prose > :not(.diagram) {
+    max-width: var(--measure-prose);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: var(--text-display);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: var(--text-heading);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--text-body);
+    line-height: 1.55;
+    color: var(--color-ink-muted);
+    overflow-wrap: break-word;
+  }
+
+  .diagram {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  figcaption {
+    margin: 0;
+    font-size: var(--text-heading);
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--color-ink);
+  }
+
+  .flow {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .flow li {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    border-left: 4px solid var(--color-brand);
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .flow strong {
+    font-size: var(--text-label);
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+
+  .flow-edge {
+    font-size: var(--text-caption);
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--color-ink-muted);
+  }
+
+  @media (min-width: 36rem) {
+    .flow {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 48rem) {
+    .flow {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .flow li {
+      position: relative;
+      border-left: 0;
+      border-top: 4px solid var(--color-brand);
+    }
+
+    .flow li:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: calc(var(--space-3) / -2);
+      color: var(--color-ink-muted);
+      font-size: var(--text-heading);
+      line-height: 1;
+      transform: translate(50%, -50%);
+    }
+  }
+</style>
