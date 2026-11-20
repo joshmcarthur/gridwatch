@@ -40,7 +40,7 @@ const months = monthGroups(index);
     <a href="/">Gridwatch NZ home</a>
   </p>
 
-  <article>
+  <article class="prose">
     <header class="lede">
       <h1>{titleDate}</h1>
       {headlines.map((paragraph) => <p>{paragraph}</p>)}
@@ -71,7 +71,7 @@ const months = monthGroups(index);
               Previous day: {formatTradingDate(neighbours.previous.date)}
             </a>
           ) : (
-            <span>No earlier day on this site yet.</span>
+            <p>No earlier day on this site yet.</p>
           )
         }
         {
@@ -80,7 +80,7 @@ const months = monthGroups(index);
               Next day: {formatTradingDate(neighbours.next.date)}
             </a>
           ) : (
-            <span>No later day on this site yet.</span>
+            <p>No later day on this site yet.</p>
           )
         }
       </div>
@@ -114,13 +114,6 @@ const months = monthGroups(index);
     font-size: var(--text-label);
   }
 
-  article {
-    max-width: var(--measure-prose);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
-  }
-
   .lede,
   .notice,
   .slot,
@@ -141,13 +134,6 @@ const months = monthGroups(index);
   .notice.warn {
     outline: 2px solid var(--color-caution);
     outline-offset: -2px;
-  }
-
-  .turn span {
-    margin: 0;
-    font-size: var(--text-body);
-    line-height: 1.55;
-    color: var(--color-ink-muted);
   }
 
   .turn {
