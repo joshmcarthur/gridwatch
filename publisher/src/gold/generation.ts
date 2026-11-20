@@ -1,19 +1,16 @@
 import { existsSync } from "node:fs";
 import { DuckDBInstance } from "@duckdb/node-api";
-import {
-  lit,
-  type PublishResult,
-  writeParquetAtomically,
-} from "../silver/common.ts";
+import { lit, type PublishResult } from "../silver/common.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
 import {
   type GoldInput,
+  goldDataset,
   goldPartitionPath,
   goldStamp,
   inputFingerprint,
   inputsComplete,
   silverPartitionPath,
-  wantedFingerprints,
+  writeGoldTables,
 } from "./common.ts";
 
 /**
@@ -22,7 +19,7 @@ import {
  */
 export const ANALYSIS_VERSION = 1;
 
-/** The gold tables of this module. The runner reads the first. */
+/** The gold tables of this module. The first is the sentinel: the runner reads it and it is written last. */
 export const TABLES = [
   "generation_by_plant_period",
   "generation_by_plant_day",
@@ -42,10 +39,6 @@ const INPUTS: GoldInput[] = [
   { table: "entity_points_of_connection", versionColumn: "inputs_sha256" },
 ];
 
-/** The `inputs_sha256` that a build would write, for each date that has all its inputs. */
-export const generationWantedVersions = (silverDir: string) =>
-  wantedFingerprints(silverDir, ANALYSIS_VERSION, INPUTS);
-
 /**
  * Publish the generation gold tables for one trading date, one partition for each table in
  * `TABLES`: `<goldDir>/<table>/trading_date=<date>/data.parquet` (ADR-0010).
@@ -58,6 +51,9 @@ export const generationWantedVersions = (silverDir: string) =>
  *   Generation_MD units, and the plant row is their sum.
  * - Fuel category: from `entity_plants`. A plant that has no category, or that is not in
  *   `entity_plants`, has the category `unmapped`. No row is dropped.
+ * - Plant island: `min(island)` over the plant's rows. A plant whose units are on two islands
+ *   (not seen in the data) takes `NI` before `SI`. If some units are on an unmapped POC, the
+ *   plant takes the island of the mapped units. The fuel tables split by the unit's own island.
  * - Island: from the unit's point of connection in `entity_points_of_connection`, `NI` or `SI`.
  *   It is null when the point of connection is not mapped. The fuel tables have one row for
  *   each island value, so a national total is a sum over all rows of a fuel. A fuel table has
@@ -99,13 +95,7 @@ export async function publishGeneration(options: {
     ]);
     const stamp = goldStamp(
       ANALYSIS_VERSION,
-      await inputFingerprint(
-        connection,
-        silverDir,
-        ANALYSIS_VERSION,
-        INPUTS,
-        date,
-      ),
+      await inputFingerprint(silverDir, ANALYSIS_VERSION, INPUTS, date),
       completeness.complete,
     );
 
@@ -158,20 +148,19 @@ export async function publishGeneration(options: {
         ORDER BY fuel_category, island NULLS LAST`,
     };
 
-    let rows = 0;
-    for (const table of TABLES) {
-      const path = goldPartitionPath(goldDir, table, date);
-      await writeParquetAtomically(connection, selects[table], path);
-      if (table === TABLES[0]) {
-        const reader = await connection.runAndReadAll(
-          `SELECT count(*) AS n FROM read_parquet(${lit(path)})`,
-        );
-        rows = Number(
-          (reader.getRowObjectsJson() as Array<{ n: string }>)[0]?.n,
-        );
-      }
-    }
+    await writeGoldTables(
+      connection,
+      TABLES.map((table) => [table, selects[table]] as const),
+      goldDir,
+      date,
+    );
     const path = goldPartitionPath(goldDir, TABLES[0], date);
+    const reader = await connection.runAndReadAll(
+      `SELECT count(*) AS n FROM read_parquet(${lit(path)})`,
+    );
+    const rows = Number(
+      (reader.getRowObjectsJson() as Array<{ n: string }>)[0]?.n,
+    );
     return completeness.complete
       ? { date, status: "complete", rows, path }
       : {
@@ -185,3 +174,11 @@ export async function publishGeneration(options: {
     connection.closeSync();
   }
 }
+
+export const generation = goldDataset({
+  id: "gold_generation",
+  tables: TABLES,
+  inputs: INPUTS,
+  analysisVersion: ANALYSIS_VERSION,
+  publish: publishGeneration,
+});

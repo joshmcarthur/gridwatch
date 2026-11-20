@@ -119,16 +119,23 @@ export async function writeParquetAtomically(
   }
 }
 
+/** The partition folder name prefix of a table. It goes into SQL raw, so it is a literal union. */
+export type PartitionKey = "trading_date" | "snapshot_date";
+/** The column that holds the input version of a row. It goes into SQL raw. */
+export type VersionColumn = "bronze_sha256" | "inputs_sha256";
+
 /**
  * The value of `versionColumn` in each partition of a table, by partition date. Works for any
  * layer: `root` is the silver or gold directory. A folder without `data.parquet` is not a
- * partition (a failed first write leaves one). Every row of a partition holds one value.
+ * partition (a failed first write leaves one). Pass `only` to read one date. Every row of a
+ * partition must hold one version: more than one throws. A null version is left out.
  */
 export async function partitionVersions(
   root: string,
   table: string,
-  partitionKey: string,
-  versionColumn: string,
+  partitionKey: PartitionKey,
+  versionColumn: VersionColumn,
+  only?: string,
 ): Promise<Map<string, string>> {
   const versions = new Map<string, string>();
   const dir = join(root, table);
@@ -139,7 +146,13 @@ export async function partitionVersions(
     },
   );
   const files = folders
-    .filter((f) => f.isDirectory() && f.name.startsWith(`${partitionKey}=`))
+    .filter(
+      (f) =>
+        f.isDirectory() &&
+        (only === undefined
+          ? f.name.startsWith(`${partitionKey}=`)
+          : f.name === `${partitionKey}=${only}`),
+    )
     .map((f) => join(dir, f.name, "data.parquet"))
     .filter((file) => existsSync(file));
   if (files.length === 0) return versions;
@@ -149,13 +162,20 @@ export async function partitionVersions(
       `SELECT DISTINCT
          regexp_extract(filename, '${partitionKey}=(\\d{4}-\\d{2}-\\d{2})', 1) AS date,
          ${versionColumn} AS version
-       FROM read_parquet([${files.map(lit).join(", ")}], filename = true)`,
+       FROM read_parquet([${files.map(lit).join(", ")}], filename = true)
+       WHERE ${versionColumn} IS NOT NULL
+       ORDER BY 1, 2`,
     );
     for (const row of reader.getRowObjectsJson() as Array<{
       date: string;
       version: string;
-    }>)
+    }>) {
+      if (versions.has(row.date))
+        throw new Error(
+          `${table} ${partitionKey}=${row.date} holds more than one ${versionColumn}`,
+        );
       versions.set(row.date, row.version);
+    }
   } finally {
     connection.closeSync();
   }

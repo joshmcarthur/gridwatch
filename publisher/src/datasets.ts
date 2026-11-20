@@ -1,9 +1,10 @@
-import {
-  generationWantedVersions,
-  publishGeneration,
-} from "./gold/generation.ts";
+import { generation } from "./gold/generation.ts";
 import { publishClearedOffers } from "./silver/cleared-offers.ts";
-import type { PublishResult } from "./silver/common.ts";
+import type {
+  PartitionKey,
+  PublishResult,
+  VersionColumn,
+} from "./silver/common.ts";
 import { publishDispatchEnergyPrices } from "./silver/dispatch-energy-prices.ts";
 import { publishDispatchReservePrices } from "./silver/dispatch-reserve-prices.ts";
 import {
@@ -19,9 +20,9 @@ export interface PublisherDataset {
   /** The dataset ID. It is the same in the manifest, the bronze folder and the silver folder. */
   id: string;
   /** The partition folder is `<partitionKey>=YYYY-MM-DD`. */
-  partitionKey: "trading_date" | "snapshot_date";
-  /** `silver` (default) or `gold`. The runner reads held versions from that layer (ADR-0010). */
-  layer?: "silver" | "gold";
+  partitionKey: PartitionKey;
+  /** The directory that holds this dataset's partitions. Default: the silver directory. A gold table holds them in gold (ADR-0010). */
+  partitionRoot?(dirs: { silverDir: string; goldDir: string }): string;
   /**
    * The silver folder that holds the partitions, when it differs from `id`. The entity mappings
    * write several tables, and the runner reads the first.
@@ -31,7 +32,7 @@ export interface PublisherDataset {
    * The column that holds the input version of a silver row. Default `bronze_sha256`. A dataset
    * with no bronze file of its own uses a fingerprint of its silver inputs.
    */
-  versionColumn?: string;
+  versionColumn?: VersionColumn;
   /**
    * True when the date is complete only if every trading period is present.
    * The count is 46, 48 or 50, from `periodsInTradingDate` (ADR-0010).
@@ -104,14 +105,6 @@ export const datasets: PublisherDataset[] = [
     publish: ({ silverDir, date }) =>
       publishEntityMappings({ silverDir, date }),
   },
-  // Gold runs after silver in the same run (ADR-0010). Its tables read the silver above.
-  {
-    id: "gold_generation",
-    layer: "gold",
-    table: "generation_by_plant_period",
-    versionColumn: "inputs_sha256",
-    partitionKey: "trading_date",
-    wantedVersions: generationWantedVersions,
-    publish: publishGeneration,
-  },
+  // Gold runs after silver in the same run (ADR-0010). It reads the silver above.
+  generation,
 ];

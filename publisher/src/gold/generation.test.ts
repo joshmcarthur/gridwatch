@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import {
   appendFile,
   mkdir,
@@ -15,10 +16,15 @@ import { runPublish } from "../runner.ts";
 import { publishEntityMappings } from "../silver/entity-mappings.ts";
 import { publishGenerationMd } from "../silver/generation-md.ts";
 import { publishNetworkSupplyPoints } from "../silver/network-supply-points.ts";
-import { fingerprint, goldPartitionPath } from "./common.ts";
+import {
+  fingerprint,
+  goldPartitionPath,
+  inputsComplete,
+  writeGoldTables,
+} from "./common.ts";
 import {
   ANALYSIS_VERSION,
-  generationWantedVersions,
+  generation,
   publishGeneration,
   TABLES,
 } from "./generation.ts";
@@ -149,7 +155,9 @@ test("rows carry the analysis version, the fingerprint and the completeness flag
 }, async () => {
   await buildSilver();
   await publishGeneration({ silverDir, goldDir, date: "2026-09-26" });
-  const wanted = (await generationWantedVersions(silverDir)).get("2026-09-26");
+  const wanted = (await generation.wantedVersions?.(silverDir))?.get(
+    "2026-09-26",
+  );
   for (const table of TABLES) {
     const rows = await query(
       `SELECT DISTINCT analysis_version, inputs_sha256, inputs_complete
@@ -320,4 +328,62 @@ test("the runner builds gold, skips it when silver is unchanged and rebuilds it 
   const { rename } = await import("node:fs/promises");
   await rename(`${file}.new`, file);
   expect(await run()).toMatchObject({ published: 1, upToDate: 2 });
+});
+
+test("a NULL trading period does not hide missing periods", async () => {
+  const date = "2026-11-18";
+  await silver(
+    "generation_md",
+    date,
+    "SELECT 1 AS trading_period UNION ALL SELECT NULL",
+  );
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    const result = await inputsComplete(connection, date, [
+      join(silverDir, "generation_md", `trading_date=${date}`, "data.parquet"),
+    ]);
+    expect(result.complete).toBe(false);
+    expect(result.missingPeriods).toHaveLength(47);
+  } finally {
+    connection.closeSync();
+  }
+});
+
+test("a failure in a later table leaves the date out of date and writes nothing", async () => {
+  const date = "2026-11-18";
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    await expect(
+      writeGoldTables(
+        connection,
+        [
+          ["generation_by_plant_period", "SELECT 1 AS x"],
+          ["generation_by_plant_day", "SELECT * FROM no_such_table"],
+        ],
+        goldDir,
+        date,
+      ),
+    ).rejects.toThrow();
+    for (const table of [
+      "generation_by_plant_period",
+      "generation_by_plant_day",
+    ])
+      expect(existsSync(goldPartitionPath(goldDir, table, date))).toBe(false);
+    await writeGoldTables(
+      connection,
+      [
+        ["generation_by_plant_period", "SELECT 1 AS x"],
+        ["generation_by_plant_day", "SELECT 2 AS x"],
+      ],
+      goldDir,
+      date,
+    );
+    for (const table of [
+      "generation_by_plant_period",
+      "generation_by_plant_day",
+    ])
+      expect(existsSync(goldPartitionPath(goldDir, table, date))).toBe(true);
+  } finally {
+    connection.closeSync();
+  }
 });

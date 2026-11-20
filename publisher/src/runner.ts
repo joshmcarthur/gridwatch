@@ -39,7 +39,8 @@ export interface DatasetSummary {
 
 const nzToday = () => Temporal.Now.plainDateISO("Pacific/Auckland").toString();
 
-const isGold = (dataset: PublisherDataset) => dataset.layer === "gold";
+const isGold = (dataset: PublisherDataset) =>
+  dataset.partitionRoot !== undefined;
 
 /**
  * Publish every dataset, in registry order (silver first, then gold). A date is published when its
@@ -74,7 +75,7 @@ export async function runPublish(
       const held = options.force
         ? new Map<string, string>()
         : await partitionVersions(
-            isGold(dataset) ? goldDir : silverDir,
+            dataset.partitionRoot?.({ silverDir, goldDir }) ?? silverDir,
             dataset.table ?? dataset.id,
             dataset.partitionKey,
             dataset.versionColumn ?? "bronze_sha256",

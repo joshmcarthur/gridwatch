@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { mkdir, rename, rm } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { DuckDBConnection } from "@duckdb/node-api";
-import { lit, partitionVersions } from "../silver/common.ts";
+import type { PublisherDataset } from "../datasets.ts";
+import {
+  lit,
+  type PublishResult,
+  partitionVersions,
+  type VersionColumn,
+} from "../silver/common.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
 
 /**
@@ -15,7 +22,7 @@ export interface GoldInput {
   /** The silver folder, for example `generation_md`. */
   table: string;
   /** `bronze_sha256` for a dataset with a bronze file, `inputs_sha256` for a derived table. */
-  versionColumn: "bronze_sha256" | "inputs_sha256";
+  versionColumn: VersionColumn;
 }
 
 /** `<goldDir>/<table>/trading_date=<date>/data.parquet`, the same shape as silver. */
@@ -86,9 +93,12 @@ export async function wantedFingerprints(
   return wanted;
 }
 
-/** The same fingerprint for one date, read from the input partitions themselves. */
+/**
+ * The same fingerprint for one date. It reads versions with `partitionVersions`, as
+ * `wantedFingerprints` does, so the written and the wanted value always agree. Throws when an
+ * input has no version for the date.
+ */
 export async function inputFingerprint(
-  connection: DuckDBConnection,
   silverDir: string,
   analysisVersion: number,
   inputs: readonly GoldInput[],
@@ -96,14 +106,77 @@ export async function inputFingerprint(
 ): Promise<string> {
   const versions: Array<[string, string]> = [];
   for (const input of inputs) {
-    const reader = await connection.runAndReadAll(
-      `SELECT min(${input.versionColumn}) AS version
-       FROM read_parquet(${lit(silverPartitionPath(silverDir, input.table, date))})`,
-    );
-    const [row] = reader.getRowObjectsJson() as Array<{ version: string }>;
-    versions.push([input.table, String(row?.version)]);
+    const version = (
+      await partitionVersions(
+        silverDir,
+        input.table,
+        "trading_date",
+        input.versionColumn,
+        date,
+      )
+    ).get(date);
+    if (version === undefined)
+      throw new Error(`${input.table} has no version for ${date}`);
+    versions.push([input.table, version]);
   }
   return fingerprint(analysisVersion, versions);
+}
+
+/**
+ * Write every table of a date. Each is written to a `.tmp` file first. The files are then
+ * renamed, and the sentinel table (the first, the one the runner reads) is renamed last. A
+ * failure while writing leaves every partition as it was. A crash between renames leaves the
+ * old sentinel, so the date stays out of date and the next run builds it again (ADR-0010).
+ */
+export async function writeGoldTables(
+  connection: DuckDBConnection,
+  selects: ReadonlyArray<readonly [table: string, selectSql: string]>,
+  goldDir: string,
+  date: string,
+): Promise<void> {
+  const targets = selects.map(
+    ([table, sql]) => [goldPartitionPath(goldDir, table, date), sql] as const,
+  );
+  try {
+    for (const [path, sql] of targets) {
+      await mkdir(dirname(path), { recursive: true });
+      await connection.run(
+        `COPY (${sql}) TO ${lit(`${path}.tmp`)} (FORMAT parquet)`,
+      );
+    }
+    // The sentinel is the first table, so rename it after the others.
+    for (const [path] of [...targets.slice(1), ...targets.slice(0, 1)])
+      await rename(`${path}.tmp`, path);
+  } finally {
+    for (const [path] of targets) await rm(`${path}.tmp`, { force: true });
+  }
+}
+
+/**
+ * The registry entry of a gold module. `tables[0]` is the sentinel table: the runner reads the
+ * held fingerprint from it, and `writeGoldTables` writes it last. `publish` gets `goldDir`.
+ */
+export function goldDataset(options: {
+  id: string;
+  tables: readonly [string, ...string[]];
+  inputs: readonly GoldInput[];
+  analysisVersion: number;
+  publish: (options: {
+    silverDir: string;
+    goldDir: string;
+    date: string;
+  }) => Promise<PublishResult>;
+}): PublisherDataset {
+  return {
+    id: options.id,
+    table: options.tables[0],
+    partitionKey: "trading_date",
+    versionColumn: "inputs_sha256",
+    partitionRoot: ({ goldDir }) => goldDir,
+    wantedVersions: (silverDir) =>
+      wantedFingerprints(silverDir, options.analysisVersion, options.inputs),
+    publish: options.publish,
+  };
 }
 
 /**
@@ -122,7 +195,8 @@ export async function inputsComplete(
   for (const file of periodFiles) {
     const reader = await connection.runAndReadAll(
       `SELECT p AS period FROM range(1, ${expected + 1}) t(p)
-       WHERE p NOT IN (SELECT DISTINCT trading_period FROM read_parquet(${lit(file)}))`,
+       WHERE NOT EXISTS (
+         SELECT 1 FROM read_parquet(${lit(file)}) r WHERE r.trading_period = t.p)`,
     );
     for (const row of reader.getRowObjectsJson() as Array<{ period: string }>)
       missing.add(Number(row.period));
