@@ -9,6 +9,10 @@ import {
   partitionVersions,
   type VersionColumn,
 } from "../silver/common.ts";
+import {
+  type CompletenessView,
+  completenessKey,
+} from "../silver/completeness.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
 
 /**
@@ -23,7 +27,34 @@ export interface GoldInput {
   table: string;
   /** `bronze_sha256` for a dataset with a bronze file, `inputs_sha256` for a derived table. */
   versionColumn: VersionColumn;
+  /**
+   * The `_completeness` dataset ID of this input (ADR-0010, ADR-0011). Leave it out for an
+   * entity table: `_completeness` has no row for it, and it counts as complete when its
+   * partition exists.
+   */
+  completenessDataset?: string;
 }
+
+/** The `_completeness` status of an input on a date. No row counts as `missing`. */
+const inputStatus = (
+  completeness: CompletenessView,
+  input: GoldInput,
+  date: string,
+) =>
+  input.completenessDataset === undefined
+    ? "complete"
+    : (completeness.get(completenessKey(input.completenessDataset, date))
+        ?.status ?? "missing");
+
+/** True when every input is `complete` for the date. It is the first half of `inputs_complete`. */
+export const inputStatusesComplete = (
+  completeness: CompletenessView,
+  inputs: readonly GoldInput[],
+  date: string,
+) =>
+  inputs.every(
+    (input) => inputStatus(completeness, input, date) === "complete",
+  );
 
 /** `<goldDir>/<table>/trading_date=<date>/data.parquet`, the same shape as silver. */
 export const goldPartitionPath = (
@@ -40,9 +71,10 @@ export const silverPartitionPath = (
 ) => join(silverDir, table, `trading_date=${date}`, "data.parquet");
 
 /**
- * The `inputs_sha256` value. A SHA-256 over the analysis version and the version of each input
- * partition, named by table. It changes when an input is rebuilt from new bronze data, and
- * when the analysis version is bumped. It does not change with the git SHA.
+ * The `inputs_sha256` value. A SHA-256 over the analysis version and, for each input, its
+ * partition version and its `_completeness` status, named by table. It changes when an input is
+ * rebuilt from new bronze data, when an input changes status, and when the analysis version is
+ * bumped. It does not change with the git SHA.
  */
 export function fingerprint(
   analysisVersion: number,
@@ -59,6 +91,31 @@ export function fingerprint(
 }
 
 /**
+ * The fingerprint of one date from the version of each input and the completeness view. Both
+ * `wantedFingerprints` and `inputFingerprint` call it, so the wanted and the written value
+ * always agree.
+ */
+const dateFingerprint = (
+  analysisVersion: number,
+  inputs: readonly GoldInput[],
+  completeness: CompletenessView,
+  date: string,
+  versionOf: (input: GoldInput) => string | undefined,
+) =>
+  fingerprint(
+    analysisVersion,
+    inputs.map((input) => {
+      const version = versionOf(input);
+      if (version === undefined)
+        throw new Error(`${input.table} has no version for ${date}`);
+      return [
+        input.table,
+        `${version} ${inputStatus(completeness, input, date)}`,
+      ];
+    }),
+  );
+
+/**
  * The fingerprint that a build would write, for each date on which every input has a silver
  * partition. The runner compares it with the value that gold holds (ADR-0009, ADR-0011).
  * It reads each input table once, not once for each date.
@@ -67,6 +124,7 @@ export async function wantedFingerprints(
   silverDir: string,
   analysisVersion: number,
   inputs: readonly GoldInput[],
+  completeness: CompletenessView,
 ): Promise<Map<string, string>> {
   const versions = await Promise.all(
     inputs.map((input) =>
@@ -84,14 +142,8 @@ export async function wantedFingerprints(
     if (!rest.every((v) => v.has(date))) continue;
     wanted.set(
       date,
-      fingerprint(
-        analysisVersion,
-        inputs.map((input, i) => {
-          const version = versions[i]?.get(date);
-          if (version === undefined)
-            throw new Error(`${input.table} has no version for ${date}`);
-          return [input.table, version];
-        }),
+      dateFingerprint(analysisVersion, inputs, completeness, date, (input) =>
+        versions[inputs.indexOf(input)]?.get(date),
       ),
     );
   }
@@ -99,32 +151,34 @@ export async function wantedFingerprints(
 }
 
 /**
- * The same fingerprint for one date. It reads versions with `partitionVersions`, as
- * `wantedFingerprints` does, so the written and the wanted value always agree. Throws when an
- * input has no version for the date.
+ * The same fingerprint for one date. It reads versions with `partitionVersions` and builds the
+ * value with the same code as `wantedFingerprints`. Throws when an input has no version for the
+ * date.
  */
 export async function inputFingerprint(
   silverDir: string,
   analysisVersion: number,
   inputs: readonly GoldInput[],
+  completeness: CompletenessView,
   date: string,
 ): Promise<string> {
-  const versions: Array<[string, string]> = [];
-  for (const input of inputs) {
-    const version = (
-      await partitionVersions(
-        silverDir,
-        input.table,
-        "trading_date",
-        input.versionColumn,
-        date,
-      )
-    ).get(date);
-    if (version === undefined)
-      throw new Error(`${input.table} has no version for ${date}`);
-    versions.push([input.table, version]);
-  }
-  return fingerprint(analysisVersion, versions);
+  const versions = new Map<GoldInput, string | undefined>();
+  for (const input of inputs)
+    versions.set(
+      input,
+      (
+        await partitionVersions(
+          silverDir,
+          input.table,
+          "trading_date",
+          input.versionColumn,
+          date,
+        )
+      ).get(date),
+    );
+  return dateFingerprint(analysisVersion, inputs, completeness, date, (input) =>
+    versions.get(input),
+  );
 }
 
 /**
@@ -157,6 +211,14 @@ export async function writeGoldTables(
   }
 }
 
+/** What a gold `publish` function gets. `completeness` is the view of this run (ADR-0010). */
+export interface GoldPublishOptions {
+  silverDir: string;
+  goldDir: string;
+  completeness: CompletenessView;
+  date: string;
+}
+
 /**
  * The registry entry of a gold module. `tables[0]` is the sentinel table: the runner reads the
  * held fingerprint from it, and `writeGoldTables` writes it last. `publish` gets `goldDir`.
@@ -166,11 +228,7 @@ export function goldDataset(options: {
   tables: readonly [string, ...string[]];
   inputs: readonly GoldInput[];
   analysisVersion: number;
-  publish: (options: {
-    silverDir: string;
-    goldDir: string;
-    date: string;
-  }) => Promise<PublishResult>;
+  publish: (options: GoldPublishOptions) => Promise<PublishResult>;
 }): PublisherDataset {
   return {
     id: options.id,
@@ -178,19 +236,24 @@ export function goldDataset(options: {
     partitionKey: "trading_date",
     versionColumn: "inputs_sha256",
     partitionRoot: ({ goldDir }) => goldDir,
-    wantedVersions: (silverDir) =>
-      wantedFingerprints(silverDir, options.analysisVersion, options.inputs),
+    wantedVersions: (silverDir, completeness) =>
+      wantedFingerprints(
+        silverDir,
+        options.analysisVersion,
+        options.inputs,
+        completeness,
+      ),
     publish: options.publish,
   };
 }
 
 /**
- * Is every input complete for the date? Each input file must have rows in every expected trading
- * period (46, 48 or 50, from `periodsInTradingDate`). Pass only inputs that have a `trading_period`
- * column. This does not read `silver/_completeness` (ADR-0010): `completeness.ts` imports the
- * dataset registry, and gold already sits in that registry. Gold flags from the period count.
+ * The row-level data rule of the generation tables: does each file have rows in every expected
+ * trading period (46, 48 or 50, from `periodsInTradingDate`)? Pass only files that have a
+ * `trading_period` column. It is the second half of `inputs_complete`. The first half is
+ * `inputStatusesComplete`, from `_completeness`.
  */
-export async function inputsComplete(
+export async function periodsComplete(
   connection: DuckDBConnection,
   date: string,
   periodFiles: readonly string[],

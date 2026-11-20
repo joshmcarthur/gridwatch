@@ -7,6 +7,7 @@ import type {
   PublishResult,
   VersionColumn,
 } from "./silver/common.ts";
+import type { CompletenessView } from "./silver/completeness.ts";
 import { publishDispatchEnergyPrices } from "./silver/dispatch-energy-prices.ts";
 import { publishDispatchReservePrices } from "./silver/dispatch-reserve-prices.ts";
 import {
@@ -42,12 +43,17 @@ export interface PublisherDataset {
    */
   countsTradingPeriods?: boolean;
   /** The version each date should hold, from silver. Default: the manifest (bronze). */
-  wantedVersions?(silverDir: string): Promise<Map<string, string>>;
+  wantedVersions?(
+    silverDir: string,
+    completeness: CompletenessView,
+  ): Promise<Map<string, string>>;
   /** Publish the partition of one date. */
   publish(options: {
     bronzeDir: string;
     silverDir: string;
     goldDir: string;
+    /** This run's completeness rows. Gold reads them (ADR-0010). Silver ignores them. */
+    completeness: CompletenessView;
     date: string;
   }): Promise<PublishResult>;
 }

@@ -4,11 +4,13 @@ import { lit, type PublishResult } from "../silver/common.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
 import {
   type GoldInput,
+  type GoldPublishOptions,
   goldDataset,
   goldPartitionPath,
   goldStamp,
   inputFingerprint,
-  inputsComplete,
+  inputStatusesComplete,
+  periodsComplete,
   silverPartitionPath,
   writeGoldTables,
 } from "./common.ts";
@@ -30,9 +32,11 @@ export const TABLES = [
 const GENERATION: GoldInput = {
   table: "generation_md",
   versionColumn: "bronze_sha256",
+  completenessDataset: "generation_md",
 };
 // Both entity tables carry the same `inputs_sha256`. Listing both keeps the rule simple:
-// every silver table that the SQL reads is a fingerprint input.
+// every silver table that the SQL reads is a fingerprint input. They have no `_completeness`
+// row (ADR-0010), so each counts as complete when its partition exists.
 const INPUTS: GoldInput[] = [
   GENERATION,
   { table: "entity_plants", versionColumn: "inputs_sha256" },
@@ -62,20 +66,20 @@ const INPUTS: GoldInput[] = [
  *   in the period (MWh x 2), or by the hours of the trading day (24, 23 or 25) for a day table.
  * - Battery is storage and keeps its own category `battery`. These tables have no total, so
  *   nothing counts it in a primary total.
- * - Completeness: every row has `inputs_complete`. It is false when Generation_MD has no rows
- *   in some trading periods of the day. A day with missing periods is written, flagged, and
- *   the result is `partial` with those periods (the same as silver).
+ * - Completeness: every row has `inputs_complete`. It is true only when the `_completeness`
+ *   status of Generation_MD is `complete` for the date (this run's rows, ADR-0010), the entity
+ *   partitions exist, and Generation_MD has rows in every trading period of the day. A day that
+ *   fails any check is written, flagged, and the result is `partial`. `missingPeriods` lists the
+ *   periods that the data check found, and is empty when only the status failed.
  *
  * Missing (nothing written): the date has no Generation_MD or entity silver.
  * Repeatable: no `processed_at`. A total `ORDER BY` and one thread make the same inputs give the
  * same bytes (floating-point sums depend on the order of addition).
  */
-export async function publishGeneration(options: {
-  silverDir: string;
-  goldDir: string;
-  date: string;
-}): Promise<PublishResult> {
-  const { silverDir, goldDir, date } = options;
+export async function publishGeneration(
+  options: GoldPublishOptions,
+): Promise<PublishResult> {
+  const { silverDir, goldDir, completeness: view, date } = options;
   const generationMd = silverPartitionPath(silverDir, GENERATION.table, date);
   const plants = silverPartitionPath(silverDir, "entity_plants", date);
   const pointsOfConnection = silverPartitionPath(
@@ -95,11 +99,13 @@ export async function publishGeneration(options: {
   try {
     await connection.run("SET TimeZone = 'UTC'");
     await connection.run("SET threads = 1");
-    const completeness = await inputsComplete(connection, date, [generationMd]);
+    const periodCheck = await periodsComplete(connection, date, [generationMd]);
+    const complete =
+      periodCheck.complete && inputStatusesComplete(view, INPUTS, date);
     const stamp = goldStamp(
       ANALYSIS_VERSION,
-      await inputFingerprint(silverDir, ANALYSIS_VERSION, INPUTS, date),
-      completeness.complete ? "true" : "false",
+      await inputFingerprint(silverDir, ANALYSIS_VERSION, INPUTS, view, date),
+      complete ? "true" : "false",
     );
 
     // One row for each Generation_MD unit and period, with its plant, category and island.
@@ -164,14 +170,14 @@ export async function publishGeneration(options: {
     const rows = Number(
       (reader.getRowObjectsJson() as Array<{ n: string }>)[0]?.n,
     );
-    return completeness.complete
+    return complete
       ? { date, status: "complete", rows, path }
       : {
           date,
           status: "partial",
           rows,
           path,
-          missingPeriods: completeness.missingPeriods,
+          missingPeriods: periodCheck.missingPeriods,
         };
   } finally {
     connection.closeSync();

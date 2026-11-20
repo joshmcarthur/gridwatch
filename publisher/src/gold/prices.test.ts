@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { afterEach, beforeEach, expect, test } from "vitest";
+import type { PublisherDataset } from "../datasets.ts";
 import { runPublish } from "../runner.ts";
 import { lit } from "../silver/common.ts";
 import {
@@ -20,6 +21,7 @@ import {
   publishDispatchEnergyPrices,
 } from "../silver/dispatch-energy-prices.ts";
 import { fingerprint, goldPartitionPath } from "./common.ts";
+import { completenessView } from "./fixtures/completeness.ts";
 import {
   ANALYSIS_VERSION,
   prices,
@@ -128,7 +130,12 @@ const synthetic: SilverRow[] = [
 
 test("price per reference node per period: each price applies until the next publish", async () => {
   await writeSilver(synthetic);
-  const result = await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  const result = await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   expect(result.status).toBe("partial");
   if (result.status !== "partial") throw new Error("expected partial");
   expect(result.missingPeriods).toEqual(
@@ -164,7 +171,12 @@ test("price per reference node per period: each price applies until the next pub
 
 test("daily summary: mean of periods, min and max of published prices", async () => {
   await writeSilver(synthetic);
-  await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   const rows = await readGold("price_daily_summary");
   const ota = rows.find((r) => r.point_of_connection === "OTA2201");
   // Period prices 30 and 100, each covered for 1800 s.
@@ -193,7 +205,12 @@ test("publish times are clamped into the period", async () => {
     // A row after the period end has no weight but still counts.
     ...rowsOf("BEN2201", 1, [0, 4], [1900, 99]),
   ]);
-  await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   const rows = await readGold("price_periods");
   const at = (poc: string) =>
     rows.find((r) => r.point_of_connection === poc && r.trading_period === 1);
@@ -208,7 +225,12 @@ test("publish times are clamped into the period", async () => {
 
 test("spreads are from minus to, by period, flagged when either side has no row", async () => {
   await writeSilver(synthetic);
-  await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   const rows = await readGold("price_spreads");
   expect(rows).toHaveLength(3 * 48);
   const at = (from: string, to: string, period: number) =>
@@ -243,7 +265,12 @@ test("spreads are from minus to, by period, flagged when either side has no row"
 
 test("national distribution of period prices over the POCs that have a row", async () => {
   await writeSilver(synthetic);
-  await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   const rows = await readGold("price_distribution");
   expect(rows).toHaveLength(48);
   // P1 prices: 0, 4, 5, 30, 100.
@@ -274,23 +301,40 @@ test("inputs_sha256 follows the bronze version and the analysis version", async 
   };
   await writeSilver(synthetic, "sha-a");
   expect(
-    await publishGoldPrices({ silverDir, goldDir, date: DATE }),
+    await publishGoldPrices({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date: DATE,
+    }),
   ).toMatchObject({ status: "partial" });
   const first = await shaOf();
   expect(
-    await publishGoldPrices({ silverDir, goldDir, date: DATE }),
+    await publishGoldPrices({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date: DATE,
+    }),
   ).toMatchObject({ status: "partial" });
   expect(await shaOf()).toBe(first);
   await writeSilver(synthetic, "sha-b");
   expect(
-    await publishGoldPrices({ silverDir, goldDir, date: DATE }),
+    await publishGoldPrices({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date: DATE,
+    }),
   ).toMatchObject({ status: "partial" });
   const expected = fingerprint(ANALYSIS_VERSION, [
-    ["dispatch_energy_prices", "sha-b"],
+    ["dispatch_energy_prices", "sha-b complete"],
   ]);
   expect(await shaOf()).toBe(expected);
   expect(expected).not.toBe(first);
-  expect((await prices.wantedVersions?.(silverDir))?.get(DATE)).toBe(expected);
+  expect(
+    (await prices.wantedVersions?.(silverDir, completenessView()))?.get(DATE),
+  ).toBe(expected);
   for (const table of TABLES)
     for (const row of await readGold(table))
       expect(row.inputs_sha256).toBe(expected);
@@ -304,9 +348,19 @@ test("two runs on the same input write identical bytes", async () => {
         readFile(join(goldDir, t, `trading_date=${DATE}`, "data.parquet")),
       ),
     );
-  await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   const first = await bytes();
-  await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   expect(await bytes()).toEqual(first);
 });
 
@@ -324,7 +378,12 @@ test("a DST-start day has 46 periods in every table, and a proxy price is flagge
     { poc: "BEN2201", period: 46, at: 0, price: 3, proxy: true },
   ];
   await writeSilver(rows, "sha-a", date, dayStart);
-  const result = await publishGoldPrices({ silverDir, goldDir, date });
+  const result = await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date,
+  });
   expect(result.status).toBe("partial");
   if (result.status !== "partial") throw new Error("expected partial");
   expect(result.rows).toBe(3 * 46);
@@ -357,7 +416,14 @@ test("a DST-start day has 46 periods in every table, and a proxy price is flagge
 });
 
 test("a date with no silver is missing and writes nothing", async () => {
-  expect(await publishGoldPrices({ silverDir, goldDir, date: DATE })).toEqual({
+  expect(
+    await publishGoldPrices({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date: DATE,
+    }),
+  ).toEqual({
     date: DATE,
     status: "missing",
   });
@@ -380,7 +446,12 @@ test("real data: HAY2201 period prices match hand sums (periods 1 and 45), and s
   );
   await publishDispatchEnergyPrices({ bronzeDir, silverDir, date: DATE });
 
-  const result = await publishGoldPrices({ silverDir, goldDir, date: DATE });
+  const result = await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
   // The extract has rows in every period, so the day is complete.
   expect(result).toMatchObject({ status: "complete", rows: 3 * 48 });
 
@@ -456,3 +527,87 @@ test("the runner builds gold_prices, skips it when silver is unchanged and rebui
   await rename(`${file}.new`, file);
   expect(await run()).toMatchObject({ published: 1, upToDate: 1 });
 }, 20_000);
+
+/** A silver stand-in that writes nothing: the old partition stays, as for an invalid file. */
+const silverStub = (
+  status: () => "complete" | "invalid",
+): PublisherDataset => ({
+  id: DATASET,
+  partitionKey: "trading_date",
+  countsTradingPeriods: true,
+  wantedVersions: async () => new Map([[DATE, "sha-new"]]),
+  publish: async ({ date }) =>
+    status() === "complete"
+      ? { date, status: "complete", rows: 1, path: "p" }
+      : { date, status: "invalid", errors: ["bad file"] },
+});
+
+test("an invalid input day gives incomplete rows in the same run, and a status change alone rebuilds gold", async () => {
+  await writeSilver(
+    ["OTA2201", "HAY2201", "BEN2201"].flatMap((poc) =>
+      Array.from({ length: 48 }, (_, i) => ({
+        poc,
+        period: i + 1,
+        at: 0,
+        price: 10,
+      })),
+    ),
+  );
+  let status: "complete" | "invalid" = "complete";
+  const run = () =>
+    runPublish({
+      bronzeDir: join(root, "bronze"),
+      silverDir,
+      goldDir,
+      registry: [silverStub(() => status), prices],
+    });
+  const flags = async () => [
+    ...new Set(
+      (await readGold("price_daily_summary")).map((r) => r.inputs_complete),
+    ),
+  ];
+
+  const first = (await run()).find((s) => s.id === "gold_prices");
+  expect(first).toMatchObject({ published: 1, partial: [] });
+  expect(await flags()).toEqual([true]);
+  const shaComplete = (await readGold("price_periods"))[0]?.inputs_sha256;
+
+  // Silver keeps its old partition, so only the `_completeness` status changes.
+  status = "invalid";
+  const second = (await run()).find((s) => s.id === "gold_prices");
+  expect(second).toMatchObject({ published: 1 });
+  expect(second?.partial).toHaveLength(1);
+  expect(await flags()).toEqual([false]);
+  for (const table of TABLES)
+    for (const r of await readGold(table))
+      expect(r.inputs_complete).toBe(false);
+  expect((await readGold("price_periods"))[0]?.inputs_sha256).not.toBe(
+    shaComplete,
+  );
+
+  // The same status again: gold is up to date.
+  expect((await run()).find((s) => s.id === "gold_prices")).toMatchObject({
+    published: 0,
+    upToDate: 1,
+  });
+}, 30_000);
+
+test("a date with no completeness row is not complete", async () => {
+  await writeSilver(
+    ["OTA2201", "HAY2201", "BEN2201"].flatMap((poc) =>
+      Array.from({ length: 48 }, (_, i) => ({
+        poc,
+        period: i + 1,
+        at: 0,
+        price: 10,
+      })),
+    ),
+  );
+  const result = await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: new Map(),
+    date: DATE,
+  });
+  expect(result).toMatchObject({ status: "partial", missingPeriods: [] });
+});

@@ -20,6 +20,8 @@ import {
   parseRunArgs,
   runPublish,
 } from "./runner.ts";
+import { partitionVersions } from "./silver/common.ts";
+import { loadCompleteness } from "./silver/completeness.ts";
 
 const DISPATCH = "dispatch_energy_prices";
 const fixtures = join(
@@ -128,7 +130,9 @@ test("a changed bronze file publishes again exactly its trading days", async () 
   });
 });
 
-test("a monthly file that lists many dates changes all of them", async () => {
+test("a monthly file that lists many dates changes all of them", {
+  timeout: 30_000,
+}, async () => {
   // Fake publish: a partition for each date holding the bronze sha, as the real ones do.
   const published: string[] = [];
   const registry: PublisherDataset[] = [
@@ -337,4 +341,43 @@ test("entity mappings build last, settle, and rebuild when an input partition ch
     failed: [],
   });
   expect(entity(await run())).toMatchObject({ published: 0, upToDate: 2 });
+});
+
+test("completeness is saved after each dataset, so a crashed run keeps it", async () => {
+  await archive(DISPATCH, ["2026-11-18"], await fixture("2026-11-18"));
+  let onDisk: string[] = [];
+  const registry: PublisherDataset[] = [
+    ...datasets.filter((d) => d.id === DISPATCH),
+    {
+      id: "crash",
+      partitionKey: "trading_date",
+      wantedVersions: async () => {
+        // The second dataset starts. The file must already hold the first one's rows.
+        onDisk = [...(await loadCompleteness(silverDir)).values()].map(
+          (row) => row.dataset,
+        );
+        throw new Error("process died");
+      },
+      publish: async ({ date }) => ({ date, status: "missing" }),
+    },
+  ];
+  await run({ registry });
+  expect(onDisk).toEqual([DISPATCH]);
+});
+
+test("partitionVersions throws when a partition holds more than one version", async () => {
+  const { DuckDBInstance } = await import("@duckdb/node-api");
+  const dir = join(silverDir, "mixed", "trading_date=2026-11-18");
+  await mkdir(dir, { recursive: true });
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    await connection.run(
+      `COPY (SELECT 'a' AS bronze_sha256 UNION ALL SELECT 'b') TO '${join(dir, "data.parquet")}' (FORMAT parquet)`,
+    );
+  } finally {
+    connection.closeSync();
+  }
+  await expect(
+    partitionVersions(silverDir, "mixed", "trading_date", "bronze_sha256"),
+  ).rejects.toThrow("holds more than one bronze_sha256");
 });

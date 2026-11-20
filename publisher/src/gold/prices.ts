@@ -4,10 +4,12 @@ import { lit, type PublishResult } from "../silver/common.ts";
 import { periodsInTradingDate, periodToUtc } from "../trading-time.ts";
 import {
   type GoldInput,
+  type GoldPublishOptions,
   goldDataset,
   goldPartitionPath,
   goldStamp,
   inputFingerprint,
+  inputStatusesComplete,
   silverPartitionPath,
   writeGoldTables,
 } from "./common.ts";
@@ -47,6 +49,7 @@ export const TABLES = [
 const DISPATCH: GoldInput = {
   table: "dispatch_energy_prices",
   versionColumn: "bronze_sha256",
+  completenessDataset: "dispatch_energy_prices",
 };
 const INPUTS: GoldInput[] = [DISPATCH];
 
@@ -62,19 +65,19 @@ const INPUTS: GoldInput[] = [DISPATCH];
  * price is the time-weighted mean over the period, so a late publish gets little weight.
  *
  * Rows are flagged, not dropped: a node with no row in a period has a row with null prices
- * and `inputs_complete = false`. Completeness is "at least one row", not `inputsComplete()`
- * (that helper counts trading periods in silver fact files).
+ * and `inputs_complete = false`. `inputs_complete` is true only when the `_completeness` status
+ * of `dispatch_energy_prices` is `complete` for the date (this run's rows, ADR-0010) and the
+ * node has at least one row in the period. A daily or spread row needs this of all its periods
+ * or nodes.
  *
  * Missing (nothing written): the date has no dispatch energy prices silver.
  * Repeatable: no `processed_at`. A total `ORDER BY` and one thread make the same inputs give
  * the same bytes (floating-point sums depend on the order of addition).
  */
-export async function publishGoldPrices(options: {
-  silverDir: string;
-  goldDir: string;
-  date: string;
-}): Promise<PublishResult> {
-  const { silverDir, goldDir, date } = options;
+export async function publishGoldPrices(
+  options: GoldPublishOptions,
+): Promise<PublishResult> {
+  const { silverDir, goldDir, completeness, date } = options;
   const periods = periodsInTradingDate(date); // also rejects a malformed date
   const input = silverPartitionPath(silverDir, DISPATCH.table, date);
   if (!existsSync(input)) return { date, status: "missing" };
@@ -87,10 +90,17 @@ export async function publishGoldPrices(options: {
       silverDir,
       ANALYSIS_VERSION,
       INPUTS,
+      completeness,
       date,
     );
+    // A row is complete when its input status is `complete` and the data rule holds.
+    const statusComplete = inputStatusesComplete(completeness, INPUTS, date);
     const stamp = (completeSql: string) =>
-      goldStamp(ANALYSIS_VERSION, inputsSha256, completeSql);
+      goldStamp(
+        ANALYSIS_VERSION,
+        inputsSha256,
+        `(${completeSql}) AND ${statusComplete}`,
+      );
 
     const spans = Array.from({ length: periods }, (_, i) => {
       const span = periodToUtc(date, i + 1);
@@ -220,7 +230,7 @@ export async function publishGoldPrices(options: {
       missingReader.getRowObjectsJson() as Array<{ period: string }>
     ).map((row) => Number(row.period));
     const rows = REFERENCE_NODES.length * periods;
-    return missingPeriods.length === 0
+    return missingPeriods.length === 0 && statusComplete
       ? { date, status: "complete", rows, path }
       : { date, status: "partial", rows, path, missingPeriods };
   } finally {

@@ -1,4 +1,5 @@
 import { dataPaths } from "./data-root.ts";
+import { datasets } from "./datasets.ts";
 import {
   hasFailures,
   parseRunArgs,
@@ -17,7 +18,7 @@ if (argv[0] === "status") {
     console.error(`status takes no arguments\n\n${USAGE}`);
     process.exit(2);
   }
-  const lines = await completenessStatusLines(dataPaths().silver);
+  const lines = await completenessStatusLines(dataPaths().silver, datasets);
   for (const line of lines) console.log(line);
 } else {
   let args: ReturnType<typeof parseRunArgs>;
