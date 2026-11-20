@@ -37,7 +37,7 @@ const GENERATION: GoldInput = {
 // Both entity tables carry the same `inputs_sha256`. Listing both keeps the rule simple:
 // every silver table that the SQL reads is a fingerprint input. The runner records one
 // `_completeness` row for each date under the dataset ID `entity_mappings` (ADR-0010).
-const INPUTS: GoldInput[] = [
+export const INPUTS: GoldInput[] = [
   GENERATION,
   {
     table: "entity_plants",
