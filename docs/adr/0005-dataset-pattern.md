@@ -107,7 +107,7 @@ A day is **partial** (written) when one or more periods of the day have no rows.
 
 ### Validation for cleared offers
 
-A row is one 5-minute interval of one RTD case for one point of connection, one unit and one product class. The shape matches nodal prices: `IntervalDateTime` is the interval start, `RunDateTime` is `source_run_at`, and silver keeps every case. Layers after silver keep the latest case for each interval. A day is **invalid** (nothing written) when:
+A row is one 5-minute interval of one RTD case for one point of connection, one unit and one product class. `IntervalDateTime` is the interval start, and `event_end_utc` is 5 minutes later. `RunDateTime` is `source_run_at`. The source can hold more than one case for an interval, and silver keeps every case. Layers after silver keep the latest case (latest `RunDateTime`) for each interval (owner decision on [#9](https://github.com/joshmcarthur/gridwatch/issues/9)). The rules are the same as for nodal prices (#9). A day is **invalid** (nothing written) when:
 
 1. The file has no rows, or a row has a `TradingDate` other than the requested date.
 2. A row has a trading period outside the range of the day.
@@ -126,7 +126,7 @@ A day is **partial** (written) when one or more periods of the day have no rows.
 6. `ProductClass` is not `Injection` or `Offtake`.
 7. A megawatt value is present but is not a finite number. A blank megawatt value is valid and means none cleared.
 
-A day is **partial** (written) when one or more periods of the day have no rows. A period with some missing intervals is not partial, as for nodal prices.
+A day is **partial** (written) when one or more periods of the day have no rows. A period with some missing intervals is not partial, because the source omits about ten intervals on most days.
 
 ### Silver columns, cleared offers
 

@@ -133,10 +133,10 @@ Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricin
 | Integrity | Serves `Content-MD5`. |
 | Revisions | Section 2. A forum thread, [reconciling ClearedMW with SPD case file offers](https://www.emi.ea.govt.nz/Forum/thread/reconciling-differences-in-clearedmw-from-cleared-offers-and-offers-obtained-from-spd-case-files/), suggests the two can differ; unread. |
 | Size | About 3.1-3.9 MB per day. Silver Parquet is 127-138 KB per day (19 Nov 2026: 3.8 MB CSV, 137 KB Parquet), so 12 months is about 50 MB. The size does not justify a different backfill start. |
-| Interval time | As nodal (3.3): `IntervalDateTime` is the interval start and `RunDateTime` is about one minute before it. A `CaseID` belongs to one interval. Six intervals on 18 Nov 2026 have two cases. |
+| Interval time | `IntervalDateTime` is the interval start. Interval 00:00 is in period 1, and the last interval, 23:55, is in the last period (checked on 18 Nov, 27 Sep and 5 Apr). `RunDateTime` is usually about one minute before the interval start. Re-run cases come after it: the difference runs from -157 s to +60 s. A `CaseID` belongs to one interval. Six intervals on 18 Nov 2026 have two cases. |
 | Key | `(IntervalDateTime, CaseID, ProductClass, PointOfConnectionCode, UnitCode)`. It has no duplicates on 18 Nov, 19 Nov, 27 Sep and 5 Apr. The key without `ProductClass` also has none on those days, but `ProductClass` stays in the key, because a unit could be both. |
 | Products | One row holds energy and both reserve products. `ClearedGenerationMegawatts` is blank on every `Offtake` row. `ClearedFIRMegawatts` and `ClearedSIRMegawatts` are blank when none cleared. Across the four days, no row has all three blank. |
-| `N/A` and blanks | `Offtake` rows have `PlantName` `N/A`. Most also have `UnitCode` `N/A` (7,187 of 8,083), and the rest have a unit code such as `RHO99`. `Island` is blank on 2,217 `Injection` rows (for example the `PTA` units). Silver stores null for all of these. |
+| `N/A` and blanks | `Offtake` rows have `PlantName` `N/A`. Most also have `UnitCode` `N/A` (7,187 of 8,083 across the four days checked), and the rest have a unit code such as `RHO99`. `Island` is blank on 2,217 `Injection` rows across the four days (for example the `PTA` units). Silver stores null for all of these. |
 
 ### 3.5 Generation_MD
 
@@ -212,7 +212,7 @@ Website content, including these datasets, is licensed under Creative Commons At
 10. Nodal and Cleared Offers are 5-minute cases with missing intervals (10 of 288 on the day checked) while dispatch prices arrive at irregular times, so the silver layer needs one rule to reach trading periods. Affects #6, #9, #11, #12, #17.
 11. The 12-month backfill is about 6.9 GB raw (more than half Nodal) and about 0.7 GB gzip; it takes about 1.2 hours on one stream. Affects #5, #13 and the hosting spike.
 12. The backfill covers the last 12 months only (owner direction). If it is extended, start the dispatch datasets no earlier than 2022-11-01: Nodal exists from 2020-09-10 and Cleared Offers from 2022-04-01, but the settlement relevance of earlier data is inferred (see 3.3). Affects #9, #12, #13.
-13. Trading days can have 46 or 50 periods (checked in energy prices and Generation_MD; other datasets unchecked), so never assume 48. Affects #6, #8, #9, #11, #12.
+13. Trading days can have 46 or 50 periods (checked in energy prices, Generation_MD and cleared offers; other datasets unchecked), so never assume 48. Affects #6, #8, #9, #11, #12.
 
 ## 7. Generator outage information
 
