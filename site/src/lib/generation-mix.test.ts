@@ -74,7 +74,7 @@ test("battery is shown apart and is not in the primary total", () => {
   if (!mix) throw new Error("expected a mix");
   const period15 = mix.points[14];
   if (!period15) throw new Error("expected period 15");
-  expect(period15.battery).toBeCloseTo(10.288, 3);
+  expect(period15.megawatts.battery).toBeCloseTo(10.288, 3);
   expect(period15.primary).toBeCloseTo(79.848, 3);
   expect(mix.layers.map((layer) => layer.label)).not.toContain("Battery");
 });
@@ -141,7 +141,7 @@ test("two islands are summed, and a null in one island keeps the other", () => {
   expect(gap.incomplete).toBe(false);
 
   expect(first.primary).toBeCloseTo(12, 6);
-  expect(first.battery).toBeCloseTo(2, 6);
+  expect(first.megawatts.battery).toBeCloseTo(2, 6);
 });
 
 test("unmapped is a stacked layer and counts in the primary total", () => {
@@ -263,4 +263,32 @@ test("the summary names the largest fuel by average MW and its share", () => {
   expect(generationMixSummary(mix)).toBe(
     "Wind made the most, about 119 megawatts on average, 80% of the day's primary generation.",
   );
+});
+
+test("tick labels on the DST-end day are unique", () => {
+  const mix = generationMix(dayWith(DST_END_DAY, 50, {}));
+  if (!mix) throw new Error("expected a mix");
+  const labels = mix.ticks.map((tick) => tick.label);
+  expect(labels.length).toBeGreaterThan(0);
+  expect(new Set(labels).size).toBe(labels.length);
+});
+
+test("a gap period gives a No data table row", () => {
+  const count = 46;
+  const day = dayWith(DST_START_DAY, count, {
+    missing_periods: [5],
+    series: [
+      {
+        fuel: "hydro",
+        island: null,
+        megawatt_hours: cells(count, { 4: null }),
+      },
+    ],
+  });
+  const mix = generationMix(day);
+  if (!mix) throw new Error("expected a mix");
+  const row = generationMixTable(mix).rows[4];
+  if (!row) throw new Error("expected row 5");
+  expect(row[0]).toBe("03:00");
+  expect(row.slice(1).every((cell) => cell === "No data")).toBe(true);
 });

@@ -64,12 +64,10 @@ export interface MixPoint {
   gap: boolean;
   /** A null cell in a period that is not a gap. The cell counts as 0. */
   incomplete: boolean;
-  /** Average megawatts for each stacked fuel. Null in a gap. */
-  megawatts: Record<StackFuel, number | null>;
+  /** Average megawatts for each fuel. Battery is here, but it is not stacked. Null in a gap. */
+  megawatts: Record<FuelCategory, number | null>;
   /** Sum of the stacked fuels. Excludes battery. Null in a gap. */
   primary: number | null;
-  /** Average megawatts of battery, shown in the table only. Null in a gap. */
-  battery: number | null;
   /** Text for the native hover tooltip. */
   title: string;
 }
@@ -101,42 +99,50 @@ export function generationMix(day: SiteDay): GenerationMix | null {
   const section: GenerationSection = day.generation;
   if (section.state === "missing" || section.series.length === 0) return null;
 
+  const count = day.periods.length;
   const gaps = new Set(section.missing_periods);
   const clockOf = clockLabeller(day);
-  const fuels = [...STACK_ORDER, "battery" as const];
-  const megawattsByFuel = new Map<FuelCategory, Array<number | null>>();
-  const hasRows = new Set<FuelCategory>();
-  for (const fuel of fuels) {
-    megawattsByFuel.set(fuel, fuelSeries(section, fuel, day.periods.length));
-    if (section.series.some((row) => row.fuel === fuel)) hasRows.add(fuel);
-  }
+  const series: Record<FuelCategory, Array<number | null>> = {
+    hydro: fuelSeries(section, "hydro", count),
+    geothermal: fuelSeries(section, "geothermal", count),
+    wind: fuelSeries(section, "wind", count),
+    solar: fuelSeries(section, "solar", count),
+    gas: fuelSeries(section, "gas", count),
+    coal_gas: fuelSeries(section, "coal_gas", count),
+    other: fuelSeries(section, "other", count),
+    unmapped: fuelSeries(section, "unmapped", count),
+    battery: fuelSeries(section, "battery", count),
+  };
+  const reported = [...new Set(section.series.map((row) => row.fuel))];
 
   const layers: MixLayer[] = STACK_ORDER.filter((fuel) =>
-    (megawattsByFuel.get(fuel) ?? []).some(
-      (value) => value !== null && value > 0,
-    ),
+    series[fuel].some((value) => value !== null && value > 0),
   ).map((fuel) => ({ fuel, label: FUEL_LABELS[fuel] }));
 
   const points: MixPoint[] = day.periods.map((period, index) => {
     const gap = gaps.has(period.period);
     const zoned = zonedAt(period.start_utc);
-    let incomplete = false;
-    const read = (fuel: FuelCategory): number | null => {
-      if (gap) return null;
-      const value = megawattsByFuel.get(fuel)?.[index] ?? null;
-      if (value !== null) return value;
-      if (hasRows.has(fuel)) incomplete = true;
-      return 0;
+    // A null cell in a reported fuel counts as 0 and marks the period incomplete.
+    const incomplete =
+      !gap && reported.some((fuel) => series[fuel][index] === null);
+    const at = (fuel: FuelCategory): number | null =>
+      gap ? null : (series[fuel][index] ?? 0);
+    const megawatts: Record<FuelCategory, number | null> = {
+      hydro: at("hydro"),
+      geothermal: at("geothermal"),
+      wind: at("wind"),
+      solar: at("solar"),
+      gas: at("gas"),
+      coal_gas: at("coal_gas"),
+      other: at("other"),
+      unmapped: at("unmapped"),
+      battery: at("battery"),
     };
-    const megawatts = Object.fromEntries(
-      STACK_ORDER.map((fuel) => [fuel, read(fuel)]),
-    ) as Record<StackFuel, number | null>;
-    const battery = read("battery");
     const primary = gap
       ? null
       : STACK_ORDER.reduce((sum, fuel) => sum + (megawatts[fuel] ?? 0), 0);
     const time = clockOf(zoned);
-    return {
+    const point: MixPoint = {
       period: period.period,
       start: new Date(period.start_utc),
       time,
@@ -144,9 +150,10 @@ export function generationMix(day: SiteDay): GenerationMix | null {
       incomplete,
       megawatts,
       primary,
-      battery,
-      title: tooltipText(time, layers, megawatts, primary, gap, incomplete),
+      title: "",
     };
+    point.title = tooltipText(point, layers);
+    return point;
   });
 
   const areas: MixArea[] = [];
@@ -199,7 +206,9 @@ export function generationMixTable(mix: GenerationMix): {
       point.incomplete ? `${point.time} (incomplete)` : point.time,
       ...cells,
       `${megawatts1.format(primary)} MW`,
-      point.battery === null ? "" : `${megawatts1.format(point.battery)} MW`,
+      point.megawatts.battery === null
+        ? ""
+        : `${megawatts1.format(point.megawatts.battery)} MW`,
     ];
   });
   return { headers, rows };
@@ -280,24 +289,18 @@ function timeTicks(day: SiteDay): Array<{ at: Date; label: string }> {
   return ticks;
 }
 
-function tooltipText(
-  time: string,
-  layers: MixLayer[],
-  megawatts: Record<StackFuel, number | null>,
-  primary: number | null,
-  gap: boolean,
-  incomplete: boolean,
-): string {
-  if (gap || primary === null) {
-    return `${time} · No generation numbers for this period`;
+function tooltipText(point: MixPoint, layers: MixLayer[]): string {
+  if (point.gap || point.primary === null) {
+    return `${point.time} · No generation numbers for this period`;
   }
-  const parts = layers.map(
-    (layer) =>
-      `${layer.label} ${megawatts1.format(megawatts[layer.fuel] ?? 0)} MW${shareText(megawatts[layer.fuel] ?? 0, primary)}`,
-  );
+  const primary = point.primary;
+  const parts = layers.map((layer) => {
+    const value = point.megawatts[layer.fuel] ?? 0;
+    return `${layer.label} ${megawatts1.format(value)} MW${shareText(value, primary)}`;
+  });
   parts.push(`Total ${megawatts1.format(primary)} MW`);
-  if (incomplete) parts.push("Some plant data missing, counted as 0");
-  return [time, ...parts].join(" · ");
+  if (point.incomplete) parts.push("Some plant data missing, counted as 0");
+  return [point.time, ...parts].join(" · ");
 }
 
 function shareText(value: number, total: number): string {
