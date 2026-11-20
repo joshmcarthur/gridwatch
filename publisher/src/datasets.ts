@@ -26,6 +26,12 @@ export interface PublisherDataset {
    * with no bronze file of its own uses a fingerprint of its silver inputs.
    */
   versionColumn?: string;
+  /**
+   * True when the date is complete only if every trading period is present.
+   * The count is 46, 48 or 50, from `periodsInTradingDate` (ADR-0010).
+   * Snapshots and entity mappings leave this unset.
+   */
+  countsTradingPeriods?: boolean;
   /** The version each date should hold, from silver. Default: the manifest (bronze). */
   wantedVersions?(silverDir: string): Promise<Map<string, string>>;
   /** Publish the silver partition of one date. */
@@ -44,26 +50,31 @@ export const datasets: PublisherDataset[] = [
   {
     id: "dispatch_energy_prices",
     partitionKey: "trading_date",
+    countsTradingPeriods: true,
     publish: publishDispatchEnergyPrices,
   },
   {
     id: "dispatch_reserve_prices",
     partitionKey: "trading_date",
+    countsTradingPeriods: true,
     publish: publishDispatchReservePrices,
   },
   {
     id: "nodal_prices_and_volumes",
     partitionKey: "trading_date",
+    countsTradingPeriods: true,
     publish: publishNodalPricesAndVolumes,
   },
   {
     id: "cleared_offers",
     partitionKey: "trading_date",
+    countsTradingPeriods: true,
     publish: publishClearedOffers,
   },
   {
     id: "generation_md",
     partitionKey: "trading_date",
+    countsTradingPeriods: true,
     publish: publishGenerationMd,
   },
   {
