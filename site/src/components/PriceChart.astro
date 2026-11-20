@@ -2,7 +2,7 @@
 import * as Plot from "@observablehq/plot";
 import type { SiteDay } from "@gridwatch/publisher/site-contract";
 import ChartFigure from "./ChartFigure.astro";
-import { CHART_FRAME, renderPlot } from "../lib/chart-svg";
+import { renderPlot } from "../lib/chart-svg";
 import {
   PRICE_MISSING,
   PRICE_NOTICE,
@@ -124,7 +124,6 @@ function hoverMark(data: PriceChart) {
 function priceSvg(data: PriceChart): string {
   return renderPlot(
     {
-      ...CHART_FRAME,
       marginTop: 28,
       x: axisX(data),
       y: {
@@ -153,7 +152,6 @@ function spreadSvg(data: PriceChart): string {
     .sort((a, b) => Number(a.dashed) - Number(b.dashed));
   return renderPlot(
     {
-      ...CHART_FRAME,
       marginTop: 28,
       x: axisX(data),
       y: {
