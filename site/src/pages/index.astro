@@ -3,93 +3,177 @@ import Layout from "../layouts/Layout.astro";
 import { dailyPath } from "../lib/daily-page";
 import { episodeHeadline } from "../lib/episode-copy";
 import {
+  conditionCards,
+  latestUpdate,
+  recentDays,
+} from "../lib/homepage-conditions";
+import {
   formatTradingDate,
+  loadSiteDay,
   loadSiteIndex,
   recentEpisodes,
 } from "../lib/site-data";
 
 const index = loadSiteIndex();
-const generationDate = index.latest_complete_sections.generation;
-const pricesDate = index.latest_complete_sections.prices;
-const sampleDay = index.days.at(-1);
-const recent = recentEpisodes(index);
+const loadDay = (date: string) => loadSiteDay(date, index);
+const update = latestUpdate(index, loadDay);
+const cards = conditionCards(index, loadDay);
+const recent = recentDays(index);
+const episodes = recentEpisodes(index);
 ---
 
 <Layout
   title="Gridwatch NZ"
-  description="An independent observatory for the New Zealand electricity market."
+  description="The Electricity Authority's public market files, turned into pages for finished New Zealand trading days."
 >
   <section class="prose">
     <h1>The grid as a country, not a spreadsheet.</h1>
     <p>
-      Gridwatch turns public market data into plain explanations of what
-      happened on the New Zealand electricity system. This is a placeholder
-      homepage. Charts are not on this build yet.
+      The Electricity Authority publishes the files for New Zealand's wholesale
+      electricity market. They're a slog if you don't already work in the
+      industry. This site reads those files and makes pages from finished
+      trading days. Wholesale prices are what generators and retailers paid each
+      other, not the rate on a household bill.
+    </p>
+  </section>
+
+  <div class="stack">
+    <section class="card lede-card" aria-labelledby="latest-heading">
+      <h2 id="latest-heading">Latest market update</h2>
       {
-        sampleDay ? (
+        update ? (
           <>
-            {" "}
-            Sample day:{" "}
-            <a href={dailyPath(sampleDay.date)}>
-              {formatTradingDate(sampleDay.date)}
-            </a>
-            .
-          </>
-        ) : null
-      }
-    </p>
-  </section>
-
-  <section class="card" aria-labelledby="latest-heading">
-    <h2 id="latest-heading">Latest sample data</h2>
-    <p>Each dataset states its own date. There is no single market score.</p>
-    <dl>
-      <div>
-        <dt>Generation</dt>
-        <dd>
-          {
-            generationDate
-              ? formatTradingDate(generationDate)
-              : "No complete day yet"
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>Prices</dt>
-        <dd>
-          {pricesDate ? formatTradingDate(pricesDate) : "No complete day yet"}
-        </dd>
-      </div>
-    </dl>
-  </section>
-
-  <section class="card" aria-labelledby="recent-episodes-heading">
-    <h2 id="recent-episodes-heading">Recently detected</h2>
-    <p>
-      Unusual stretches grouped from the public files. Not a written-up
-      public event yet.
-    </p>
-    {
-      recent.length === 0 ? (
-        <p>No grouped readings on the days this site holds yet.</p>
-      ) : (
-        <ol class="episodes">
-          {recent.map(({ date, episode }) => (
-            <li>
-              <a href={`${dailyPath(date)}#episode-${episode.episode_id}`}>
-                {formatTradingDate(date)}: {episodeHeadline(episode)}
+            <p class="when">
+              <a href={dailyPath(update.date)}>
+                {formatTradingDate(update.date)}
               </a>
+            </p>
+            {update.paragraphs
+              .filter((paragraph) => paragraph.length > 0)
+              .map((paragraph) => <p>{paragraph}</p>)}
+            <p>
+              <a href={dailyPath(update.date)}>Open that day</a>
+            </p>
+          </>
+        ) : (
+          <p>No complete wholesale prices day is on this site yet.</p>
+        )
+      }
+    </section>
+
+    <section class="conditions" aria-labelledby="conditions-heading">
+      <h2 id="conditions-heading">Market conditions</h2>
+      <p>
+        Each card uses its own latest complete day. There is no single market
+        score.
+      </p>
+      <ul class="condition-grid">
+        {
+          cards.map((card) => (
+            <li>
+              <article
+                class="card condition-card"
+                aria-labelledby={`${card.id}-heading`}
+              >
+                <h3 id={`${card.id}-heading`}>{card.title}</h3>
+                {card.date ? (
+                  <p class="when">
+                    Figures for{" "}
+                    <a href={dailyPath(card.date)}>
+                      {formatTradingDate(card.date)}
+                    </a>
+                  </p>
+                ) : (
+                  <p class="when">No complete day yet</p>
+                )}
+                {card.value ? <p class="figure">{card.value}</p> : null}
+                <p>{card.headline}</p>
+                <p>{card.detail}</p>
+              </article>
             </li>
-          ))}
-        </ol>
-      )
-    }
-  </section>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="card lede-card" aria-labelledby="recent-days-heading">
+      <h2 id="recent-days-heading">Recent days</h2>
+      {
+        recent.length === 0 ? (
+          <p>No days are on this site yet.</p>
+        ) : (
+          <ol class="day-list">
+            {recent.map((day) => (
+              <li>
+                <a href={dailyPath(day.date)}>{formatTradingDate(day.date)}</a>
+                {day.complete ? null : <span> Not complete yet.</span>}
+              </li>
+            ))}
+          </ol>
+        )
+      }
+    </section>
+
+    <section class="card lede-card" aria-labelledby="recent-episodes-heading">
+      <h2 id="recent-episodes-heading">Recently detected</h2>
+      <p>
+        Unusual stretches grouped from the public files. Not a written-up
+        public event yet.
+      </p>
+      {
+        episodes.length === 0 ? (
+          <p>No grouped readings on the days this site holds yet.</p>
+        ) : (
+          <ol class="episodes">
+            {episodes.map(({ date, episode }) => (
+              <li>
+                <a href={`${dailyPath(date)}#episode-${episode.episode_id}`}>
+                  {formatTradingDate(date)}: {episodeHeadline(episode)}
+                </a>
+              </li>
+            ))}
+          </ol>
+        )
+      }
+    </section>
+  </div>
 </Layout>
 
 <style>
   .prose {
     margin-bottom: var(--space-6);
+  }
+
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .conditions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .conditions > p {
+    margin: 0;
+    max-width: var(--measure-prose);
+  }
+
+  .condition-grid {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 48rem) {
+    .condition-grid {
+      grid-template-columns: 1fr 1fr;
+    }
   }
 
   .card {
@@ -99,33 +183,27 @@ const recent = recentEpisodes(index);
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  .lede-card {
     max-width: var(--measure-prose);
   }
 
-  dl {
+  .when {
     margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  dl div {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  dt {
     font-size: var(--text-label);
-    font-weight: 700;
+    color: var(--color-ink-muted);
   }
 
-  dd {
+  .figure {
     margin: 0;
-    font-size: var(--text-body);
+    font-size: var(--text-title);
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
   }
 
+  .day-list,
   .episodes {
     margin: 0;
     padding-left: 1.5rem;

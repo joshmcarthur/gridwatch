@@ -24,6 +24,10 @@ import {
   REFERENCE_NODES,
   SPREAD_PAIRS,
 } from "../gold/prices.ts";
+import {
+  INPUTS as RESERVE_INPUTS,
+  TABLES as RESERVE_TABLES,
+} from "../gold/reserves.ts";
 import type { DatasetSummary } from "../runner.ts";
 import { lit, partitionVersions } from "../silver/common.ts";
 import {
@@ -40,6 +44,8 @@ import {
   type GenerationSection,
   type Island,
   type PricesSection,
+  type ReserveClass,
+  type ReservesSection,
   type SankeySection,
   type SectionState,
   SITE_CONTRACT_VERSION,
@@ -55,10 +61,10 @@ import {
  * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
  * rebuilt (ADR-0014).
  */
-export const EXPORT_VERSION = 3;
+export const EXPORT_VERSION = 4;
 
 interface Section {
-  name: "generation" | "prices" | "sankey" | "episodes";
+  name: "generation" | "prices" | "reserves" | "sankey" | "episodes";
   /** The first gold table. Its partition holds the section's `inputs_sha256`. */
   sentinel: string;
   inputs: readonly GoldInput[];
@@ -74,6 +80,11 @@ const PRICES_SECTION: Section = {
   sentinel: PRICE_TABLES[0],
   inputs: PRICE_INPUTS,
 };
+const RESERVES_SECTION: Section = {
+  name: "reserves",
+  sentinel: RESERVE_TABLES[0],
+  inputs: RESERVE_INPUTS,
+};
 const SANKEY_SECTION: Section = {
   name: "sankey",
   sentinel: ENERGY_BALANCE_TABLES[0],
@@ -87,6 +98,7 @@ const EPISODES_SECTION: Section = {
 const SECTIONS: readonly Section[] = [
   GENERATION_SECTION,
   PRICES_SECTION,
+  RESERVES_SECTION,
   SANKEY_SECTION,
   EPISODES_SECTION,
 ];
@@ -628,6 +640,106 @@ const islandList = (value: unknown): Island[] =>
     return [];
   });
 
+function missingReserves(
+  base: Pick<ReservesSection, "silver_tables" | "gold_tables" | "datasets">,
+): ReservesSection {
+  return {
+    ...base,
+    state: "missing",
+    missing_periods: [],
+    analysis_version: null,
+    inputs_sha256: null,
+    daily: [],
+  };
+}
+
+const asReserveClass = (value: unknown): ReserveClass | null => {
+  if (value === "FIR" || value === "SIR") return value;
+  return null;
+};
+
+const asIsland = (value: unknown): Island | null => {
+  if (value === "NI" || value === "SI") return value;
+  return null;
+};
+
+async function buildReserves(
+  connection: DuckDBConnection,
+  goldDir: string,
+  date: string,
+  completeness: CompletenessView,
+): Promise<ReservesSection> {
+  const section = RESERVES_SECTION;
+  const base = {
+    silver_tables: section.inputs.map((input) => input.table),
+    gold_tables: [...RESERVE_TABLES],
+    datasets: sectionDatasets(section),
+  };
+  const stamp = await readStamp(
+    connection,
+    goldPartitionPath(goldDir, section.sentinel, date),
+  );
+  if (!stamp) return missingReserves(base);
+  const dayPath = goldPartitionPath(goldDir, RESERVE_TABLES[1], date);
+  if (!existsSync(dayPath)) return missingReserves(base);
+
+  const dayRows = await rowsOf(
+    connection,
+    goldDir,
+    RESERVE_TABLES[1],
+    date,
+    "reserve_class, island, mean_price, min_price, max_price, periods_present, periods_expected, rows_present, inputs_complete",
+    "reserve_class, island NULLS LAST",
+  );
+  const daily = dayRows.flatMap((row) => {
+    const reserveClass = asReserveClass(row.reserve_class);
+    const island = asIsland(row.island);
+    if (reserveClass === null || island === null) return [];
+    return [
+      {
+        reserve_class: reserveClass,
+        island,
+        mean_price: roundOrNull(numberOrNull(row.mean_price), 2),
+        min_price: roundOrNull(numberOrNull(row.min_price), 2),
+        max_price: roundOrNull(numberOrNull(row.max_price), 2),
+        periods_present: Number(row.periods_present),
+        periods_expected: Number(row.periods_expected),
+        rows_present: Number(row.rows_present),
+        inputs_complete: row.inputs_complete === true,
+      },
+    ];
+  });
+
+  const periodPath = goldPartitionPath(goldDir, RESERVE_TABLES[0], date);
+  let missingPeriods: number[] = [];
+  if (existsSync(periodPath)) {
+    const periodRows = await rowsOf(
+      connection,
+      goldDir,
+      RESERVE_TABLES[0],
+      date,
+      "trading_period, dollars_per_megawatt_hour",
+      "trading_period",
+    );
+    missingPeriods = [
+      ...new Set(
+        periodRows
+          .filter((row) => numberOrNull(row.dollars_per_megawatt_hour) === null)
+          .map((row) => Number(row.trading_period)),
+      ),
+    ].sort((a, b) => a - b);
+  }
+
+  return {
+    ...base,
+    state: sectionState(stamp, section, completeness, date),
+    missing_periods: missingPeriods,
+    analysis_version: stamp.analysis_version,
+    inputs_sha256: stamp.inputs_sha256,
+    daily,
+  };
+}
+
 function missingEpisodes(
   base: Pick<EpisodesSection, "silver_tables" | "gold_tables" | "datasets">,
 ): EpisodesSection {
@@ -722,6 +834,12 @@ export async function buildSiteDay(options: {
       periods,
     );
     const sankey = await buildSankey(connection, goldDir, date, completeness);
+    const reserves = await buildReserves(
+      connection,
+      goldDir,
+      date,
+      completeness,
+    );
     const episodes = await buildEpisodes(
       connection,
       goldDir,
@@ -740,6 +858,7 @@ export async function buildSiteDay(options: {
       datasets,
       generation,
       prices,
+      reserves,
       sankey,
       episodes,
     };
@@ -872,6 +991,7 @@ export async function exportSite(options: {
         sections: {
           generation: day.generation.state,
           prices: day.prices.state,
+          reserves: day.reserves?.state ?? "missing",
           sankey: day.sankey?.state ?? "missing",
           episodes: day.episodes?.state ?? "missing",
         },
@@ -887,7 +1007,7 @@ export async function exportSite(options: {
   const entries = [...days.values()];
   const latest = latestCompleteDates(completeness);
   const latestSection = (
-    name: "generation" | "prices" | "sankey" | "episodes",
+    name: "generation" | "prices" | "reserves" | "sankey" | "episodes",
   ) =>
     entries.filter((day) => day.sections[name] === "complete").at(-1)?.date ??
     null;
@@ -902,6 +1022,7 @@ export async function exportSite(options: {
     latest_complete_sections: {
       generation: latestSection("generation"),
       prices: latestSection("prices"),
+      reserves: latestSection("reserves"),
       sankey: latestSection("sankey"),
       episodes: latestSection("episodes"),
     },

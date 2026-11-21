@@ -183,6 +183,24 @@ export interface EpisodesSection extends SectionBase {
   items: SiteEpisode[];
 }
 
+export type ReserveClass = "FIR" | "SIR";
+
+/** Daily reserve prices by class and island (ADR-0013, ADR-0014). */
+export interface ReservesSection extends SectionBase {
+  daily: Array<{
+    reserve_class: ReserveClass;
+    island: Island;
+    /** $/MWh. Null when every period of the day is null. */
+    mean_price: number | null;
+    min_price: number | null;
+    max_price: number | null;
+    periods_present: number;
+    periods_expected: number;
+    rows_present: number;
+    inputs_complete: boolean;
+  }>;
+}
+
 /** An extension point. The v1 exporter never writes one. A consumer treats absence as "not built". */
 export type SiteExtension = { state: SectionState } & Record<string, unknown>;
 
@@ -200,7 +218,8 @@ export interface SiteDay {
   generation: GenerationSection;
   /** Always present. `state` may be `missing`. */
   prices: PricesSection;
-  reserves?: SiteExtension;
+  /** Optional. Absence means not built. The exporter writes it on every day, `missing` when gold has no row. */
+  reserves?: ReservesSection;
   /** Optional. Absence means not built. The exporter writes it on every day, `missing` when gold has no row. */
   sankey?: SankeySection;
   observations?: SiteExtension;
@@ -219,6 +238,8 @@ export interface SiteIndexDay {
     sankey?: SectionState;
     /** Optional. Detected episodes for the day (ADR-0021). */
     episodes?: SectionState;
+    /** Optional. Reserve prices for the day. */
+    reserves?: SectionState;
   };
   /** The held version of the day file (ADR-0014). */
   export_sha256: string;
@@ -238,6 +259,8 @@ export interface SiteIndex {
     sankey?: string | null;
     /** Optional. Latest day whose episodes section is complete. */
     episodes?: string | null;
+    /** Optional. Latest day whose reserves section is complete. */
+    reserves?: string | null;
   };
 }
 
@@ -253,6 +276,7 @@ const DATASET_STATES: readonly DatasetState[] = [
   "invalid",
 ];
 const ISLANDS: readonly Island[] = ["NI", "SI"];
+const RESERVE_CLASSES: readonly ReserveClass[] = ["FIR", "SIR"];
 const EXTENSIONS = ["reserves", "sankey", "observations", "episodes"] as const;
 const DAY_LENGTHS = [46, 48, 50];
 
@@ -544,6 +568,31 @@ function checkSankey(
   return base.datasets;
 }
 
+function checkReserves(
+  value: unknown,
+  path: string,
+  periodCount: number,
+): string[] {
+  const section = record(value, path);
+  const base = checkSectionBase(section, path, periodCount);
+  const daily = list(section.daily, `${path}.daily`);
+  checkEmptyWhenMissing(daily, base.state, `${path}.daily`);
+  for (let i = 0; i < daily.length; i++) {
+    const at = `${path}.daily[${i}]`;
+    const row = record(daily[i], at);
+    oneOf(row.reserve_class, RESERVE_CLASSES, `${at}.reserve_class`);
+    oneOf(row.island, ISLANDS, `${at}.island`);
+    nullable(row.mean_price, number, `${at}.mean_price`);
+    nullable(row.min_price, number, `${at}.min_price`);
+    nullable(row.max_price, number, `${at}.max_price`);
+    integer(row.periods_present, `${at}.periods_present`);
+    integer(row.periods_expected, `${at}.periods_expected`);
+    integer(row.rows_present, `${at}.rows_present`);
+    flag(row.inputs_complete, `${at}.inputs_complete`);
+  }
+  return base.datasets;
+}
+
 function checkEpisodes(
   value: unknown,
   path: string,
@@ -609,6 +658,8 @@ export function assertSiteDay(value: unknown): asserts value is SiteDay {
         sectionDatasets.push(...checkEpisodes(day[key], key, periods.length));
         break;
       case "reserves":
+        sectionDatasets.push(...checkReserves(day[key], key, periods.length));
+        break;
       case "observations":
         oneOf(record(day[key], key).state, SECTION_STATES, `${key}.state`);
         break;
@@ -647,6 +698,8 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
       oneOf(sections.sankey, SECTION_STATES, `${at}.sections.sankey`);
     if (sections.episodes !== undefined)
       oneOf(sections.episodes, SECTION_STATES, `${at}.sections.episodes`);
+    if (sections.reserves !== undefined)
+      oneOf(sections.reserves, SECTION_STATES, `${at}.sections.reserves`);
     text(day.export_sha256, `${at}.export_sha256`);
   });
   for (const [id, date] of Object.entries(
@@ -663,4 +716,6 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
     nullable(sections.sankey, text, "latest_complete_sections.sankey");
   if (sections.episodes !== undefined)
     nullable(sections.episodes, text, "latest_complete_sections.episodes");
+  if (sections.reserves !== undefined)
+    nullable(sections.reserves, text, "latest_complete_sections.reserves");
 }
