@@ -31,6 +31,9 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain(
       'aria-labelledby="generation-mix-chart-title generation-mix-chart-summary"',
     );
+    expect(html).toContain(
+      'aria-labelledby="generation-battery-chart-title generation-battery-chart-summary"',
+    );
     expect(html).toContain("<figcaption");
     expect(html).toMatch(/<table[\s>]/);
     expect(html).toContain('scope="col"');
@@ -60,7 +63,7 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain("HAY2201");
     expect(html).toContain("BEN2201");
     expect(html).toContain("Electricity Authority dispatch energy prices");
-    expect(html.match(/role="img"/g)?.length).toBe(3);
+    expect(html.match(/role="img"/g)?.length).toBe(4);
     expect(html).toContain('aria-labelledby="energy-flow"');
     expect(html).toMatch(/not published yet/i);
     expect(html).toMatch(/does not guess/i);
