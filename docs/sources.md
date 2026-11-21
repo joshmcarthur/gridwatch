@@ -494,3 +494,91 @@ DST: `TimeZoneIndicator` is `NZDT` on 19 Nov 2026. 46/50-period days: **unchecke
 **Do not collect Final reserve prices** unless the owner wants settled FIR/SIR next to the interim dispatch prices we already publish.
 
 **Owner questions.** (1) Collect dispatched frequency-keeping offers? (2) Offers stack too? (3) Final reserve prices? I will not add a collector until you say so.
+
+## 11. SPD case files (selected periods)
+
+Research for [issue #44](https://github.com/joshmcarthur/gridwatch/issues/44). Checked on 21 November 2026 (NZ time). The brief says to use SPD **selectively** for interesting periods, not every case ([brief §3.3, §13 Phase 5](brief.md)). Section 8 found post-RTP binding constraints live in these files and pointed the selective read here. [#21](https://github.com/joshmcarthur/gridwatch/issues/21) is not chosen; 27 July 2026 is the leading candidate. I listed that day's RTD folder and opened one zip covering the start of trading period 36 (17:30 NZST). I did not reconstruct the event and did not store the zips.
+
+**Finding.** Live SPD cases are ZIPs on the blob, one per 5-minute RTD run. A typical day is ~280 ZIPs and **~75 MB**. 2026 year-to-date is **24.1 GB** (92,166 files, 1 Jan–20 Nov). Twelve months is about **27 GB** if every case is kept. One period is **one ZIP of ~264 KB**, named from the `CaseID` already on our nodal and cleared-offer rows. The solved file names binding constraints and the interval offer stack; gold prices, spreads and reserve prices do not.
+
+### 11.1 Where they are published
+
+Catalogue: [EMI CaseFiles](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/CaseFiles), [hub SPD case files](https://www.ea.govt.nz/data-and-insights/datasets/wholesale/dispatch-and-pricing/spd-case-files/). Naming: [forum thread](https://forum.emi.ea.govt.nz/thread/spd-case-files/) and [EA APIs and tools](https://www.ea.govt.nz/data-and-insights/tools-and-apis/). Blob prefix `Datasets/Wholesale/DispatchAndPricing/CaseFiles/`. Four live folders (measured listing):
+
+| Folder | What | History (measured) | Size |
+|---|---|---|---|
+| `RTD/<yyyy>/<yyyymmdd>/` | Real-time dispatch. Source of dispatch prices when present ([RTD page](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/CaseFiles/RTD)). | Day folders **2022-10-24 to 2026-11-20**. 2023–2025 complete. 2022 has 69 days (from 24 Oct). | See 11.3 |
+| `PRSS/<yyyy>/<yyyymmdd>/` | Short price-responsive schedule. Fallback prices when RTD is missing (page). | 2023–2026. 2026 has the same 324 day folders as RTD. | 20 Nov 2026: **48** ZIPs, ~1.51–1.54 MB each, **73.0 MB**. CCC `130`. |
+| `RTDP/` | RTD for pricing: add shed load back when scarcity pricing is activated ([RTDP page](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/CaseFiles/RTDP)). | One test file `20220902`. **No 2026 folder.** The page: scarcity pricing has not been activated since real-time pricing. | 238 KB |
+| `WDS/` | Weekly dispatch, static research dump (hub). | 2024–2026. Last file 1 Oct 2026. 1,039 ZIPs. | **43.3 GB**, ~40–46 MB each. CCC `120`. |
+
+Pre-RTP **final pricing** cases (`CCC` `111`) sit in `Datasets/Wholesale/DispatchAndPricing/Pre1November2022Archive/CaseFiles/<yyyy>/`, year folder not day folder ([archive page](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/Pre1November2022Archive/CaseFiles)). First 2009 file is 12 Aug 2009 (~6.2 MB). 2022 files are ~6.4 MB, stamped 3 Nov 2022. Adding stopped 1 Nov 2022 (page). Outside the 12-month window. Full archive size **unchecked**.
+
+vSPD GDX is a separate tree (section 8.2), not a case file.
+
+### 11.2 Format and how to pick one ZIP
+
+A case is `MSS_{CaseID}_0X.ZIP`. `CaseID` is `DD` + `CCC` + `YYYY` + `MM` + `HHHH` + `NNN`: UTC day (not zero-padded), case type (`101` = RTD), UTC year, month, `HHMM` of the interval, three random digits ([forum](https://forum.emi.ea.govt.nz/thread/spd-case-files/)). The **folder** is the NZ trading date, which can differ from the UTC day in the name (midnight NZ is still the previous UTC day).
+
+`CaseID` on Nodal Prices and Volumes and Cleared Offers **is** that string. Measured: fixture `171012026111100394` (18 Nov 2026 00:00 NZDT) is [MSS_171012026111100394_0X.ZIP](https://emidatasets.blob.core.windows.net/publicdata/Datasets/Wholesale/DispatchAndPricing/CaseFiles/RTD/2026/20261118/MSS_171012026111100394_0X.ZIP), 272,346 bytes. `Range: bytes=0-0` returns 206 (`Content-Range bytes 0-0/272346`). `If-None-Match` on the ETag returns 304. The zip serves `Content-MD5`.
+
+The ZIP has **16** text files (both cases opened). Do not commit them.
+
+| Member | Role (measured) |
+|---|---|
+| `*.SPDSOLVED` | Solved outputs. 18 Nov 00:00: 728 KB uncompressed, 65 KB in the zip, 3,192 lines. Header `TIMEPERIODLENGTH` is **5**. |
+| `*.PERIOD` | Interval inputs, including the offer stack. 27 Jul 17:30: 136 KB, 1,438 lines. |
+| `*.MDBCTRL` | Control. `STUDYMODE` 101, `INTERVALDURATION` 5, `SHADOWANDREDUCEDDATA` **0** (no reduced-cost columns). Generation time. |
+| `*.MSSMKT`, `*.MSSMOD`, `*.MSSNET`, `*.DAILY` | Market/network model. `MSSNET` is the large one (~796 KB uncompressed). |
+| `*.SFTCHECK`, `*.LOG`, `*.aieperf` | Security-constraint check, solver logs, timings. |
+
+`SPDSOLVED` record types (27 Jul 17:30 and 18 Nov 00:00, same set): `SOLUTION,CASE`, `ISLAND`, `BUS`, `PNODE`, `BRANCH`, `CONSTRAINT`, `TRADERPERIOD`, `HVDC_DISPATCH`, `RISKSETTER`, plus empty RAS/voltage stubs. `PERIOD` has `MSSDATA,BIDSANDOFFERS` (tranche MW and `$/MWh`) and `MSSDATA,TRADERPERIODS` (`MWMAX`, ramp rates).
+
+### 11.3 Size and history (RTD)
+
+| Day | ZIPs | Bytes | Notes |
+|---|---:|---:|---|
+| 27 Jul 2026 | 287 | 75.4 MB | Leading #21 candidate. 259–267 KB each. 284 unique UTC times, 3 re-runs (`0255`, `0550`, `1400`). ~4 of 288 five-minute slots missing. Stamped 27 Jul 20:09 UTC (next morning NZ). [listing](https://emidatasets.blob.core.windows.net/publicdata?restype=container&comp=list&prefix=Datasets/Wholesale/DispatchAndPricing/CaseFiles/RTD/2026/20260727/) |
+| 29 Oct 2026 | 434 | 114.4 MB | Section 8 day. High. |
+| 18 Nov 2026 | 288 | 77.5 MB | Fixture `CaseID` day. |
+| 20 Nov 2026 | 273 | 72.7 MB | Latest complete day on 21 Nov. |
+| 20 Nov 2025 | 277 | 72.0 MB | Inside the 12-month window. |
+| 1 Nov 2022 | 287 | 70.6 MB | RTP start. |
+| 24 Oct 2022 | 281 | 69.2 MB | First RTD day on the blob. |
+
+2026 YTD (324 days): **92,166** files, **24.08 GB**, min 246 KB, max 784 KB (measured listing). Mean **~74 MB/day**. Twelve months **inferred** at 365 × 74 MB ≈ **27 GB**. Section 8's ~42 GB/year used the 114 MB 29 Oct day; that count is not typical. The [RTD page](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/CaseFiles/RTD) says typically about 250 cases/day; recent days are 273–288 plus re-runs.
+
+Licence: site content is CC BY 4.0 (section 5); no dataset-level exception found.
+
+### 11.4 What a case adds for a #21-style event
+
+Gold already has dispatch energy prices, island spreads, FIR/SIR prices, 5-minute cleared MW and nodal generation/load. Those are not why we would open a case. The case adds the **solve**:
+
+| Fact | Where in the ZIP | In gold today? |
+|---|---|---|
+| Binding constraint **name**, type (`BrCnst`/`MnCnst`), value, limits, shadow price | `D,SOLUTION,CONSTRAINT` where `LOWERMARGINALPRICE` or `UPPERMARGINALPRICE` is not zero (section 8.4) | No. Spreads show the effect, not the name. |
+| Offer stack used in the solve (tranche limit and price) | `D,MSSDATA,BIDSANDOFFERS` in `*.PERIOD`. 27 Jul 17:30: 601 rows, 187 energy (`ENOF`) tranches, 111 units, mean 1.68 tranches. | No. Full offer CSVs are deferred ([brief §3.3](brief.md)). |
+| Cleared MW **and** cleared offer price, ramp-binding flags | `D,SOLUTION,TRADERPERIOD`. 111 `ENOF` rows. `PRICECLEARED` is the offer price that cleared, not the nodal price. `UPRAMPRATEBINDING` / `DNRAMPRATEBINDING`. | Cleared MW yes (Cleared Offers). Offer price and ramp-binding no. |
+| Island residual, risk setter, HVDC pole dispatch vs limit | `SOLUTION,ISLAND` (`RESIDUAL`, `RISKNODESIXSEC`), `SOLUTION,RISKSETTER`, `SOLUTION,HVDC_DISPATCH` | Residual is gold energy-balance, not the SPD residual. HVDC gold is monthly metered, not 5-minute pole. Risk setter no. |
+| Energy scarcity in the interval | `SOLUTION,PNODE` / `ISLAND` `ENSHORTFALL`; `PERIOD` scarcity factors. RTDP would exist if scarcity **pricing** ran; it does not (11.1). | No. |
+
+Opened the 17:30 NZST case on 27 Jul 2026 ([MSS_271012026070530407_0X.ZIP](https://emidatasets.blob.core.windows.net/publicdata/Datasets/Wholesale/DispatchAndPricing/CaseFiles/RTD/2026/20260727/MSS_271012026070530407_0X.ZIP), 264,029 bytes) as a schema check, not an event write-up. 34 constraint rows; four with non-zero shadow. Two look like **penalty duals** (`DCSmax` at $650,000 with upper limit 0; several `MW_Min` rows on 18 Nov at ±$700,000). Two look economic: `DCP2Nmax` at 420 MW, shadow $1.86/MW (HVDC pole 2 north; `HVDC_DISPATCH` has `BEN2201 P2N` = 420 MW) and frequency-keeping `FK_WTO_CTRLMAX` / `FK_WTR_CTRLMAX` (same block codes as section 10). `ENSHORTFALL` was 0 in this interval. `SHADOWANDREDUCEDDATA` is 0, so a "marginal unit" is inferred from offer tranches plus `PRICECLEARED` and nodal price, not from an LP reduced-cost column.
+
+### 11.5 Smallest fetch for one period
+
+1. From nodal or cleared offers (already collected), take `TradingDate` and `CaseID` for the interval. If two cases share the interval, keep the latest `RunDateTime` (same rule as gold, [#9](https://github.com/joshmcarthur/gridwatch/issues/9)).
+2. `GET BLOB/Datasets/Wholesale/DispatchAndPricing/CaseFiles/RTD/{yyyy}/{yyyymmdd}/MSS_{CaseID}_0X.ZIP` (~264 KB). Do not list the whole day unless `CaseID` is missing.
+3. Unzip `*.SPDSOLVED` and `*.PERIOD` only. Skip `MSSNET`.
+4. Keep `D,SOLUTION,CONSTRAINT` rows whose shadow is not zero and not a round penalty ($650,000 / $700,000 seen). Keep `D,MSSDATA,BIDSANDOFFERS` energy tranches and `D,SOLUTION,TRADERPERIOD` `ENOF` rows (`MWCLEARED`, `PRICECLEARED`, ramp flags). Optionally `ISLAND`, `RISKSETTER`, `HVDC_DISPATCH`, `PNODE.ENSHORTFALL`.
+
+One flagged **interval** is ~264 KB. One flagged **trading period** is up to six intervals plus re-runs, about **1.6 MB**. One interesting **day** is ~75 MB, not 27 GB.
+
+### 11.6 Recommendation
+
+**Do not add a collector for RTD, PRSS, RTDP, WDS or the pre-RTP archive.** A 12-month RTD backfill is about 27 GB and contradicts the brief.
+
+**Do add a targeted reader, after the owner agrees and after #21 is chosen:** resolve `CaseID` from the gold/silver row for the flagged interval, fetch that ZIP only, and parse the constraint and offer records above. Store the constraint name, type, limits and shadow price, plus the offer tranches and `PRICECLEARED` of units that look marginal, next to the observation.
+
+**Do not** treat gold prices, spreads or reserve prices as a substitute for the case. They are the outcome. The case is the named constraints and the stack that produced them.
+
+**Owner question.** Approve a later targeted reader (not a collector) once #21 is chosen, or wait? I will not fetch RTD in the pipeline until you say so.
