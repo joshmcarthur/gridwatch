@@ -1,4 +1,5 @@
 import { energyBalance } from "./gold/energy-balance.ts";
+import { episodes } from "./gold/episodes.ts";
 import { generation } from "./gold/generation.ts";
 import { gridLoad } from "./gold/grid-load.ts";
 import { hvdc } from "./gold/hvdc.ts";
@@ -145,4 +146,6 @@ export const datasets: PublisherDataset[] = [
   priceSeparation,
   // After gold_reserves: the detector reads reserve_by_class_island_period (ADR-0019).
   reservePriceAnomaly,
+  // After the detectors it reads: grouping of observations (ADR-0021).
+  episodes,
 ];

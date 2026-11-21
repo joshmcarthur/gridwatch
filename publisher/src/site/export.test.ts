@@ -1379,8 +1379,14 @@ test("the committed sample day matches the exporter end to end, on real generati
     link_losses_megawatt_hours: null,
     inputs_complete: null,
   });
+  expect(built.episodes).toMatchObject({
+    state: "missing",
+    items: [],
+  });
   const parsedIndex: unknown = JSON.parse(index);
   assertSiteIndex(parsedIndex);
   expect(parsedIndex.days[0]?.sections.sankey).toBe("missing");
   expect(parsedIndex.latest_complete_sections.sankey).toBeNull();
+  expect(parsedIndex.days[0]?.sections.episodes).toBe("missing");
+  expect(parsedIndex.latest_complete_sections.episodes).toBeNull();
 });

@@ -5,6 +5,7 @@ import {
   assertSiteDay,
   assertSiteIndex,
   type SiteDay,
+  type SiteEpisode,
   type SiteIndex,
 } from "@gridwatch/publisher/site-contract";
 import fixtureIndex from "../../fixtures/index.json";
@@ -61,6 +62,24 @@ export function loadSiteDay(date: string, index = loadSiteIndex()): SiteDay {
     );
   }
   return parsed;
+}
+
+/** Newest detected episodes across the latest days, highest severity first per day. */
+export function recentEpisodes(
+  index: SiteIndex,
+  loadDay: (date: string) => SiteDay = (date) => loadSiteDay(date, index),
+  limit = 8,
+): Array<{ date: string; episode: SiteEpisode }> {
+  const found: Array<{ date: string; episode: SiteEpisode }> = [];
+  for (const entry of [...index.days].reverse()) {
+    const day = loadDay(entry.date);
+    const items = day.episodes?.items ?? [];
+    for (const episode of items) {
+      found.push({ date: entry.date, episode });
+      if (found.length >= limit) return found;
+    }
+  }
+  return found;
 }
 
 export function formatTradingDate(date: string): string {

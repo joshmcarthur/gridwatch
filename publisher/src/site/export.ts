@@ -10,6 +10,10 @@ import {
   TABLES as ENERGY_BALANCE_TABLES,
 } from "../gold/energy-balance.ts";
 import {
+  INPUTS as EPISODE_INPUTS,
+  TABLES as EPISODE_TABLES,
+} from "../gold/episodes.ts";
+import {
   INPUTS as GENERATION_INPUTS,
   TABLES as GENERATION_TABLES,
 } from "../gold/generation.ts";
@@ -31,6 +35,7 @@ import { periodsInTradingDate, periodToUtc } from "../trading-time.ts";
 import {
   assertSiteDay,
   assertSiteIndex,
+  type EpisodesSection,
   type FuelCategory,
   type GenerationSection,
   type Island,
@@ -41,6 +46,7 @@ import {
   SITE_EXPORT_ID,
   type SiteDatasetStatus,
   type SiteDay,
+  type SiteEpisode,
   type SiteIndex,
   type SiteIndexDay,
 } from "./contract.ts";
@@ -49,10 +55,10 @@ import {
  * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
  * rebuilt (ADR-0014).
  */
-export const EXPORT_VERSION = 2;
+export const EXPORT_VERSION = 3;
 
 interface Section {
-  name: "generation" | "prices" | "sankey";
+  name: "generation" | "prices" | "sankey" | "episodes";
   /** The first gold table. Its partition holds the section's `inputs_sha256`. */
   sentinel: string;
   inputs: readonly GoldInput[];
@@ -73,10 +79,16 @@ const SANKEY_SECTION: Section = {
   sentinel: ENERGY_BALANCE_TABLES[0],
   inputs: ENERGY_BALANCE_INPUTS,
 };
+const EPISODES_SECTION: Section = {
+  name: "episodes",
+  sentinel: EPISODE_TABLES[0],
+  inputs: EPISODE_INPUTS,
+};
 const SECTIONS: readonly Section[] = [
   GENERATION_SECTION,
   PRICES_SECTION,
   SANKEY_SECTION,
+  EPISODES_SECTION,
 ];
 const [, HVDC_DAY_TABLE] = HVDC_TABLES;
 
@@ -595,6 +607,92 @@ async function buildSankey(
   };
 }
 
+const asUtc = (value: unknown): string => {
+  if (value instanceof Date) return value.toISOString().replace(/\.000Z$/, "Z");
+  if (typeof value === "string") {
+    const ms = Date.parse(value);
+    if (Number.isNaN(ms)) throw new TypeError(`not an instant: ${value}`);
+    return new Date(ms).toISOString().replace(/\.000Z$/, "Z");
+  }
+  throw new TypeError("event time is not a string or Date");
+};
+
+const stringList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+};
+
+const islandList = (value: unknown): Island[] =>
+  stringList(value).flatMap((item) => {
+    if (item === "NI" || item === "SI") return [item];
+    return [];
+  });
+
+function missingEpisodes(
+  base: Pick<EpisodesSection, "silver_tables" | "gold_tables" | "datasets">,
+): EpisodesSection {
+  return {
+    ...base,
+    state: "missing",
+    missing_periods: [],
+    analysis_version: null,
+    inputs_sha256: null,
+    items: [],
+  };
+}
+
+async function buildEpisodes(
+  connection: DuckDBConnection,
+  goldDir: string,
+  date: string,
+  completeness: CompletenessView,
+): Promise<EpisodesSection> {
+  const section = EPISODES_SECTION;
+  const base = {
+    silver_tables: [] as string[],
+    gold_tables: [...EPISODE_TABLES],
+    datasets: sectionDatasets(section),
+  };
+  const stamp = await readStamp(
+    connection,
+    goldPartitionPath(goldDir, section.sentinel, date),
+  );
+  if (!stamp) return missingEpisodes(base);
+  const itemsPath = goldPartitionPath(goldDir, EPISODE_TABLES[1], date);
+  const rows = existsSync(itemsPath)
+    ? await rowsOf(
+        connection,
+        goldDir,
+        EPISODE_TABLES[1],
+        date,
+        `episode_id, seed_observation_id, event_start_utc, event_end_utc,
+         start_trading_period, end_trading_period, member_count,
+         observation_types, islands, severity`,
+        "severity DESC, episode_id",
+      )
+    : [];
+  const items: SiteEpisode[] = rows.map((row) => ({
+    episode_id: String(row.episode_id),
+    seed_observation_id: String(row.seed_observation_id),
+    start_utc: asUtc(row.event_start_utc),
+    end_utc: asUtc(row.event_end_utc),
+    start_trading_period: Number(row.start_trading_period),
+    end_trading_period: Number(row.end_trading_period),
+    member_count: Number(row.member_count),
+    observation_types: stringList(row.observation_types),
+    islands: islandList(row.islands),
+    severity: round(Number(row.severity), 2),
+  }));
+  return {
+    ...base,
+    state: sectionState(stamp, section, completeness, date),
+    missing_periods: [],
+    analysis_version: stamp.analysis_version,
+    inputs_sha256: stamp.inputs_sha256,
+    items,
+  };
+}
+
 /**
  * One site day from the gold tables of a date and this run's completeness rows. Opens one
  * in-memory DuckDB connection and reads only the sentinel and the tables of each section.
@@ -624,6 +722,12 @@ export async function buildSiteDay(options: {
       periods,
     );
     const sankey = await buildSankey(connection, goldDir, date, completeness);
+    const episodes = await buildEpisodes(
+      connection,
+      goldDir,
+      date,
+      completeness,
+    );
     const datasets = Object.fromEntries(
       DATASET_IDS.map((id) => [id, datasetStatus(completeness, id, date)]),
     );
@@ -637,6 +741,7 @@ export async function buildSiteDay(options: {
       generation,
       prices,
       sankey,
+      episodes,
     };
   } finally {
     connection.closeSync();
@@ -768,6 +873,7 @@ export async function exportSite(options: {
           generation: day.generation.state,
           prices: day.prices.state,
           sankey: day.sankey?.state ?? "missing",
+          episodes: day.episodes?.state ?? "missing",
         },
         export_sha256: wanted,
       });
@@ -780,7 +886,9 @@ export async function exportSite(options: {
 
   const entries = [...days.values()];
   const latest = latestCompleteDates(completeness);
-  const latestSection = (name: "generation" | "prices" | "sankey") =>
+  const latestSection = (
+    name: "generation" | "prices" | "sankey" | "episodes",
+  ) =>
     entries.filter((day) => day.sections[name] === "complete").at(-1)?.date ??
     null;
   const index: SiteIndex = {
@@ -795,6 +903,7 @@ export async function exportSite(options: {
       generation: latestSection("generation"),
       prices: latestSection("prices"),
       sankey: latestSection("sankey"),
+      episodes: latestSection("episodes"),
     },
   };
   assertSiteIndex(index);

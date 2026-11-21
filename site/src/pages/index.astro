@@ -1,12 +1,18 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { dailyPath } from "../lib/daily-page";
-import { formatTradingDate, loadSiteIndex } from "../lib/site-data";
+import { episodeHeadline } from "../lib/episode-copy";
+import {
+  formatTradingDate,
+  loadSiteIndex,
+  recentEpisodes,
+} from "../lib/site-data";
 
 const index = loadSiteIndex();
 const generationDate = index.latest_complete_sections.generation;
 const pricesDate = index.latest_complete_sections.prices;
 const sampleDay = index.days.at(-1);
+const recent = recentEpisodes(index);
 ---
 
 <Layout
@@ -56,6 +62,29 @@ const sampleDay = index.days.at(-1);
       </div>
     </dl>
   </section>
+
+  <section class="card" aria-labelledby="recent-episodes-heading">
+    <h2 id="recent-episodes-heading">Recently detected</h2>
+    <p>
+      Unusual stretches grouped from the public files. Not a written-up
+      public event yet.
+    </p>
+    {
+      recent.length === 0 ? (
+        <p>No grouped readings on the days this site holds yet.</p>
+      ) : (
+        <ol class="episodes">
+          {recent.map(({ date, episode }) => (
+            <li>
+              <a href={`${dailyPath(date)}#episode-${episode.episode_id}`}>
+                {formatTradingDate(date)}: {episodeHeadline(episode)}
+              </a>
+            </li>
+          ))}
+        </ol>
+      )
+    }
+  </section>
 </Layout>
 
 <style>
@@ -95,5 +124,13 @@ const sampleDay = index.days.at(-1);
     margin: 0;
     font-size: var(--text-body);
     font-variant-numeric: tabular-nums;
+  }
+
+  .episodes {
+    margin: 0;
+    padding-left: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
 </style>
