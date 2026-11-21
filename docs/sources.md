@@ -165,14 +165,14 @@ Class: `omission` (no Generation_MD row while RTD has energy), `zero-fill` (Gene
 
 | Plant / POC | Class | Generation_MD GWh | RTD GWh | Verdict | Evidence |
 |---|---|---:|---:|---|---|
-| Waipori `WPG0331` vs parent `HWB0331` | definition | 124.1 | 108.8 | Different POCs, not a mapping error. NSP `WPG0331` is embedded under `HWB0331`. | **Measured.** RTD at `HWB0331` is `MAH0` Mahinerangi 94.4 + `WPI0` Deep Stream 14.4. Period correlation with `MAH0` is 0.995. |
-| Waipori fuel at `WPG0331` | definition | ~94 of 124.1 labelled Hydro | `MAH0` 94.4 wind | Hydro label includes Mahinerangi wind. Gold relabels plant `WPG/waipori` as wind ([#105](https://github.com/joshmcarthur/gridwatch/issues/105)). The BWK1101 row stays hydro. Generation_MD is one row, so the Deep Stream share at `WPG0331` is also labelled wind. | **Inferred** from the 0.995 correlation. `MAH0` is 36 MW wind. No source statement. Owner chose relabel. |
+| Waipori `WPG0331` vs parent `HWB0331` | definition | 124.1 | 108.8 | Different POCs, not a mapping error. NSP `WPG0331` is embedded under `HWB0331`. | **Measured.** RTD at `HWB0331` is `MAH0` Mahinerangi 94.4 + `WPI0` Deep Stream 14.4. The half-hour correlation of `WPG0331` with `MAH0` is 0.90. With the `HWB0331` total it is 0.97. |
+| Waipori fuel at `WPG0331` | definition | ~94 of 124.1 labelled Hydro | `MAH0` 94.4 wind | Hydro label includes Mahinerangi wind. Gold relabels plant `WPG/waipori` as wind ([#105](https://github.com/joshmcarthur/gridwatch/issues/105)). The BWK1101 row stays hydro. Generation_MD is one row, so the Deep Stream share at `WPG0331` is also labelled wind. | **Inferred** from the 0.90 correlation with `MAH0` (the split is not measured). `MAH0` is 36 MW wind. No source statement. Owner chose relabel. |
 | Waipori `BWK1101` | not-a-gap | 107.1 | 105.5 (`WPI0`) | The two files match. | **Measured.** |
 | Matahina `MAT1101` (`MAT0`) | omission | 0 | ~285 | Omitted from Generation_MD since about October 2021. | **Measured** unless marked. Fleet has `MAT0` (80 MW hydro) and `ANI0` Aniwhenua (25 MW) at `MAT1101`. Generation_MD has only Aniwhenua (BOPD): 139.9 GWh vs RTD `ANI0` 134.6, correlation 0.984; adding `MAT0` drops it to 0.17. No Matahina row in the 12 months of silver. Files 202001 and 202109 have `MAT,MAT1101,TRUS,matahina,Hydro`; 202112 and 202309 have none. Fleet ownership of `MAT0` changed from TRUS to CNIR on 2021-10-01. File 202110 was not fetched, so the exact month is **inferred**. Cause not documented by EMI that was found. |
 | Ngawha `KOE1101` | definition | 420.6 | 221.2 (`NGB0`) | Generation_MD includes generation that was not dispatched. | **Measured** volumes. The extra energy is **inferred** from the difference. |
 | Twin Rivers solar `TRS0` | omission | none | ~29 | No Generation_MD row. | **Measured.** |
 | Pukenui | omission | none before 2026-04 | — | In Generation_MD from 2026-04. | **Measured.** |
-| Maraetai `MTI2201` | unresolved | 830 | 911 | RTD is higher in every month, by 5% to 25%. Cause unknown. | **Measured.** |
+| Maraetai `MTI2201` | unresolved | 830 | 911 | RTD is higher in 11 of 12 months, by 5.1% to 19.8%. In October 2026 RTD is 0.3% lower. Cause unknown. | **Measured.** |
 | Glenbrook-Ohurua battery `GLB0` | omission | none | 23.2 | No Generation_MD row. | **Measured.** |
 | Huntly Battery `HLY11` | omission | none | 5.5 | No Generation_MD row. | **Measured.** |
 | Taiohi Solar `TOH0` at `HLY0331` | omission | none | 38.3 | No Generation_MD row. | **Measured.** |
