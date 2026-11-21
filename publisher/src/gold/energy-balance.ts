@@ -3,6 +3,7 @@ import { DuckDBInstance } from "@duckdb/node-api";
 import { lit, type PublishResult } from "../silver/common.ts";
 import { periodsInTradingDate, periodToUtc } from "../trading-time.ts";
 import {
+  dayTermSql,
   type GoldInput,
   type GoldPublishOptions,
   goldDataset,
@@ -197,8 +198,7 @@ export async function publishEnergyBalance(
       ).getRowObjectsJson() as Array<{ trading_period: string }>
     ).map((row) => Number(row.trading_period));
 
-    const dayTerm = (column: string) =>
-      `CASE WHEN count(${column}) = ${periods} THEN sum(${column}) END AS ${column}`;
+    const dayTerm = (column: string) => dayTermSql(column, periods);
     const selects: Record<(typeof TABLES)[number], string> = {
       energy_balance_period: `SELECT trading_date, trading_period, event_start_utc, event_end_utc,
           island, generation_mwh, hvdc_import_mwh, load_mwh, load_intervals, residual_mwh,
