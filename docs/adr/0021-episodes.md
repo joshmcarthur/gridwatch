@@ -1,4 +1,4 @@
-# ADR-0020: Episode gold table and grouping rules
+# ADR-0021: Episode gold table and grouping rules
 
 - Status: Proposed
 - Date: 2026-11-21
