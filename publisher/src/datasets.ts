@@ -1,3 +1,4 @@
+import { demandDeviation } from "./gold/demand-deviation.ts";
 import { energyBalance } from "./gold/energy-balance.ts";
 import { episodes } from "./gold/episodes.ts";
 import { generation } from "./gold/generation.ts";
@@ -153,6 +154,8 @@ export const datasets: PublisherDataset[] = [
   // After gold_generation: plant and fuel generation-change detectors (ADR-0019).
   plantGenerationChange,
   fuelGenerationChange,
+  // After gold_grid_load: demand-deviation reads grid_load_period (ADR-0020).
+  demandDeviation,
   // After the detectors it reads: grouping of observations (ADR-0021).
   episodes,
 ];

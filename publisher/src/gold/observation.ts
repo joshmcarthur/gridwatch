@@ -140,6 +140,12 @@ export interface RunDetectorConfig {
    * the same.
    */
   baselineByTradingPeriod?: boolean;
+  /**
+   * When true with `baselineByTradingPeriod`, the period-matched cell keeps only prior days
+   * whose weekday equals the date under test. Default false: generation matches every prior
+   * day of that period. Omit the key so existing config hashes stay the same.
+   */
+  baselineSameWeekday?: boolean;
 }
 
 export interface RunTableOptions {
@@ -162,6 +168,7 @@ type BaselineMode = "period" | "all";
  *   is left out, so a spike does not raise its own threshold. Default: one row for each
  *   subject, pooling every period of the window. When `baselineByTradingPeriod` is true: one
  *   row for each `(subject_id, trading_period)`, using the same period number on prior days.
+ *   When `baselineSameWeekday` is also true, those prior days must share the date's weekday.
  * - `hits`: a period of `date` strictly beyond a threshold. A null value is never a hit.
  *   Period-matched hits join baseline on subject and period.
  * - `runs`: consecutive period numbers that hit. A run of fewer than `minPeriods` is dropped.
@@ -296,6 +303,10 @@ async function createPeriodMatchedRunTables(
   connection: DuckDBConnection,
   { config, date, highType, lowType, baselineStart }: RunTableSqlOptions,
 ): Promise<void> {
+  const sameWeekdaySql =
+    config.baselineSameWeekday === true
+      ? `AND dayofweek(b.trading_date) = dayofweek(DATE ${lit(date)})`
+      : "";
   await connection.run(
     `CREATE TEMP TABLE baseline AS
      WITH date_periods AS (
@@ -316,6 +327,7 @@ async function createPeriodMatchedRunTables(
         AND b.trading_date < DATE ${lit(date)}
         AND b.trading_date >= DATE ${lit(baselineStart)}
         AND b.value IS NOT NULL AND b.inputs_complete
+        ${sameWeekdaySql}
        GROUP BY ALL
      )
      SELECT *,
