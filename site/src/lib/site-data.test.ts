@@ -2,7 +2,12 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { formatTradingDate, loadSiteDay, loadSiteIndex } from "./site-data.ts";
+import {
+  formatTradingDate,
+  loadSiteDay,
+  loadSiteIndex,
+  recentEpisodes,
+} from "./site-data.ts";
 
 const validIndex = {
   contract_version: 1,
@@ -116,6 +121,66 @@ test("loadSiteDay reads a gold day when DATA_ROOT has a matching file", async ()
   await writeFile(join(dataRoot, "gold/site/days/2026-09-27.json"), fixture);
   process.env.DATA_ROOT = dataRoot;
   expect(loadSiteDay("2026-09-27").trading_date).toBe("2026-09-27");
+});
+
+test("recentEpisodes walks newest days first and stops at the limit", () => {
+  const older = {
+    episode_id: "old",
+    seed_observation_id: "s1",
+    start_utc: "2026-09-25T12:00:00Z",
+    end_utc: "2026-09-25T13:00:00Z",
+    start_trading_period: 1,
+    end_trading_period: 2,
+    member_count: 1,
+    observation_types: ["price_high"],
+    islands: ["NI" as const],
+    severity: 9,
+  };
+  const newer = {
+    ...older,
+    episode_id: "new",
+    seed_observation_id: "s2",
+    severity: 1,
+  };
+  const found = recentEpisodes(
+    {
+      contract_version: 1,
+      days: [
+        {
+          date: "2026-09-25",
+          path: "days/2026-09-25.json",
+          complete: true,
+          sections: { generation: "complete", prices: "complete" },
+          export_sha256: "a",
+        },
+        {
+          date: "2026-09-26",
+          path: "days/2026-09-26.json",
+          complete: true,
+          sections: { generation: "complete", prices: "complete" },
+          export_sha256: "a",
+        },
+      ],
+      latest_complete: { generation_md: "2026-09-26" },
+      latest_complete_sections: { generation: "2026-09-26", prices: null },
+    },
+    (date) =>
+      ({
+        contract_version: 1,
+        trading_date: date,
+        periods: [],
+        complete: true,
+        datasets: {},
+        generation: { state: "complete" },
+        prices: { state: "complete" },
+        episodes: {
+          state: "complete",
+          items: date === "2026-09-26" ? [newer] : [older],
+        },
+      }) as never,
+    1,
+  );
+  expect(found).toEqual([{ date: "2026-09-26", episode: newer }]);
 });
 
 test("loadSiteIndex does not load gold from a cwd-relative data path", async () => {

@@ -12,6 +12,7 @@ import {
   monthGroups,
   neighbouringDays,
 } from "../../../../lib/daily-page";
+import { episodeHeadline } from "../../../../lib/episode-copy";
 import {
   formatTradingDate,
   loadSiteDay,
@@ -69,6 +70,37 @@ const months = monthGroups(index);
     <section class="slot" aria-labelledby="energy-flow">
       <h2 id="energy-flow">Where the energy went</h2>
       <EnergySankeyChart day={day} />
+    </section>
+
+    <section class="slot" aria-labelledby="detected-episodes">
+      <h2 id="detected-episodes">What stood out</h2>
+      <p>
+        Detectors look for unusual stretches in the public files and group the
+        ones that overlap. Wholesale prices are what generators and retailers
+        paid each other, not a household bill. Reserve prices are the cost of
+        backup generation kept ready if something trips. These grouped
+        readings are not yet a written-up public event.
+      </p>
+      {
+        day.episodes === undefined || day.episodes.state === "missing" ? (
+          <p>Grouped readings have not been published for this day yet.</p>
+        ) : day.episodes.items.length === 0 ? (
+          <p>No overlapping unusual stretches were grouped on this day.</p>
+        ) : (
+          <ol class="episodes">
+            {day.episodes.items.map((episode) => (
+              <li id={`episode-${episode.episode_id}`}>
+                <p>{episodeHeadline(episode)}</p>
+                <p>
+                  Trading periods {episode.start_trading_period} to{" "}
+                  {episode.end_trading_period}. {episode.member_count}{" "}
+                  {episode.member_count === 1 ? "reading" : "readings"}.
+                </p>
+              </li>
+            ))}
+          </ol>
+        )
+      }
     </section>
 
     <nav class="days" aria-label="Other days">
@@ -157,6 +189,13 @@ const months = monthGroups(index);
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-3);
+  }
+
+  .episodes {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    list-style: decimal;
+    padding-left: 1.5rem;
   }
 
   a[aria-current="page"] {

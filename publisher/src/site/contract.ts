@@ -160,6 +160,29 @@ export interface SankeySection extends SectionBase {
   inputs_complete: boolean | null;
 }
 
+/** One grouped stretch of unusual readings (ADR-0021). */
+export interface SiteEpisode {
+  episode_id: string;
+  seed_observation_id: string;
+  start_utc: string;
+  end_utc: string;
+  start_trading_period: number;
+  end_trading_period: number;
+  member_count: number;
+  observation_types: string[];
+  islands: Island[];
+  severity: number;
+}
+
+/**
+ * Detected episodes for the day (ADR-0021). Optional: absence means the exporter has not
+ * built it. A day with no gold episode_days row is `missing`. An empty `items` list is a
+ * quiet day, not missing.
+ */
+export interface EpisodesSection extends SectionBase {
+  items: SiteEpisode[];
+}
+
 /** An extension point. The v1 exporter never writes one. A consumer treats absence as "not built". */
 export type SiteExtension = { state: SectionState } & Record<string, unknown>;
 
@@ -181,6 +204,7 @@ export interface SiteDay {
   /** Optional. Absence means not built. The exporter writes it on every day, `missing` when gold has no row. */
   sankey?: SankeySection;
   observations?: SiteExtension;
+  episodes?: EpisodesSection;
 }
 
 export interface SiteIndexDay {
@@ -193,6 +217,8 @@ export interface SiteIndexDay {
     prices: SectionState;
     /** Optional. The exporter writes it; older index files omit it. */
     sankey?: SectionState;
+    /** Optional. Detected episodes for the day (ADR-0021). */
+    episodes?: SectionState;
   };
   /** The held version of the day file (ADR-0014). */
   export_sha256: string;
@@ -210,6 +236,8 @@ export interface SiteIndex {
     prices: string | null;
     /** Optional. The exporter writes it; older index files omit it. */
     sankey?: string | null;
+    /** Optional. Latest day whose episodes section is complete. */
+    episodes?: string | null;
   };
 }
 
@@ -225,7 +253,7 @@ const DATASET_STATES: readonly DatasetState[] = [
   "invalid",
 ];
 const ISLANDS: readonly Island[] = ["NI", "SI"];
-const EXTENSIONS = ["reserves", "sankey", "observations"] as const;
+const EXTENSIONS = ["reserves", "sankey", "observations", "episodes"] as const;
 const DAY_LENGTHS = [46, 48, 50];
 
 function fail(path: string, message: string): never {
@@ -516,6 +544,34 @@ function checkSankey(
   return base.datasets;
 }
 
+function checkEpisodes(
+  value: unknown,
+  path: string,
+  periodCount: number,
+): string[] {
+  const section = record(value, path);
+  const base = checkSectionBase(section, path, periodCount);
+  const items = list(section.items, `${path}.items`);
+  checkEmptyWhenMissing(items, base.state, `${path}.items`);
+  items.forEach((item, i) => {
+    const at = `${path}.items[${i}]`;
+    const row = record(item, at);
+    text(row.episode_id, `${at}.episode_id`);
+    text(row.seed_observation_id, `${at}.seed_observation_id`);
+    text(row.start_utc, `${at}.start_utc`);
+    text(row.end_utc, `${at}.end_utc`);
+    integer(row.start_trading_period, `${at}.start_trading_period`);
+    integer(row.end_trading_period, `${at}.end_trading_period`);
+    integer(row.member_count, `${at}.member_count`);
+    texts(row.observation_types, `${at}.observation_types`);
+    const islands = list(row.islands, `${at}.islands`);
+    for (let j = 0; j < islands.length; j++)
+      oneOf(islands[j], ISLANDS, `${at}.islands[${j}]`);
+    number(row.severity, `${at}.severity`);
+  });
+  return base.datasets;
+}
+
 /**
  * Throws a `TypeError` with the path of the first field that does not match the contract. The
  * exporter calls it on every day it writes, and the site may call it on every day it reads.
@@ -548,6 +604,9 @@ export function assertSiteDay(value: unknown): asserts value is SiteDay {
     switch (key) {
       case "sankey":
         sectionDatasets.push(...checkSankey(day[key], key, periods.length));
+        break;
+      case "episodes":
+        sectionDatasets.push(...checkEpisodes(day[key], key, periods.length));
         break;
       case "reserves":
       case "observations":
@@ -586,6 +645,8 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
     oneOf(sections.prices, SECTION_STATES, `${at}.sections.prices`);
     if (sections.sankey !== undefined)
       oneOf(sections.sankey, SECTION_STATES, `${at}.sections.sankey`);
+    if (sections.episodes !== undefined)
+      oneOf(sections.episodes, SECTION_STATES, `${at}.sections.episodes`);
     text(day.export_sha256, `${at}.export_sha256`);
   });
   for (const [id, date] of Object.entries(
@@ -600,4 +661,6 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
   nullable(sections.prices, text, "latest_complete_sections.prices");
   if (sections.sankey !== undefined)
     nullable(sections.sankey, text, "latest_complete_sections.sankey");
+  if (sections.episodes !== undefined)
+    nullable(sections.episodes, text, "latest_complete_sections.episodes");
 }
