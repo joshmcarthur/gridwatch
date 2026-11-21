@@ -48,8 +48,11 @@ export interface RunDetectorSpec {
   lowType: string;
   measuredUnit: string;
   subjectType: SubjectType;
-  /** SELECT that yields at least `subject_id`. Extra columns are `s.*` in the mapping. */
-  subjectsSql: string;
+  /**
+   * SELECT that yields at least `subject_id`. Extra columns are `s.*` in the mapping. It may
+   * read the temp table `input`. A function receives the date under test.
+   */
+  subjectsSql: string | ((date: string) => string);
   /**
    * SELECT that yields `subject_id, trading_date, trading_period, event_start_utc,
    * event_end_utc, value, inputs_complete`. It may read the temp table `input`.
@@ -125,6 +128,11 @@ export async function publishRunDetector(
   const baselineEnd = shiftDate(date, -1);
   const columns = spec.subjectColumns;
   const parameters = JSON.stringify(spec.config);
+  const byPeriod = spec.config.baselineByTradingPeriod === true;
+  const subjectsSql =
+    typeof spec.subjectsSql === "function"
+      ? spec.subjectsSql(date)
+      : spec.subjectsSql;
 
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
@@ -144,7 +152,7 @@ export async function publishRunDetector(
     await connection.run(
       `CREATE TEMP TABLE input AS SELECT * FROM read_parquet([${files.map(lit).join(", ")}])`,
     );
-    await connection.run(`CREATE TEMP TABLE subjects AS ${spec.subjectsSql}`);
+    await connection.run(`CREATE TEMP TABLE subjects AS ${subjectsSql}`);
     await connection.run(`CREATE TEMP TABLE series AS ${spec.seriesSql}`);
     await createRunTables(connection, {
       config: spec.config,
@@ -203,6 +211,7 @@ export async function publishRunDetector(
 
     const sentinelSql = `SELECT ${lit(date)}::DATE AS trading_date,
          b.subject_id,
+         ${byPeriod ? "b.trading_period," : ""}
          ${lit(baselineStart)}::DATE AS baseline_window_start,
          ${lit(baselineEnd)}::DATE AS baseline_window_end,
          b.sample_count AS baseline_sample_count,
@@ -217,7 +226,7 @@ export async function publishRunDetector(
          SELECT subject_id, count(*)::INTEGER AS observation_count
          FROM runs GROUP BY subject_id
        ) c ON c.subject_id = b.subject_id
-       ORDER BY b.subject_id`;
+       ORDER BY b.subject_id${byPeriod ? ", b.trading_period" : ""}`;
 
     await writeGoldTables(
       connection,

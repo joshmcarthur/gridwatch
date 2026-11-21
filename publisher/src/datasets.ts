@@ -1,6 +1,10 @@
 import { energyBalance } from "./gold/energy-balance.ts";
 import { episodes } from "./gold/episodes.ts";
 import { generation } from "./gold/generation.ts";
+import {
+  fuelGenerationChange,
+  plantGenerationChange,
+} from "./gold/generation-change.ts";
 import { gridLoad } from "./gold/grid-load.ts";
 import { hvdc } from "./gold/hvdc.ts";
 import { priceAnomaly } from "./gold/price-anomaly.ts";
@@ -146,6 +150,9 @@ export const datasets: PublisherDataset[] = [
   priceSeparation,
   // After gold_reserves: the detector reads reserve_by_class_island_period (ADR-0019).
   reservePriceAnomaly,
+  // After gold_generation: plant and fuel generation-change detectors (ADR-0019).
+  plantGenerationChange,
+  fuelGenerationChange,
   // After the detectors it reads: grouping of observations (ADR-0021).
   episodes,
 ];
