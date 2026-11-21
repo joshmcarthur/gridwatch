@@ -1,0 +1,127 @@
+---
+import { getCollection, type CollectionEntry } from "astro:content";
+import PriceChart from "../../components/PriceChart.astro";
+import Layout from "../../layouts/Layout.astro";
+import { dailyPath } from "../../lib/daily-page";
+import {
+  renderExplainerMarkdown,
+  splitExplainerBody,
+  VISUAL_HEADING,
+} from "../../lib/explainer";
+import { formatTradingDate, loadSiteDayIfPresent } from "../../lib/site-data";
+
+export async function getStaticPaths() {
+  const explainers = await getCollection("explainers");
+  return explainers.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry },
+  }));
+}
+
+interface Props {
+  entry: CollectionEntry<"explainers">;
+}
+
+const { entry } = Astro.props;
+const sections = splitExplainerBody(entry.body ?? "");
+const exampleDate = entry.data.example_date;
+const exampleDay = loadSiteDayIfPresent(exampleDate);
+const examplePath = dailyPath(exampleDate);
+const exampleLabel = formatTradingDate(exampleDate);
+---
+
+<Layout
+  title={`${entry.data.title} · Gridwatch NZ`}
+  description={entry.data.description}
+>
+  <p class="home">
+    <a href="/">Gridwatch NZ home</a>
+    {" · "}
+    <a href="/explainers/">Explainers</a>
+  </p>
+
+  <article>
+    <header class="lede prose">
+      <h1>{entry.data.title}</h1>
+      <p>{entry.data.description}</p>
+    </header>
+
+    {
+      sections.map((section) => (
+        <section
+          class:list={["block", section.heading === VISUAL_HEADING && "visual"]}
+          aria-labelledby={section.id}
+        >
+          <div class="prose">
+            <h2 id={section.id}>{section.heading}</h2>
+            <Fragment set:html={renderExplainerMarkdown(section.markdown)} />
+          </div>
+          {section.heading === VISUAL_HEADING &&
+            (exampleDay ? (
+              <PriceChart day={exampleDay} />
+            ) : (
+              <p class="chart-fallback">
+                The same price and spread charts sit on{" "}
+                <a href={examplePath}>{exampleLabel}</a> when that day is
+                published here. The evening figures in the next section are the
+                example.
+              </p>
+            ))}
+        </section>
+      ))
+    }
+  </article>
+</Layout>
+
+<style>
+  .home {
+    margin: 0 0 var(--space-5);
+    font-size: var(--text-label);
+  }
+
+  article {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .lede,
+  .block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .visual,
+  .block:not(.visual) .prose {
+    max-width: var(--measure-prose);
+  }
+
+  .visual {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    padding: var(--space-5);
+  }
+
+  .chart-fallback {
+    margin: 0;
+    font-size: var(--text-body);
+    line-height: 1.55;
+    color: var(--color-ink-muted);
+  }
+
+  .block :global(ul) {
+    margin: 0;
+    padding-left: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    font-size: var(--text-body);
+    line-height: 1.55;
+    color: var(--color-ink-muted);
+  }
+
+  .block :global(code) {
+    font-size: 0.92em;
+  }
+</style>

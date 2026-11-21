@@ -1,0 +1,71 @@
+---
+import { getCollection } from "astro:content";
+import Layout from "../../layouts/Layout.astro";
+import { formatTradingDate } from "../../lib/site-data";
+
+const explainers = (await getCollection("explainers")).toSorted((a, b) =>
+  a.data.title.localeCompare(b.data.title, "en-NZ"),
+);
+---
+
+<Layout
+  title="Explainers · Gridwatch NZ"
+  description="Short pages that tie a market idea to a real trading day."
+>
+  <article class="prose">
+    <h1>Explainers</h1>
+    <p>
+      Short pages that tie a market idea to a real trading day on this site.
+    </p>
+    <ul class="topics">
+      {
+        explainers.map((entry) => (
+          <li>
+            <a href={`/explainers/${entry.id}/`}>{entry.data.title}</a>
+            <p>{entry.data.description}</p>
+            <p class="example">
+              Example: {formatTradingDate(entry.data.example_date)}
+            </p>
+          </li>
+        ))
+      }
+    </ul>
+  </article>
+</Layout>
+
+<style>
+  .topics {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .topics li {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .topics a {
+    font-size: var(--text-heading);
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--color-ink);
+    text-decoration: none;
+  }
+
+  .topics a:hover {
+    text-decoration: underline;
+    color: var(--color-brand);
+  }
+
+  .example {
+    font-size: var(--text-caption);
+  }
+</style>
