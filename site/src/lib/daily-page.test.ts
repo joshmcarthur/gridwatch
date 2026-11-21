@@ -108,10 +108,12 @@ test("monthGroups lists days under en-NZ month headings", () => {
   ]);
 });
 
-test("fixture day builds a /2026/09/27/ path", () => {
+test("fixture days build a path for each committed sample", () => {
   const index = loadSiteIndex();
   expect(dailyStaticPaths(index)).toEqual([
+    { params: { year: "2026", month: "09", day: "26" } },
     { params: { year: "2026", month: "09", day: "27" } },
+    { params: { year: "2026", month: "10", day: "29" } },
   ]);
   const day = loadSiteDay("2026-09-27");
   expect(day.trading_date).toBe("2026-09-27");
@@ -121,12 +123,12 @@ test("fixture day builds a /2026/09/27/ path", () => {
 test("headline explains wholesale prices and megawatt-hours in plain language", () => {
   const paragraphs = headlineParagraphs(loadSiteDay("2026-09-27"));
   const text = paragraphs.join(" ");
-  expect(text).toMatch(/3,433 megawatt-hours/);
+  expect(text).toMatch(/108,910 megawatt-hours/);
   expect(text).toMatch(/1,000 kilowatt-hours/);
   expect(text).toMatch(/kWh/);
   expect(text).toMatch(/wholesale prices/i);
   expect(text).toMatch(/household bill/);
-  expect(text).toMatch(/\$104 per megawatt-hour/);
+  expect(text).toMatch(/\$73 per megawatt-hour/);
   expect(text).toMatch(/Upper North Island/);
   expect(text).toMatch(/Otahuhu/);
   expect(text).not.toMatch(/\bEMI\b/);

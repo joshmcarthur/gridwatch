@@ -52,7 +52,7 @@ Amended 2026-11-21. The exporter writes a `sankey` section on every day. The con
 
 ## Consequences
 
-- The site builds against one file shape, and a contract change shows in the diff of the committed sample day (`site/fixtures/`).
+- The site builds against one file shape, and a contract change shows in the diff of the committed sample days (`site/fixtures/`). The exporter lock on trimmed silver is a separate file in `publisher/src/site/fixtures/`.
 - A gold fix reaches the site only when `ANALYSIS_VERSION` changes, as for the other gold tables.
 - The index grows by about 0.2 KB for each day. It is one file, so a long backfill makes it large. If it reaches a few hundred KB, a later issue shards it by year.
 - `totals` may change when the national-total question is settled. That change is a rule change in `export.ts`, not a contract change.

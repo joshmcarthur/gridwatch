@@ -6,7 +6,8 @@
       "**/*.ts",
       "**/*.json",
       "!site/fixtures",
-      "!site/src/data/nz-coastline.json"
+      "!site/src/data/nz-coastline.json",
+      "!publisher/src/site/fixtures"
     ]
   },
   "formatter": { "indentStyle": "space", "indentWidth": 2 }
