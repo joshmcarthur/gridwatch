@@ -88,6 +88,7 @@ const NSP_SCHEMA = {
   longitude: "DOUBLE",
   start_date: "DATE",
   end_date: "DATE",
+  embedded_under_point_of_connection: "VARCHAR",
 };
 /** An NSP row. Only the arguments the tests care about are set. */
 const nsp = (
@@ -97,6 +98,7 @@ const nsp = (
   end: string | null,
   region: [number, string] | null = [1, "Region One"],
   xy: [number, number] | null = null,
+  parentPoc: string | null = null,
 ) => [
   `${poc}XXXXGN`,
   poc,
@@ -109,6 +111,7 @@ const nsp = (
   xy?.[1] ?? null,
   start,
   end,
+  parentPoc,
 ];
 /** The same row under a second NSP code. */
 const otherNsp = (row: unknown[]) => ["AAA1101YYYYGN", ...row.slice(1)];
@@ -299,6 +302,44 @@ test("a POC with only closed NSP rows keeps its newest closed row", async () => 
     { poc_id: "BBB1101", nsp_row_status: "last_closed", region_id: 4 },
     { poc_id: "CCC1101", nsp_row_status: "last_closed", region_id: 5 },
     { poc_id: "EEE1101", nsp_row_status: "in_force", region_id: 7 },
+  ]);
+});
+
+test("an embedded POC keeps its parent grid POC, and a grid POC has none", async () => {
+  await writeNsp("2026-11-01", [
+    nsp("HWB0331", "SI", "2020-01-01", null),
+    nsp(
+      "WPG0331",
+      "SI",
+      "2020-01-01",
+      null,
+      [1, "Region One"],
+      null,
+      "HWB0331",
+    ),
+    nsp(
+      "EMB0331",
+      "NI",
+      "2020-01-01",
+      "2026-10-31",
+      [1, "Region One"],
+      null,
+      "ABC1101",
+    ),
+    nsp("ABC1101", "NI", "2020-01-01", null),
+  ]);
+  await writeDispatch("2026-11-18", [["BEN2201", "SI"]]);
+  await build("2026-11-18");
+  expect(
+    await query(
+      `SELECT poc_id, parent_poc_id FROM ${table("entity_points_of_connection", "2026-11-18")} ORDER BY poc_id`,
+    ),
+  ).toEqual([
+    { poc_id: "ABC1101", parent_poc_id: null },
+    { poc_id: "BEN2201", parent_poc_id: null },
+    { poc_id: "EMB0331", parent_poc_id: "ABC1101" },
+    { poc_id: "HWB0331", parent_poc_id: null },
+    { poc_id: "WPG0331", parent_poc_id: "HWB0331" },
   ]);
 });
 
