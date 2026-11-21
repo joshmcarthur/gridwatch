@@ -122,11 +122,71 @@ The shared kit lives in `publisher/src/gold/observation.ts` (`createRunTables`, 
 - **Tables.** `reserve_price_anomaly_baselines` (sentinel, one row for each class-island, keyed by `subject_id`) and `observations_reserve_price_anomaly`.
 - **Registry.** After `gold_reserves` in DAG order, appended with the other detectors, because the detector reads `reserve_by_class_island_period`.
 
+### Generation-change detectors
+
+[#33](https://github.com/joshmcarthur/gridwatch/issues/33) adds two run detectors in `publisher/src/gold/generation-change.ts`. They share one `ANALYSIS_VERSION`. Each has its own observation table (ADR-0019). Both set `baselineByTradingPeriod: true` on the shared kit, which price and reserve detectors leave unset so their config hashes do not change.
+
+The all-periods baseline used for prices is the wrong comparison for generation. Solar, wind and hydro have a strong time-of-day shape. Pooling every period of the 28-day window into one set mixes ordinary nights with midday. A stable daily ramp then looks like a low every morning and a high every evening, and a daytime plant trip can sit inside the pooled low tail (night zeros). ADR-0019 rejected a per-time-of-day baseline for prices because 28 samples cannot support a 99th percentile. Generation still matches time of day: `minBaselinePeriods` is a day-count (14), and a large `minDeviationFromMedian` in MW is the floor that a noisy 14-sample percentile cannot beat.
+
+Percentiles stay 0.99 / 0.01, the same as prices. With 14 to 28 same-period samples the 99th percentile sits near the max of that cell, so a hit is "beyond recent same-period history". Dropping to 0.95 would still sit near the max at n = 14. The MW floor, not the percentile, is what stops a few MW of noise from firing. `minPeriods` is 2. Runs stay inside one trading date. There is no gap bridging.
+
+The kit default is unchanged: omit `baselineByTradingPeriod` and all periods of the window still form one baseline, as for `price_anomaly`, `price_separation` and `reserve_price_anomaly`.
+
+#### Plant generation-change
+
+- **Series.** Gold `generation_by_plant_period`. The value is `average_megawatts`. The subject type is `plant`. `subject_id` is `plant_id`. `plant_id`, `island` and `fuel_category` are filled. `point_of_connection` and `price_region` are null.
+- **Size cutoff.** A plant is a subject only when the mean of `average_megawatts` over complete baseline-window rows is at least 30 MW. `subjectsSql` reads the temp table `input`. The cutoff is the plant's typical size, not a one-day spike.
+- **Battery.** `fuel_category` `battery` is not a subject. Battery is storage, not primary generation (ADR-0008, ADR-0017).
+- **Observation types.** `generation_high` and `generation_low`.
+- **Config.** `PLANT_GENERATION_CHANGE_CONFIG`. The values are provisional.
+
+| Key | Value | Why |
+| --- | --- | --- |
+| `baselineWindowDays` | 28 | Four weeks of the same trading period. |
+| `minBaselinePeriods` | 14 | Day-count. Half the window of same-period samples. |
+| `highPercentile` | 0.99 | Same as prices. With n ≈ 14 the value sits near the max; the MW floor is the real guard. |
+| `lowPercentile` | 0.01 | The mirror of the high percentile. |
+| `minDeviationFromMedian` | 30 | MW. A 14-sample percentile must not fire on a few MW of noise. 30 MW is about a small hydro unit, not a rounding wiggle. |
+| `minPeriods` | 2 | As for prices. |
+| `baselineByTradingPeriod` | true | Compare period 20 to other period 20s, not to nights. |
+| `minPlantAverageMw` | 30 | Drop plants whose baseline-window mean is below 30 MW. Recorded in `parameters`. |
+
+- **Tables.** `plant_generation_change_baselines` (sentinel, one row for each plant and trading period of the date) and `observations_plant_generation_change`.
+- **Fingerprint.** `goldDataset` with `{ layer: "gold", table: "generation_by_plant_period", windowDays: config.baselineWindowDays }`.
+
+#### Fuel generation-change
+
+- **Series.** Gold `generation_by_fuel_period`. The value is `average_megawatts`. The subject type is `fuel_category`. `subject_id` is `fuel_category|island`, for example `hydro|NI`. `fuel_category` and `island` are filled.
+- **No size cutoff.** Island-fuel series are already large aggregates.
+- **Skipped.** `battery`, and rows whose `island` is null.
+- **Observation types.** `generation_high` and `generation_low`, the same names as the plant detector. `detector_id` and `subject_type` separate them.
+- **Config.** `FUEL_GENERATION_CHANGE_CONFIG`. `minDeviationFromMedian` is 100 MW because an island-fuel series is a sum of plants.
+
+| Key | Value | Why |
+| --- | --- | --- |
+| `baselineWindowDays` | 28 | As for the plant detector. |
+| `minBaselinePeriods` | 14 | As for the plant detector. |
+| `highPercentile` | 0.99 | As for the plant detector. |
+| `lowPercentile` | 0.01 | As for the plant detector. |
+| `minDeviationFromMedian` | 100 | MW. An island-fuel move of a few tens of MW is ordinary plant mix; 100 MW is a real shift. |
+| `minPeriods` | 2 | As for prices. |
+| `baselineByTradingPeriod` | true | As for the plant detector. |
+
+- **Tables.** `fuel_generation_change_baselines` and `observations_fuel_generation_change`.
+- **Fingerprint.** `goldDataset` with `{ layer: "gold", table: "generation_by_fuel_period", windowDays: config.baselineWindowDays }`.
+
+#### Registry
+
+After `gold_generation`, because both detectors read generation gold. The entries are appended after the price and reserve detectors. They do not read those tables. Order in the file is append-only so a parallel detector can land in the same list.
+
+A period with no same-period samples in the window (`sample_count = 0`), for example periods 49 and 50 on a DST-end day, is vacuously `baseline_ready`. It cannot hit (thresholds are null). A period with 1 to 13 samples is not ready, and the day is `partial`.
+
 ## Alternatives considered
 
 - **One shared `observations` table.** Rejected. The runner reads one sentinel fingerprint for each dataset, and `writeGoldTables` replaces a whole partition. Two detectors in one partition would overwrite each other.
 - **A separate `analysis/` layer.** Rejected. Detectors are gold tables that read gold. They use `goldDataset` with a windowed `GoldInput`.
 - **A baseline for each time of day.** Rejected. Each cell has about 28 values, which cannot support a 99th percentile.
+- **A pooled all-periods baseline for generation.** Rejected for #33. Solar, wind and hydro have a strong daily shape. Pooling puts ordinary nights in the same set as midday, so a stable ramp looks like a low every morning and a daytime trip can hide in the pooled low tail. Generation uses `baselineByTradingPeriod`. The 14-sample cell cannot support a 99th percentile on its own; `minDeviationFromMedian` of 30 MW (plant) or 100 MW (island-fuel) is the floor.
 - **A baseline that includes the current day.** Rejected. A spike would raise its own threshold.
 - **Fixed thresholds only.** Rejected. A fixed threshold does not follow a change of regime, which the brief asks for.
 - **A separate `detector_version` column.** Rejected. It would repeat `analysis_version`.
@@ -161,3 +221,7 @@ The shared kit lives in `publisher/src/gold/observation.ts` (`createRunTables`, 
 - By month (high): Dec 2025 5, Jan 2026 0, Feb 18, Mar 0, Apr 21, May 10, Jun 5, Jul 12, Aug 14, Sep 10, Oct 3, Nov 2026 15.
 - Examples: `reserve_price_high` on 2026-07-27, SIR|NI periods 35 to 40 (6 periods) — measured $2154.45, median $0.49, threshold $13.13, severity 170.5. FIR|NI on 2026-09-27 (DST, 46 periods) periods 32 to 39, measured $211.95, median $0.96, threshold $77.19, severity 2.77. 2026-04-05 (50 periods) has no observations.
 - The $10 floor is holding: SI 99th percentiles in this window sit around $5–$6, so SI hits are the days that also clear $10. No `ANALYSIS_VERSION` bump.
+- Generation-change uses a per-time-of-day baseline. A plant that changes its usual daily shape, for example a hydro station that starts peaking, is flagged until that shape is 14 days old, then becomes the baseline.
+- A 14-sample 99th percentile is close to the max of that cell. The 30 MW / 100 MW floors are what stop a noisy percentile from firing. They also mean a 20 MW plant trip never flags, by design of the size cutoff and the deviation guard.
+- Periods 49 and 50 exist on one DST-end day a year. They usually have `sample_count = 0` in a 28-day window and cannot fire. They do not mark the day `partial`.
+- Generation-change backfill counts are pending. This environment has no gold lake, so the run over the full backfill has not happened. Counts, examples and false positives seen will be added here after that run.
