@@ -5,6 +5,7 @@ import { hvdc } from "./gold/hvdc.ts";
 import { priceAnomaly } from "./gold/price-anomaly.ts";
 import { priceSeparation } from "./gold/price-separation.ts";
 import { prices } from "./gold/prices.ts";
+import { reservePriceAnomaly } from "./gold/reserve-price-anomaly.ts";
 import { reserves } from "./gold/reserves.ts";
 import { publishClearedOffers } from "./silver/cleared-offers.ts";
 import type {
@@ -142,4 +143,6 @@ export const datasets: PublisherDataset[] = [
   priceAnomaly,
   // After gold_price_anomaly: the detector reads price_spreads (ADR-0019).
   priceSeparation,
+  // After gold_reserves: the detector reads reserve_by_class_island_period (ADR-0019).
+  reservePriceAnomaly,
 ];

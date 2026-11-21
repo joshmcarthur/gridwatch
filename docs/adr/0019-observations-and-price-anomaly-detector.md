@@ -98,6 +98,30 @@ The shared kit lives in `publisher/src/gold/observation.ts` (`createRunTables`, 
 - **Tables.** `price_separation_baselines` (sentinel, one row for each pair, keyed by `subject_id`) and `observations_price_separation`.
 - **Registry.** After `gold_price_anomaly`, because the detector reads `price_spreads`.
 
+### Reserve price anomaly detector
+
+[#34](https://github.com/joshmcarthur/gridwatch/issues/34) adds a third run detector. It is a thin adapter over the same kit. The config object is `RESERVE_PRICE_ANOMALY_CONFIG` in `publisher/src/gold/reserve-price-anomaly.ts`.
+
+- **Series.** The gold `reserve_by_class_island_period` rows of ADR-0013. The value is `dollars_per_megawatt_hour`. A null price is never a hit and ends a run. The four subjects are FIR/NI, FIR/SI, SIR/NI and SIR/SI.
+- **Rule.** The same as for energy prices. The baseline is the complete non-null period prices of that class and island on the 28 days before the date. All periods of a day form one set of samples, not one set for each time of day. Reserve has no solar-style diurnal trap, so the all-periods window is the right one. The high threshold is the larger of the 99th percentile and the median plus 10 $/MWh. The low threshold is the smaller of the 1st percentile and the median minus 10 $/MWh. A hit is strictly beyond a threshold. A run is at least 2 consecutive periods inside one trading date.
+- **Observation types.** `reserve_price_high` and `reserve_price_low`. They are in the observation ID. Severity is as for prices, and is at least 1. The measured unit is `$/MWh`.
+- **Subject.** The subject type is `reserve_class`. The subject ID is `reserve_class|island`, for example `FIR|NI`. Typed columns `reserve_class` and `island` are filled. `point_of_connection` and `price_region` are null.
+- **Completeness.** `inputs_complete` is the class-island-day: every gold reserve row of that subject on the date is complete. A subject with no row on the date is incomplete. `missingPeriods` lists the periods with `rows_present = 0`. A date with no `reserve_by_class_island_period` partition is `missing`.
+- **Config.** The values are provisional. They are checked against the backfill and changed by a version bump. `minDeviationFromMedian` is $10, not energy's $25: reserve prices sit at $0 for long stretches (ADR-0013's FIR example is about $0.55), so a $25 floor would hide most genuine spikes, and a $0 floor would flag every $0.01 wiggle when the percentiles sit on the median. $5 was considered; $10 is the more conservative of the two. In a $0-median window the low rule can only fire on a negative price.
+
+| Key | Value | Why |
+| --- | --- | --- |
+| `baselineWindowDays` | 28 | As for prices. Four whole weeks, all periods in one set. |
+| `minBaselinePeriods` | 672 | 14 days of 48 periods. Half the window. |
+| `highPercentile` | 0.99 | As for prices. |
+| `lowPercentile` | 0.01 | As for prices. |
+| `minDeviationFromMedian` | 10 | Reserve is often $0. The floor must be large next to a typical $0–$1 price, and small enough that a security spike still clears it. |
+| `minPeriods` | 2 | As for prices. |
+
+- **Fingerprint.** The registry entry is `goldDataset` with a gold input `{ layer: "gold", table: "reserve_by_class_island_period", windowDays: config.baselineWindowDays }`. `inputs_sha256` is the same `dateFingerprint` that `wantedFingerprints` uses. A revised reserve day, a day that enters or leaves the window, and a version bump each change the fingerprint. A config change bumps `ANALYSIS_VERSION`.
+- **Tables.** `reserve_price_anomaly_baselines` (sentinel, one row for each class-island, keyed by `subject_id`) and `observations_reserve_price_anomaly`.
+- **Registry.** After `gold_reserves` in DAG order, appended with the other detectors, because the detector reads `reserve_by_class_island_period`.
+
 ## Alternatives considered
 
 - **One shared `observations` table.** Rejected. The runner reads one sentinel fingerprint for each dataset, and `writeGoldTables` replaces a whole partition. Two detectors in one partition would overwrite each other.
@@ -110,6 +134,9 @@ The shared kit lives in `publisher/src/gold/observation.ts` (`createRunTables`, 
 - **Detection on all points of connection.** Deferred. Issue #22 covers the three reference nodes. Node-level detection is a later issue.
 - **Island on `REFERENCE_NODES`.** Rejected. Main's shape is `{ pointOfConnection, priceRegion }`. The detector holds a local map.
 - **Dearer node in `point_of_connection`, `island` and `price_region`.** Rejected. Pair rows leave those columns null. The sign of `measured_value` records which node was dearer. A zero spread does not write a POC.
+- **A time-of-day baseline for reserves.** Rejected. Same reason as for prices: 28 samples cannot support a 99th percentile. Reserve has no solar-style diurnal trap, so the all-periods 28-day window is the right one.
+- **`minDeviationFromMedian` of $5 for reserves.** Rejected for v1 in favour of $10, the more conservative of the two suggested floors. A backfill can lower it with a version bump.
+- **`subject_type` `island` with the class only in `subject_id`.** Rejected. The series is per class and island. `subject_type` is `reserve_class`; `island` is the typed column.
 
 ## Consequences
 
@@ -127,3 +154,10 @@ The shared kit lives in `publisher/src/gold/observation.ts` (`createRunTables`, 
 - The baseline median was below $25 on 357 of 1053 node-days with a baseline, so the low rule is mostly limited to negative prices there. `price_low` severity peaks at 1.49. Thresholds remain usable; no `ANALYSIS_VERSION` bump.
 - Price separation, backfill of 365 days. Of the 820 complete pair-periods (3 pairs, 488 distinct periods; complete means `inputs_complete`) with a spread above $100/MWh in size, 818 have a baseline and 356 are hit periods before the minimum-run rule. The other 462 are not hit periods. In 457 of them the 28-day 99th (or 1st) percentile lies beyond the median by more than $100. 15 days have `baseline_ready` false: the first 14 days, and 2025-12-04 with 624 samples. 8 runs fall on pair-days that are not complete, so they have `inputs_complete` false.
 - A sustained separation of more than about 2 weeks becomes part of the baseline and stops being flagged. An absolute rule is deferred, as for prices.
+- When the reserve-price median is below $10, no `reserve_price_low` observation is possible unless the price is negative. Typical FIR and SIR prices sit at $0, so the low rule will rarely fire until a backfill shows otherwise. An absolute "negative reserve price is always low" rule is deferred, as for energy.
+- A revised reserve-price day rebuilds that day and the next 28 detector days.
+- Reserve price anomaly, backfill of 366 days (`gold/reserve_by_class_island_period` from 2025-11-20 to 2026-11-20, `analysis_version` 1). 113 observations, all with distinct IDs, all `reserve_price_high`. No `reserve_price_low` rows: typical medians sit near $0, so the $10 floor blocks the low rule unless the price is negative. 337 days are complete (baseline ready and inputs complete). 29 days are `partial`: 15 have `baseline_ready = false` (2025-11-20 to 2025-12-04), and 14 later days have incomplete inputs. November 2025 has no observations, because no baseline is ready. 8 observations on 3 days have `inputs_complete = false` (2026-05-14, 2026-09-10, 2026-11-17).
+- By class-island (high only): FIR|NI 50, SIR|NI 40, SIR|SI 12, FIR|SI 11.
+- By month (high): Dec 2025 5, Jan 2026 0, Feb 18, Mar 0, Apr 21, May 10, Jun 5, Jul 12, Aug 14, Sep 10, Oct 3, Nov 2026 15.
+- Examples: `reserve_price_high` on 2026-07-27, SIR|NI periods 35 to 40 (6 periods) — measured $2154.45, median $0.49, threshold $13.13, severity 170.5. FIR|NI on 2026-09-27 (DST, 46 periods) periods 32 to 39, measured $211.95, median $0.96, threshold $77.19, severity 2.77. 2026-04-05 (50 periods) has no observations.
+- The $10 floor is holding: SI 99th percentiles in this window sit around $5–$6, so SI hits are the days that also clear $10. No `ANALYSIS_VERSION` bump.
