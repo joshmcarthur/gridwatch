@@ -32,7 +32,7 @@ const DISPATCH: GoldInput = {
   versionColumn: "bronze_sha256",
   completenessDataset: "dispatch_reserve_prices",
 };
-const INPUTS: GoldInput[] = [DISPATCH];
+export const INPUTS: GoldInput[] = [DISPATCH];
 
 /**
  * Publish the reserve gold tables for one trading date, one partition for each table in

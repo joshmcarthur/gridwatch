@@ -1,0 +1,48 @@
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { expect, test } from "vitest";
+
+const builtPage = fileURLToPath(
+  new URL("../../dist/index.html", import.meta.url),
+);
+
+test.skipIf(!existsSync(builtPage))(
+  "built homepage has the accepted layout and no banned copy",
+  () => {
+    const html = readFileSync(builtPage, "utf8");
+    expect(html).toContain('lang="en-NZ"');
+    expect(html).toContain("<main");
+    expect(html).toContain('aria-labelledby="latest-heading"');
+    expect(html).toContain('aria-labelledby="conditions-heading"');
+    expect(html).toContain('aria-labelledby="recent-days-heading"');
+    expect(html).toMatch(
+      /<h2 id="latest-heading"[^>]*>Latest market update<\/h2>/,
+    );
+    expect(html).toMatch(
+      /<h2 id="conditions-heading"[^>]*>Market conditions<\/h2>/,
+    );
+    expect(html).toMatch(/<h2 id="recent-days-heading"[^>]*>Recent days<\/h2>/);
+    expect(html).toContain("Wholesale prices");
+    expect(html).toContain("Supply");
+    expect(html).toContain("Reserves");
+    expect(html).toContain("Regional price differences");
+    expect(html).toContain("Gas and coal");
+    expect(html).toMatch(/Sunday, 27 September 2026/);
+    expect(html).toContain('href="/2026/09/27/"');
+    expect(html).not.toMatch(/observatory/i);
+    expect(html).not.toMatch(/placeholder homepage/i);
+    expect(html).toMatch(/no single score/);
+    expect(html).not.toMatch(/green\/amber\/red/);
+    expect(html).not.toMatch(/composite score/);
+    expect(html).not.toMatch(/\bEMI\b/);
+    expect(html).not.toMatch(/\bEA\b/);
+    expect(html).not.toMatch(/\bNI\b/);
+    expect(html).not.toMatch(/\bSI\b/);
+    expect(html).not.toMatch(/\bFIR\b/);
+    expect(html).not.toMatch(/\bSIR\b/);
+    expect(html).toMatch(/household bill/);
+    expect(html).toMatch(/backup generation/);
+    expect(html).toMatch(/Recently detected/);
+    expect(html).not.toMatch(/recent events/i);
+  },
+);
