@@ -38,13 +38,13 @@ The median, 99th percentile and 1st percentile are taken over that cell only. Wi
 
 ### Hits and runs
 
-A period is a high hit when `load_mwh > max(p99, median + 50)`. It is a low hit when `load_mwh < min(p01, median − 50)`. Equivalently: `|load − median|` is strictly greater than the percentile fence from the median, and strictly greater than 50 MWh.
+A period is a high hit when `load_mwh > max(p99, median + 50)`. It is a low hit when `load_mwh < min(p01, median - 50)`. Equivalently: `|load - median|` is strictly greater than the percentile fence from the median, and strictly greater than 50 MWh.
 
 Runs follow ADR-0019: consecutive period numbers, at least 2 periods, one trading date, a missing or null period ends a run, no gap bridging. Severity is 1 at the threshold.
 
 ### DST
 
-A trading date has 46, 48 or 50 periods ([ADR-0003](0003-time-column-naming.md)). The comparable cell is the **same period number**, not the same clock time after a DST change. Periods 47–50 exist only on DST-end days, so those cells will often have `baseline_ready` false. Periods 1–46 exist every day.
+A trading date has 46, 48 or 50 periods ([ADR-0003](0003-time-column-naming.md)). The comparable cell is the **same period number**, not the same clock time after a DST change. Periods 47-50 exist only on DST-end days, so those cells will often have `baseline_ready` false. Periods 1-46 exist every day.
 
 ### Holidays
 
@@ -57,8 +57,8 @@ A public holiday against ordinary weekdays of the same name is a known false-pos
 | `baselineWeeks` | 8 | Eight comparable weekdays. The calendar window is 56 days. |
 | `baselineWindowDays` | 56 | Fingerprint window of gold partitions. |
 | `minBaselineSamples` | 4 | Half the cell, as ADR-0019 takes 14 of 28 days. |
-| `highPercentile` | 0.99 | Same fence as the price detectors. With n ≈ 8 this is the sample max. |
-| `lowPercentile` | 0.01 | The mirror. With n ≈ 8 this is the sample min. |
+| `highPercentile` | 0.99 | Same fence as the price detectors. With n ~ 8 this is the sample max. |
+| `lowPercentile` | 0.01 | The mirror. With n ~ 8 this is the sample min. |
 | `minDeviationFromMedian` | 50 | MWh floor so a tight cluster of Tuesdays does not flag a 5 MWh wiggle. About 2% of a national period (EMI demand 116.9 GWh on 2026-10-29 is ~2435 MWh per period) and about 7% of a South Island period. |
 | `minPeriods` | 2 | Same as the price detectors. One period is a chart spike, not an observation. |
 
@@ -87,5 +87,5 @@ The ADR-0019 kit's `createRunTables` pools every period of the window into one b
 - The first four same-weekdays of history have `baseline_ready` false.
 - Public holidays will flag. That is accepted in v1.
 - A load regime that lasts more than about four weeks of that weekday becomes the baseline and stops being flagged, as with prices.
-- Periods 47–50 on a DST-end day will often have no baseline.
+- Periods 47-50 on a DST-end day will often have no baseline.
 - This ADR does not close [#35](https://github.com/joshmcarthur/gridwatch/issues/35). Tests and backfill wait until the owner agrees the method.
