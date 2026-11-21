@@ -7,7 +7,9 @@ import { expect, test } from "vitest";
 import fixtureJson from "../../fixtures/days/2026-09-27.json";
 import {
   BATTERY_HEADER,
+  batteryPointTitle,
   generationMix,
+  generationMixBatterySummary,
   generationMixSummary,
   generationMixTable,
   type MixPoint,
@@ -85,6 +87,11 @@ test("battery is shown apart and is not in the primary total", () => {
   expect(period15.megawatts.battery).toBeCloseTo(10.288, 3);
   expect(period15.primary).toBeCloseTo(79.848, 3);
   expect(mix.layers.map((layer) => layer.label)).not.toContain("Battery");
+  expect(mix.battery[14]?.megawatts).toBeCloseTo(10.288, 3);
+  expect(mix.battery).toHaveLength(mix.points.length);
+  expect(batteryPointTitle(period15)).toContain("Battery 10.3 MW");
+  expect(batteryPointTitle(period15)).toMatch(/stored power/i);
+  expect(batteryPointTitle(period15)).not.toMatch(/primary total \d/i);
 });
 
 test("hydro average over the day matches the daily summary", () => {
@@ -253,6 +260,10 @@ test("a day with only battery has no layers, and its share text is empty", () =>
   expect(generationMixSummary(mix)).toBe(
     "No fuel made power in the periods that have data.",
   );
+  expect(mix.battery[0]?.megawatts).toBeCloseTo(2, 6);
+  expect(generationMixBatterySummary(mix)).toMatch(
+    /stored, not new generation/i,
+  );
   const table = generationMixTable(mix);
   expect(table.headers.at(-1)).toBe(BATTERY_HEADER);
   expect(table.rows[0]?.[1]).toBe("0.0 MW");
@@ -296,6 +307,46 @@ test("tick labels on the DST-end day are unique", () => {
   const labels = mix.ticks.map((tick) => tick.label);
   expect(labels.length).toBeGreaterThan(0);
   expect(new Set(labels).size).toBe(labels.length);
+});
+
+test("a gap period has a null battery panel value", () => {
+  const count = 46;
+  const day = dayWith(DST_START_DAY, count, {
+    missing_periods: [5],
+    series: [
+      {
+        fuel: "hydro",
+        island: null,
+        megawatt_hours: cells(count, { 0: 1 }),
+      },
+      {
+        fuel: "battery",
+        island: null,
+        megawatt_hours: cells(count, { 0: 1, 4: null }),
+      },
+    ],
+  });
+  const mix = generationMix(day);
+  if (!mix) throw new Error("expected a mix");
+  const gap = mix.points[4];
+  if (!gap) throw new Error("expected period 5");
+  expect(gap.kind).toBe("gap");
+  expect(mix.battery[4]?.megawatts).toBeNull();
+  expect(batteryPointTitle(gap)).toBe(
+    `${gap.time} · No generation numbers for this period`,
+  );
+});
+
+test("the battery summary names average MW and is not a share of primary", () => {
+  const mix = generationMix(fixture);
+  if (!mix) throw new Error("expected a mix");
+  expect(generationMixBatterySummary(mix)).toMatch(
+    /Batteries sent about \d+ megawatts on average/,
+  );
+  expect(generationMixBatterySummary(mix)).toMatch(
+    /stored, not new generation/,
+  );
+  expect(generationMixBatterySummary(mix)).not.toMatch(/%/);
 });
 
 test("a gap period gives a No data table row", () => {

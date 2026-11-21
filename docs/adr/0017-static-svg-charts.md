@@ -20,7 +20,7 @@ The Landscape design rules for data colour say that battery is storage. It shoul
 - Area edges are straight lines between periods. A step shape is a possible later change.
 - The time axis shows the hour only (`00`, `03`, ...). Its title says "Hour (New Zealand time)". Full times are in the table and in the hover text.
 - Sizes: the SVG has a logical width of 330 units and 14px text. On desktop it is capped at 480px wide. Measured on the built page, axis text is about 12px at 375px and about 20px at 1280px. On desktop the SVG scales up to its 480px cap, so its text is larger there than on phones.
-- Battery is in the table's last column and in one caption sentence. It is not drawn in the chart for v1. This departs from the Landscape rule that battery shows below the zero line or in its own panel. The follow-up is [#92](https://github.com/joshmcarthur/gridwatch/issues/92).
+- Battery is storage. It is never in the stacked area or the primary total. It has its own panel under the stack ([#92](https://github.com/joshmcarthur/gridwatch/issues/92)), the table's last column, and a caption sentence. That matches the Landscape rule.
 
 ## Consequences
 
@@ -29,7 +29,7 @@ The Landscape design rules for data colour say that battery is storage. It shoul
 - Tooltips use the browser's native tooltip. They appear after a short delay and cannot show rich layout. That is accepted for version 1.
 - Each chart adds its SVG to the page HTML. A daily page with many charts grows by that amount.
 - Desktop axis text is large (about 20px) because the SVG scales up to its cap. Reducing the cap changes the desktop size, not the phone size.
-- Battery is not visible in the chart until #92 is done. That departs from the design rule until then.
+- Battery is a second SVG in the generation figure, not a band in the stack. A day with no battery discharge still shows the panel (a flat line), so the table column has a matching chart.
 - A later interactive feature needs a new decision. This ADR does not allow client JavaScript for charts.
 
 ## Amendment (#28): price charts
@@ -44,3 +44,7 @@ Amended 2026-11-21. The price chart is the second figure on the daily page. Thes
 - **Gaps.** A null price breaks only its own node line. A valid period whose neighbours are both null gets a dot, because a line draws nothing for a single point. A proxy period gets an open marker.
 
 Consequence: a daily page with prices adds two SVGs. Each figure has one table, so the numbers are not repeated per SVG.
+
+## Amendment (#92): battery panel
+
+Amended 2026-11-21. The generation mix figure now has two SVGs: the primary stack (`generation-mix-chart-*`) and battery (`generation-battery-chart-*`). Battery stays out of `STACK_ORDER` and out of the primary total. The battery SVG is shorter (120 units high against the 260-unit stack). Hover text and the table column still name it stored power. This closes the v1 departure from the Landscape rule.

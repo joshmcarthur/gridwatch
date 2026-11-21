@@ -74,6 +74,12 @@ export interface MixArea {
   top: number | null;
 }
 
+/** One period on the battery panel. `megawatts` is null in a gap. */
+export interface BatteryPoint {
+  start: Date;
+  megawatts: number | null;
+}
+
 export interface GenerationMix {
   /** The generation section is `incomplete`. */
   incomplete: boolean;
@@ -81,6 +87,8 @@ export interface GenerationMix {
   layers: MixLayer[];
   points: MixPoint[];
   areas: MixArea[];
+  /** Battery average MW per period, never stacked with primary generation. */
+  battery: BatteryPoint[];
   /** Every third local hour, as two digits, for the time axis. */
   ticks: Array<{ at: Date; label: string }>;
 }
@@ -146,6 +154,7 @@ export function generationMix(day: SiteDay): GenerationMix | null {
     layers,
     points,
     areas,
+    battery: points.map(batteryPointFor),
     ticks: timeTicks(day),
   };
 }
@@ -163,6 +172,19 @@ export function generationMixTable(mix: GenerationMix): {
   ];
   const rows = mix.points.map((point) => tableRow(point, mix.layers, headers));
   return { headers, rows };
+}
+
+/** One sentence for the battery panel text alternative. */
+export function generationMixBatterySummary(mix: GenerationMix): string {
+  const data = valuedPoints(mix.points);
+  if (data.length === 0) {
+    return "No battery numbers in the periods that have data.";
+  }
+  const average = mean(data.map((point) => point.megawatts.battery));
+  if (average === 0) {
+    return "Batteries did not send power in the periods that have data. Battery is storage, not new generation.";
+  }
+  return `Batteries sent about ${megawattsWhole.format(average)} megawatts on average. That power is stored, not new generation.`;
 }
 
 /** One sentence for the chart text alternative. Uses the periods that have data. */
@@ -200,6 +222,43 @@ export function mixPointTitle(point: MixPoint, layers: MixLayer[]): string {
       }
       return [point.time, ...parts].join(" · ");
     }
+    default: {
+      const _exhaustive: never = point;
+      return _exhaustive;
+    }
+  }
+}
+
+/** Native hover tooltip for the battery panel. */
+export function batteryPointTitle(point: MixPoint): string {
+  switch (point.kind) {
+    case "gap":
+      return `${point.time} · No generation numbers for this period`;
+    case "complete":
+    case "incomplete": {
+      const parts = [
+        `Battery ${megawatts1.format(point.megawatts.battery)} MW`,
+        "stored power, not in the primary total",
+      ];
+      if (point.kind === "incomplete") {
+        parts.push("Some plant data missing, counted as 0");
+      }
+      return [point.time, ...parts].join(" · ");
+    }
+    default: {
+      const _exhaustive: never = point;
+      return _exhaustive;
+    }
+  }
+}
+
+function batteryPointFor(point: MixPoint): BatteryPoint {
+  switch (point.kind) {
+    case "gap":
+      return { start: point.start, megawatts: null };
+    case "complete":
+    case "incomplete":
+      return { start: point.start, megawatts: point.megawatts.battery };
     default: {
       const _exhaustive: never = point;
       return _exhaustive;
