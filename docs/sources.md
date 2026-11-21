@@ -390,3 +390,62 @@ Sibling folders: `CaseFiles/PRSS/` (fallback prices when RTD is missing), `CaseF
 **Do not** treat island residuals, HVDC gold, or nodal spreads as a constraint dataset. They are evidence that a constraint may have bound; they are not the constraint.
 
 **Owner question.** Approve the selective RTD path on #44, or wait? I will not collect RTD or BindingConstraints until you say so.
+
+## 9. Hydro storage, inflows and expected water values
+
+Research for [issue #47](https://github.com/joshmcarthur/gridwatch/issues/47). Checked on 21 November 2026 (NZ time). Hydro scarcity is a high-priority area ([brief §2.1, §3.3, §6.4](brief.md)). Native resolution is daily or weekly, not half-hourly. **Measured** means I saw it directly. **Unknown** says what I tried.
+
+**Finding.** There is a free **annual** history of lake storage and inflows (HMD, through 31 Dec 2024). There is **no free live storage series**. The live series the Authority and Transpower plot is NZX Hydro (NIWA), which they are not allowed to republish. Expected water values are a weekly Jade model dump; the blob has 2023–2025 only (no 2026 folder on 21 Nov 2026) and the full outputs are about **19 GB**.
+
+### 9.1 Hydrological Modelling Dataset (history)
+
+Catalogue: [EMI HMD](https://www.emi.ea.govt.nz/Environment/Datasets/HydrologicalModellingDataset/). Blob prefix `Datasets/Environment/HydrologicalModellingDataset/`. About **68 MB** in 59 blobs (measured). Full update to 31 Dec 2024 (page still says 31 Dec 2023 in places; the folder names are `_20241231`).
+
+| Part | Content (measured) |
+|---|---|
+| `3_1_Storage` | Daily lake level (m) and active storage (Mm³) for 10 lakes. Columns `Date,Time,Lake level (m),Active storage (Mm³),Active contingent storage (Mm³),QualityCode`. Pukaki: 16,438 dates, 1980-10-31 to **2024-12-31**. `FileIndex_Storage.csv` maps `SiteCode` (`TPO`, `PKI`, `TKA`, `WKA`, `HWE`, `MAN`, `TAU`, `OHA`, `WAN`, `WPU`) to island and plant group. |
+| `2_Flows_20241231` | Daily `Flow (m³/s)` per site, actual and natural, from 1931. Pukaki actual inflow last date **2024-12-31** (file `SI_PKI_Actual_LakePukaki_Inflow_98614(2).csv`, 34,153 rows). |
+| `3_2_Spill` | Daily spill at 25 sites. |
+| Infrastructure | Scheme capacity, specific energy, consent constraints. `20241231_EnergyStorageCapacity(DerivedForScheme).csv` is 19 MB. |
+
+The HMD report says storage is daily active volume for the ten largest lakes from 1980, and that generator data plus other sources feed it ([Report 2](https://emidatasets.blob.core.windows.net/publicdata/Datasets/Environment/HydrologicalModellingDataset/2_Flows_20241231/HMD%20Report%202%20-%20Flow%20Series%20Description%20and%20Methodology.pdf)). Cadence is **annual**. It cannot fill a daily page for 2025–2026.
+
+**Mapping.** `SiteCode` matches Generation_MD `Site_Code` on the examples in the index (TPO Taupo / Waikato, PKI Pukaki / Waitaki). Other codes: unchecked. Storage is Mm³, not GWh; converting needs the specific-energy series in the infrastructure folder.
+
+### 9.2 Live storage and inflows
+
+| Source | What I saw |
+|---|---|
+| [NZX Hydro](https://energy.nzx.com/) | Paid. Daily hydrological summary $650/month; database $3,500/month; SFTP CSV extra ([order form](https://assets.ctfassets.net/m5mydry9e35f/2QELuFUdQi0dj58PlkQFVp/9d5c1606f24ed5291a8b3cdb015a970a/NZX_Order_Form_-_NZX_Hydro_Data_and_Subscription_1.pdf)). NIWA-sourced. |
+| EMI [RM3RAS](https://www.emi.ea.govt.nz/All/Reports/RM3RAS) | Historical electricity risk curves. Report notes: hydro storage/inflows "sourced from NZX hydro (data provided by NIWA) and is **not available for download**". Measured CSV (`Show=All`, 1.0 MB): risk-status curves, percentage risk, contingent-storage **release boundaries**, OCC triggers. No controlled-storage series. |
+| [Transpower hydro information](https://www.transpower.co.nz/system-operator/notices-and-reporting/market-operations-weekly-report/hydro-information) | Weekly charts of lake levels, island storage, 7-day inflows, contingent storage. Images, no CSV (measured). |
+| Authority / Transpower | Both pay for NZX and cannot republish the raw series ([forum 2019](https://forum.emi.ea.govt.nz/thread/hydro-storage-data/), [forum 2025](https://forum.emi.ea.govt.nz/thread/hydro-storage-information/)). |
+| Jade `reservoirs.csv` | Weekly `INI_STATE` per lake (Mm³, [Phil Bishop](https://forum.emi.ea.govt.nz/thread/expected-water-values-reservoir-levels-data/)). Stalled after 2025 (section 9.3). |
+
+Do not scrape the Transpower charts. They are pictures, and the underlying series is the same licensed NZX feed.
+
+### 9.3 Expected water values (Jade)
+
+Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/Expected%20water%20values), [hub](https://www.ea.govt.nz/data-and-insights/datasets/wholesale/expected-water-values/). Blob prefix `Datasets/Wholesale/Expected water values/`. Model: [EPOC-NZ/JADE.jl](https://github.com/EPOC-NZ/JADE/) (MPL-2.0). Week 1 starts 1 January.
+
+| Question | Answer |
+|---|---|
+| Years | Folders **2023, 2024, 2025** only. No 2026 folder on 21 Nov 2026 (measured listing). 2025 page stamp 26 Dec 2025. |
+| Size | About **19.2 GB** in 8,995 blobs (measured). 2025 alone 4.6 GB. One week (2025 week 9) is 59 files, 96 MB, of which `tidy_results.csv` is 88 MB. |
+| Compact files | `Inputs/.../reservoirs.csv` (7 lakes, `INI_STATE` Mm³). `terminal_water_value.csv` (national stored GWh vs $/MWh; week 9 ends at 4,221 GWh / $43.31). |
+| Outputs | `tidy_results.csv` header `simulation,stage,year,week,type,name,demand,node,value` (measured, Range). Simulated reservoir levels and thermal use, not a one-row-per-week water value. |
+| 2025 gaps | Weeks 7, 33, 37 and 46 are missing (measured week set). |
+
+Licence: site content CC BY 4.0 (section 5). No dataset-level exception found.
+
+### 9.4 Recommendation
+
+Keep native resolution: **daily** HMD storage/inflows, **weekly** water values. Do not interpolate to trading periods.
+
+**Do collect HMD** (~68 MB, annual). It is the only free catchment-level history, and `SiteCode` joins the entity model. It will not update the daily page for the current year.
+
+**Do not collect the 19 GB Jade output tree.** If 2026 weeks appear and you want water values, keep only the small weekly inputs (`reservoirs.csv`, `terminal_water_value.csv`).
+
+**Do not buy NZX and do not scrape Transpower** unless you say so. Live island storage in GWh is the series the brief wants for "hydro conditions", and it is the one we cannot have for free.
+
+**Owner questions.** (1) Collect HMD for history? (2) Live storage: wait for a public series, take an NZX licence, or leave it off the daily page? (3) Extract Jade weekly inputs if/when 2026 folders appear? I will not collect HMD, Jade or NZX until you say so.
