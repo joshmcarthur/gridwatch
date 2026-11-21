@@ -1,9 +1,7 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { lit } from "../silver/common.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
-import { shiftDate, windowDates } from "./common.ts";
-
-export { shiftDate, windowDates };
+import { shiftDate } from "./common.ts";
 
 /**
  * The observation row of every detector (ADR-0019). A detector writes one gold table,
@@ -150,8 +148,6 @@ export interface RunTableOptions {
   lowType: string;
 }
 
-type BaselineMode = "period" | "all";
-
 /**
  * The shared rule of the run detectors (ADR-0019). The detector first makes two temp tables:
  * `series(subject_id, trading_date, trading_period, event_start_utc, event_end_utc, value,
@@ -173,33 +169,16 @@ export async function createRunTables(
   connection: DuckDBConnection,
   { config, date, highType, lowType }: RunTableOptions,
 ): Promise<void> {
-  const baselineStart = shiftDate(date, -config.baselineWindowDays);
-  const baselineMode: BaselineMode =
-    config.baselineByTradingPeriod === true ? "period" : "all";
-  switch (baselineMode) {
-    case "period":
-      await createPeriodMatchedRunTables(connection, {
-        config,
-        date,
-        highType,
-        lowType,
-        baselineStart,
-      });
-      return;
-    case "all":
-      await createPooledRunTables(connection, {
-        config,
-        date,
-        highType,
-        lowType,
-        baselineStart,
-      });
-      return;
-    default: {
-      const unreachable: never = baselineMode;
-      return unreachable;
-    }
-  }
+  const options = {
+    config,
+    date,
+    highType,
+    lowType,
+    baselineStart: shiftDate(date, -config.baselineWindowDays),
+  };
+  if (config.baselineByTradingPeriod === true)
+    await createPeriodMatchedRunTables(connection, options);
+  else await createPooledRunTables(connection, options);
 }
 
 const thresholdSelect = (config: RunDetectorConfig, readySql: string) =>
@@ -246,6 +225,18 @@ const runSelect = (
      ) r
      JOIN baseline b ${joinSql}`;
 
+const hitsSql = (date: string, joinColumns: string) =>
+  `CREATE TEMP TABLE hits AS
+     SELECT t.subject_id, t.trading_period, t.event_start_utc, t.event_end_utc,
+       t.value, 'high' AS direction
+     FROM series t JOIN baseline b USING (${joinColumns})
+     WHERE t.trading_date = DATE ${lit(date)} AND b.baseline_ready AND t.value > b.high_threshold
+     UNION ALL
+     SELECT t.subject_id, t.trading_period, t.event_start_utc, t.event_end_utc,
+       t.value, 'low' AS direction
+     FROM series t JOIN baseline b USING (${joinColumns})
+     WHERE t.trading_date = DATE ${lit(date)} AND b.baseline_ready AND t.value < b.low_threshold`;
+
 interface RunTableSqlOptions extends RunTableOptions {
   baselineStart: string;
 }
@@ -274,18 +265,7 @@ async function createPooledRunTables(
        ${thresholdSelect(config, `sample_count >= ${config.minBaselinePeriods}`)}
      FROM stats`,
   );
-  await connection.run(
-    `CREATE TEMP TABLE hits AS
-     SELECT t.subject_id, t.trading_period, t.event_start_utc, t.event_end_utc,
-       t.value, 'high' AS direction
-     FROM series t JOIN baseline b USING (subject_id)
-     WHERE t.trading_date = DATE ${lit(date)} AND b.baseline_ready AND t.value > b.high_threshold
-     UNION ALL
-     SELECT t.subject_id, t.trading_period, t.event_start_utc, t.event_end_utc,
-       t.value, 'low' AS direction
-     FROM series t JOIN baseline b USING (subject_id)
-     WHERE t.trading_date = DATE ${lit(date)} AND b.baseline_ready AND t.value < b.low_threshold`,
-  );
+  await connection.run(hitsSql(date, "subject_id"));
   await connection.run(
     `CREATE TEMP TABLE runs AS
      ${runSelect(config, highType, lowType, "USING (subject_id)")}`,
@@ -325,18 +305,7 @@ async function createPeriodMatchedRunTables(
        )}
      FROM stats`,
   );
-  await connection.run(
-    `CREATE TEMP TABLE hits AS
-     SELECT t.subject_id, t.trading_period, t.event_start_utc, t.event_end_utc,
-       t.value, 'high' AS direction
-     FROM series t JOIN baseline b USING (subject_id, trading_period)
-     WHERE t.trading_date = DATE ${lit(date)} AND b.baseline_ready AND t.value > b.high_threshold
-     UNION ALL
-     SELECT t.subject_id, t.trading_period, t.event_start_utc, t.event_end_utc,
-       t.value, 'low' AS direction
-     FROM series t JOIN baseline b USING (subject_id, trading_period)
-     WHERE t.trading_date = DATE ${lit(date)} AND b.baseline_ready AND t.value < b.low_threshold`,
-  );
+  await connection.run(hitsSql(date, "subject_id, trading_period"));
   await connection.run(
     `CREATE TEMP TABLE runs AS
      ${runSelect(
