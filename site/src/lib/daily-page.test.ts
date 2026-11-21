@@ -4,7 +4,6 @@ import { join } from "node:path";
 import type { SiteIndex } from "@gridwatch/publisher/site-contract";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
-  CHART_SLOTS,
   completenessNotice,
   dailyPath,
   dailyStaticPaths,
@@ -168,11 +167,4 @@ test("headline falls back when generation or prices are missing", () => {
   const text = headlineParagraphs(day).join(" ");
   expect(text).toMatch(/generation numbers for this day are missing/i);
   expect(text).toMatch(/wholesale prices for this day are missing/i);
-});
-
-test("chart slots leave empty homes for later issues", () => {
-  expect(CHART_SLOTS.map((slot) => slot.id)).toEqual(["energy-flow"]);
-  for (const slot of CHART_SLOTS) {
-    expect(slot.body).toMatch(/not drawn yet/i);
-  }
 });

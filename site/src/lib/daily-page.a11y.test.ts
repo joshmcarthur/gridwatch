@@ -61,6 +61,10 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain("BEN2201");
     expect(html).toContain("Electricity Authority dispatch energy prices");
     expect(html.match(/role="img"/g)?.length).toBe(3);
+    expect(html).toContain('aria-labelledby="energy-flow"');
+    expect(html).toMatch(/not published yet/i);
+    expect(html).toMatch(/does not guess/i);
+    expect(html).not.toMatch(/not drawn yet/i);
     const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
     expect(new Set(ids).size).toBe(ids.length);
   },

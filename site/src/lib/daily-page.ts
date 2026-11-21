@@ -22,14 +22,6 @@ const DATASET_LABELS: Record<string, string> = {
   entity_mappings: "plant names and locations",
 };
 
-export const CHART_SLOTS = [
-  {
-    id: "energy-flow",
-    title: "Where the energy went",
-    body: "A chart of how energy moved through the system will sit here. It is not drawn yet.",
-  },
-] as const;
-
 export type CompletenessSource = {
   complete: boolean;
   datasets: Record<string, { status: DatasetState }>;
