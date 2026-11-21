@@ -30,7 +30,7 @@ The Landscape design rules for data colour say that battery is storage. It shoul
 - Each chart adds its SVG to the page HTML. A daily page with many charts grows by that amount.
 - Desktop axis text is large (about 20px) because the SVG scales up to its cap. Reducing the cap changes the desktop size, not the phone size.
 - Battery is a second SVG in the generation figure, not a band in the stack. A day with no battery discharge still shows the panel (a flat line), so the table column has a matching chart.
-- A later interactive feature needs a new decision. This ADR does not allow client JavaScript for charts.
+- A later interactive feature needs a new decision. This ADR does not allow client JavaScript for charts on the daily page.
 
 ## Amendment (#28): price charts
 
@@ -44,6 +44,16 @@ Amended 2026-11-21. The price chart is the second figure on the daily page. Thes
 - **Gaps.** A null price breaks only its own node line. A valid period whose neighbours are both null gets a dot, because a line draws nothing for a single point. A proxy period gets an open marker.
 
 Consequence: a daily page with prices adds two SVGs. Each figure has one table, so the numbers are not repeated per SVG.
+
+## Amendment (#49): nodal map page may use a slider
+
+Amended 2026-11-22. The nodal price map ([ADR-0023](0023-nodal-price-map.md)) is a separate page, not a daily-page chart. These points extend the decisions above for that page only.
+
+- **Static first.** The build writes one SVG for the default period (largest `price_distribution` range, else period 1) and a table of every priced POC. Scripts off, that is the page.
+- **Client slider.** A small island of JavaScript on `/YYYY/MM/DD/map` (and `/prices/map`) may recolour the existing dots and re-sort the table as the reader moves a range input. It must not fetch EMI, silver or gold. The payload is the day's site JSON, inlined.
+- **No Plot, no tiles.** The coastline is committed GeoJSON. Projection is a small equirectangular fit at build time. Daily-page charts stay Plot, static, no chart JavaScript.
+
+Daily-page charts stay under the original rule: no client JavaScript.
 
 ## Amendment (#92): battery panel
 

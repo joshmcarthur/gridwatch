@@ -53,6 +53,10 @@ export function dailyPath(date: string): string {
   return `/${parsed.year}/${month}/${day}/`;
 }
 
+export function mapPath(date: string): string {
+  return `${dailyPath(date)}map/`;
+}
+
 export function dateFromParams(
   year: string,
   month: string,

@@ -183,6 +183,35 @@ export interface EpisodesSection extends SectionBase {
   items: SiteEpisode[];
 }
 
+/** A priced POC with WGS84 coordinates, for the nodal map (ADR-0023). */
+export interface NodalMapPoc {
+  point_of_connection: string;
+  latitude: number;
+  longitude: number;
+  island: Island | null;
+  /** $/MWh. Aligned to `SiteDay.periods`. Null when silver has no row. */
+  price: Array<number | null>;
+  /** Periods where gold marks the price as a proxy. */
+  proxy_periods: number[];
+}
+
+/** A priced POC with no coordinates. It is in the table, not on the map (ADR-0023). */
+export interface NodalMapUnlocated {
+  point_of_connection: string;
+  island: Island | null;
+  price: Array<number | null>;
+  proxy_periods: number[];
+}
+
+/**
+ * Nodal prices for the map page (ADR-0023). Optional: absence means the exporter has not
+ * built it. `pocs` is only POCs with coordinates. `unlocated` is every other priced POC.
+ */
+export interface NodalMapSection extends SectionBase {
+  pocs: NodalMapPoc[];
+  unlocated: NodalMapUnlocated[];
+}
+
 /** An extension point. The v1 exporter never writes one. A consumer treats absence as "not built". */
 export type SiteExtension = { state: SectionState } & Record<string, unknown>;
 
@@ -205,6 +234,8 @@ export interface SiteDay {
   sankey?: SankeySection;
   observations?: SiteExtension;
   episodes?: EpisodesSection;
+  /** Optional. Absence means not built. The exporter writes it on every day, `missing` when gold has no row. */
+  nodal_map?: NodalMapSection;
 }
 
 export interface SiteIndexDay {
@@ -219,6 +250,8 @@ export interface SiteIndexDay {
     sankey?: SectionState;
     /** Optional. Detected episodes for the day (ADR-0021). */
     episodes?: SectionState;
+    /** Optional. Nodal price map for the day (ADR-0023). */
+    nodal_map?: SectionState;
   };
   /** The held version of the day file (ADR-0014). */
   export_sha256: string;
@@ -238,6 +271,8 @@ export interface SiteIndex {
     sankey?: string | null;
     /** Optional. Latest day whose episodes section is complete. */
     episodes?: string | null;
+    /** Optional. Latest day whose nodal map section is complete. */
+    nodal_map?: string | null;
   };
 }
 
@@ -253,7 +288,13 @@ const DATASET_STATES: readonly DatasetState[] = [
   "invalid",
 ];
 const ISLANDS: readonly Island[] = ["NI", "SI"];
-const EXTENSIONS = ["reserves", "sankey", "observations", "episodes"] as const;
+const EXTENSIONS = [
+  "reserves",
+  "sankey",
+  "observations",
+  "episodes",
+  "nodal_map",
+] as const;
 const DAY_LENGTHS = [46, 48, 50];
 
 function fail(path: string, message: string): never {
@@ -544,6 +585,56 @@ function checkSankey(
   return base.datasets;
 }
 
+function checkNodalMapNode(
+  value: unknown,
+  path: string,
+  periodCount: number,
+  length: number,
+  located: boolean,
+): void {
+  const row = record(value, path);
+  text(row.point_of_connection, `${path}.point_of_connection`);
+  if (located) {
+    number(row.latitude, `${path}.latitude`);
+    number(row.longitude, `${path}.longitude`);
+  }
+  nullable(row.island, (v, p) => oneOf(v, ISLANDS, p), `${path}.island`);
+  nullableNumbers(row.price, length, `${path}.price`);
+  integers(row.proxy_periods, `${path}.proxy_periods`, periodCount);
+}
+
+function checkNodalMap(
+  value: unknown,
+  path: string,
+  periodCount: number,
+): string[] {
+  const section = record(value, path);
+  const base = checkSectionBase(section, path, periodCount);
+  const pocs = list(section.pocs, `${path}.pocs`);
+  const unlocated = list(section.unlocated, `${path}.unlocated`);
+  checkEmptyWhenMissing(pocs, base.state, `${path}.pocs`);
+  checkEmptyWhenMissing(unlocated, base.state, `${path}.unlocated`);
+  pocs.forEach((item, i) => {
+    checkNodalMapNode(
+      item,
+      `${path}.pocs[${i}]`,
+      periodCount,
+      base.length,
+      true,
+    );
+  });
+  unlocated.forEach((item, i) => {
+    checkNodalMapNode(
+      item,
+      `${path}.unlocated[${i}]`,
+      periodCount,
+      base.length,
+      false,
+    );
+  });
+  return base.datasets;
+}
+
 function checkEpisodes(
   value: unknown,
   path: string,
@@ -608,6 +699,9 @@ export function assertSiteDay(value: unknown): asserts value is SiteDay {
       case "episodes":
         sectionDatasets.push(...checkEpisodes(day[key], key, periods.length));
         break;
+      case "nodal_map":
+        sectionDatasets.push(...checkNodalMap(day[key], key, periods.length));
+        break;
       case "reserves":
       case "observations":
         oneOf(record(day[key], key).state, SECTION_STATES, `${key}.state`);
@@ -647,6 +741,8 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
       oneOf(sections.sankey, SECTION_STATES, `${at}.sections.sankey`);
     if (sections.episodes !== undefined)
       oneOf(sections.episodes, SECTION_STATES, `${at}.sections.episodes`);
+    if (sections.nodal_map !== undefined)
+      oneOf(sections.nodal_map, SECTION_STATES, `${at}.sections.nodal_map`);
     text(day.export_sha256, `${at}.export_sha256`);
   });
   for (const [id, date] of Object.entries(
@@ -663,4 +759,6 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
     nullable(sections.sankey, text, "latest_complete_sections.sankey");
   if (sections.episodes !== undefined)
     nullable(sections.episodes, text, "latest_complete_sections.episodes");
+  if (sections.nodal_map !== undefined)
+    nullable(sections.nodal_map, text, "latest_complete_sections.nodal_map");
 }

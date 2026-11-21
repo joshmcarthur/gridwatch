@@ -10,6 +10,7 @@ import {
   dateFromParams,
   type HeadlineSource,
   headlineParagraphs,
+  mapPath,
   monthGroups,
   neighbouringDays,
 } from "./daily-page.ts";
@@ -60,6 +61,10 @@ const threeDayIndex: SiteIndex = {
 
 test("dailyPath is a trailing-slash YYYY/MM/DD route", () => {
   expect(dailyPath("2026-09-27")).toBe("/2026/09/27/");
+});
+
+test("mapPath is the daily path plus map/", () => {
+  expect(mapPath("2026-09-27")).toBe("/2026/09/27/map/");
 });
 
 test("dateFromParams round-trips a padded calendar date", () => {

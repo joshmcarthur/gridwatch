@@ -121,6 +121,17 @@ test("a valid day passes, with and without the optional extensions", () => {
         inputs_complete: null,
       },
       observations: { state: "incomplete" },
+      nodal_map: {
+        state: "missing",
+        missing_periods: [],
+        analysis_version: null,
+        inputs_sha256: null,
+        silver_tables: [],
+        gold_tables: [],
+        datasets: [],
+        pocs: [],
+        unlocated: [],
+      },
     }),
   ).not.toThrow();
 });
@@ -1014,6 +1025,91 @@ test("nodes and spreads follow the reference order, and the distribution keeps p
   expect(day.prices.distribution.median.slice(0, 2)).toEqual([50, 6]);
 });
 
+test("nodal_map plots only POCs with coordinates and lists the rest unlocated", async () => {
+  const silverDir = join(root, "silver");
+  await writeGold(
+    "nodal_price_periods",
+    DATE,
+    {
+      point_of_connection: "VARCHAR",
+      trading_period: "INTEGER",
+      price: "DOUBLE",
+      has_proxy_price: "BOOLEAN",
+    },
+    [
+      {
+        point_of_connection: "ALB0331",
+        trading_period: 1,
+        price: 90.126,
+        has_proxy_price: false,
+      },
+      {
+        point_of_connection: "HAY2201",
+        trading_period: 1,
+        price: 50,
+        has_proxy_price: true,
+      },
+    ],
+  );
+  const entityPath = join(
+    silverDir,
+    "entity_points_of_connection",
+    `trading_date=${DATE}`,
+    "data.parquet",
+  );
+  await mkdir(dirname(entityPath), { recursive: true });
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    await connection.run(
+      `COPY (SELECT 'ALB0331' AS poc_id, -36.739 AS latitude, 174.69 AS longitude,
+         'NI' AS island) TO ${lit(entityPath)} (FORMAT parquet)`,
+    );
+  } finally {
+    connection.closeSync();
+  }
+
+  const day = await buildSiteDay({
+    goldDir,
+    silverDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  assertSiteDay(day);
+  expect(day.nodal_map?.state).toBe("complete");
+  expect(day.nodal_map?.pocs).toEqual([
+    {
+      point_of_connection: "ALB0331",
+      latitude: -36.739,
+      longitude: 174.69,
+      island: "NI",
+      price: [90.13, ...Array.from({ length: 47 }, () => null)],
+      proxy_periods: [],
+    },
+  ]);
+  expect(day.nodal_map?.unlocated).toEqual([
+    {
+      point_of_connection: "HAY2201",
+      island: null,
+      price: [50, ...Array.from({ length: 47 }, () => null)],
+      proxy_periods: [1],
+    },
+  ]);
+});
+
+test("nodal_map is missing when gold has no nodal_price_periods partition", async () => {
+  const day = await buildSiteDay({
+    goldDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  expect(day.nodal_map).toMatchObject({
+    state: "missing",
+    pocs: [],
+    unlocated: [],
+    analysis_version: null,
+  });
+});
+
 test("the index records which days have a complete sankey", async () => {
   await writePrices(DATE, { periods: pricePeriods(48, (_n, p) => p) });
   await writeSankeyGold(DATE, {
@@ -1286,6 +1382,9 @@ function syntheticDispatch(date: string): string {
       [date, period, published, "OTA2201", "NI", "N", 80 + period],
       [date, period, published, "HAY2201", "NI", "N", 70 + period],
       [date, period, published, "BEN2201", "SI", "N", 60 + period],
+      [date, period, published, "ALB0331", "NI", "N", 82 + period],
+      [date, period, published, "AKL0331", "NI", "N", 95 + period],
+      [date, period, published, "ABY0111", "SI", "N", 40 + period],
     ].map((row) => row.join(","));
   }).flat();
   return [
@@ -1389,4 +1488,12 @@ test("the committed sample day matches the exporter end to end, on real generati
   expect(parsedIndex.latest_complete_sections.sankey).toBeNull();
   expect(parsedIndex.days[0]?.sections.episodes).toBe("missing");
   expect(parsedIndex.latest_complete_sections.episodes).toBeNull();
+  expect(
+    built.nodal_map?.pocs.map((p) => p.point_of_connection).sort(),
+  ).toEqual(["ABY0111", "AKL0331", "ALB0331"]);
+  expect(
+    built.nodal_map?.unlocated.map((p) => p.point_of_connection).sort(),
+  ).toEqual(["BEN2201", "HAY2201", "OTA2201"]);
+  expect(built.nodal_map?.pocs[0]?.price).toHaveLength(46);
+  expect(parsedIndex.days[0]?.sections.nodal_map).toBe("complete");
 });
