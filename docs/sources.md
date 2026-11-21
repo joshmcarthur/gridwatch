@@ -333,3 +333,60 @@ A site can hold several plants (`WKM2201` has `whakamaru` and `mokai`), so a sit
 
 - **Voluntary and revisable.** The EMI report says submission "is not mandatory" and owners can change entries at any time. The user guide says outages are provided as required under Code Schedule 8.3. I did not read the Code to settle which is right. Treat records as the owner's plan, not verified fact.
 - **Plans move.** Only `DateEffective` (EMI) or revision history (POCP) shows what was known on a day. Our own daily snapshot is the only way to keep that history.
+
+## 8. Transmission constraints
+
+Research for [issue #46](https://github.com/joshmcarthur/gridwatch/issues/46). Checked on 21 November 2026 (NZ time). Binding constraints explain persistent regional price separation ([brief §3.3, §6.4](brief.md)). This is a Phase 5 dataset. **Measured** means I saw it directly. **Unknown** says what I tried.
+
+**Finding.** There is no live CSV of binding constraints in the 12-month backfill window. EMI extracted binding and near-binding constraints from final-pricing SPD cases until **1 November 2022**. Real-time pricing ended that extract. After that date the constraint list lives inside **RTD SPD case files**. Those files are large. The brief says to use SPD **selectively** for interesting periods ([brief §3.3](brief.md), [#44](https://github.com/joshmcarthur/gridwatch/issues/44)), not to process every case.
+
+### 8.1 Pre-RTP extract (ended 1 Nov 2022)
+
+Catalogue: [Binding and near-binding constraints](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/Pre1November2022Archive/BindingConstraints). Blob prefix `Datasets/Wholesale/DispatchAndPricing/Pre1November2022Archive/BindingConstraints/`.
+
+| Question | Answer |
+|---|---|
+| Content | One row per constraint component. Binding = non-zero `MarginalDollarsPerMegawatt`. Near-binding = zero shadow price, left-hand side within 5% or 5 MW of the right-hand side ([page](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/Pre1November2022Archive/BindingConstraints)). |
+| Pattern | Daily CSV `yyyymmdd_BindingConstraints_F.csv` by year, plus annual files 2009–2021. `_F` means the SPD case is associated with final prices. |
+| Columns | `ConstraintName, ConstraintType, TradingDate, TradingPeriod, ComponentType, ComponentName, ComponentCoefficient, ComponentMegawatts, LeftHandSideMegawatts, Sense, RightHandSideMegawatts, MarginalDollarsPerMegawatt` (measured on [20221031](https://emidatasets.blob.core.windows.net/publicdata/Datasets/Wholesale/DispatchAndPricing/Pre1November2022Archive/BindingConstraints/2022/20221031_BindingConstraints_F.csv), 125 data rows, 10 KB). |
+| Types seen | `MnCnst` (market), `BrCnst` (branch). Example binding row: `BEN_HAYP2max` / `BRANCHFLOW` / `BEN_HAY2.1` at period 31, shadow $0.41385/MW (measured). |
+| History | Daily files through 31 Oct 2022. **Stopped 1 Nov 2022** with real-time pricing (page). |
+| In the 12-month window | None. |
+
+This extract is useful for history before RTP. It is not a source for gold today.
+
+### 8.2 After RTP: RTD SPD case files
+
+Catalogue: [EMI RTD](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/CaseFiles/RTD), [hub SPD case files](https://www.ea.govt.nz/data-and-insights/datasets/wholesale/dispatch-and-pricing/spd-case-files/). Blob prefix `Datasets/Wholesale/DispatchAndPricing/CaseFiles/RTD/<yyyy>/<yyyymmdd>/`. Naming: [forum thread](https://forum.emi.ea.govt.nz/thread/spd-case-files/) (`101` = RTD).
+
+| Question | Answer |
+|---|---|
+| Pattern | One ZIP per RTD case. All cases for a calendar day in one folder. Published as a batch the next morning ([RTD page](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/CaseFiles/RTD)). |
+| Count and size | 29 Oct 2026: **434** ZIPs, 260–272 KB each, **114.4 MB** for the day (measured, listing). About 250 cases/day is the page's typical figure; this day was higher. |
+| 12-month size | About **42 GB** raw if every RTD ZIP is kept (365 × 114 MB). Unknown whether every day is 434 cases. |
+| Contents | A ZIP is 16 text files. The solved case is `*.SPDSOLVED` (~714 KB uncompressed). Other files are network, market, period, logs, SFT check. |
+| Constraint rows | `I,SOLUTION,CONSTRAINT` then `D,SOLUTION,CONSTRAINT` rows. Header includes `CONSTRAINTNAME, CONSTRAINTTYPE, CONSTRAINTVALUE, LOWERLIMIT, UPPERLIMIT, LOWERMARGINALPRICE, UPPERMARGINALPRICE` (measured). Types `BrCnst` and `MnCnst`. 35 constraint rows in the 00:00 29 Oct 2026 case. Both marginal prices were 0.00000 (nothing binding at midnight). |
+| Cadence | Indeterminate; typically ~5-minute RTD. Count per day varies. |
+| Licence | Site content is CC BY 4.0 (section 5); no dataset-level exception found. |
+
+Sibling folders: `CaseFiles/PRSS/` (fallback prices when RTD is missing), `CaseFiles/RTDP/` (scarcity), `CaseFiles/WDS/` (weekly dispatch, static Jan 2024–Oct 2026 per the hub page). Not opened.
+
+**vSPD GDX.** `Datasets/Wholesale/DispatchAndPricing/GDX/<yyyy>/Pricing_yyyymmdd.gdx`, about **40 MB per day** (measured Jan 2026 files, 36–43 MB). Binary GAMS. About **15 GB** for 12 months. Input to vSPD, not a constraint extract. Needs a GAMS/vSPD reader. Not fetched beyond the listing.
+
+### 8.3 Not constraint lists
+
+| Source | Why not |
+|---|---|
+| [Constrained on/off costs](https://www.emi.ea.govt.nz/Wholesale/Datasets/ConstrainedOnOffCostsAndAmounts) | Compensation when plant is dispatched out of merit. Last file `202202_`. Page: "The process for updating this collection is currently out of service." |
+| `Transmission/PowerSystemAnalysis/` | Line-diagram PDFs, PSS/E raw cases, PowerFactory cases. Network model, not a binding list. Readme 19 KB. |
+| Nodal prices and spreads | Show the **effect** of a constraint (#32). They do not name the branch or the limit. |
+
+### 8.4 Recommendation
+
+**Do not add a collector for BindingConstraints or for every RTD case.** The CSV extract is outside the 12-month window. A full RTD backfill is tens of gigabytes and contradicts the brief's "selectively" rule.
+
+**Do add a targeted RTD read on [#44](https://github.com/joshmcarthur/gridwatch/issues/44), after the owner agrees:** for a flagged period (price separation, high price), fetch that day's RTD folder, pick the case that covers the period, and read `SOLUTION,CONSTRAINT` rows whose `LOWERMARGINALPRICE` or `UPPERMARGINALPRICE` is not zero. Store the constraint name, type, value, limits and shadow price next to the observation. One interesting day is ~114 MB, not 42 GB.
+
+**Do not** treat island residuals, HVDC gold, or nodal spreads as a constraint dataset. They are evidence that a constraint may have bound; they are not the constraint.
+
+**Owner question.** Approve the selective RTD path on #44, or wait? I will not collect RTD or BindingConstraints until you say so.
