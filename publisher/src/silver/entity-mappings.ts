@@ -107,6 +107,7 @@ function fingerprint(
   shaOf: Map<string, string>,
 ): string {
   const mapping = [
+    "poc parent_poc_id",
     ...Object.entries(FUEL_MAP).map(
       ([code, category]) => `fuel ${code} ${category}`,
     ),
@@ -290,6 +291,8 @@ export async function publishEntityMappings(options: {
               THEN min(network_reporting_region_id) END AS region_id,
          CASE WHEN count(DISTINCT (latitude, longitude)) = 1 THEN min(latitude) END AS latitude,
          CASE WHEN count(DISTINCT (latitude, longitude)) = 1 THEN min(longitude) END AS longitude,
+         CASE WHEN count(DISTINCT embedded_under_point_of_connection) = 1
+              THEN min(embedded_under_point_of_connection) END AS parent_poc_id,
          count(*) AS nsp_count
        FROM nsp_pick GROUP BY point_of_connection`,
     );
@@ -340,12 +343,12 @@ export async function publishEntityMappings(options: {
     await run(
       `CREATE TEMP TABLE poc AS
        SELECT poc_id, island, 'nsp' AS island_source, nsp_row_status, region_id, region_count,
-         latitude, longitude, nsp_count
+         latitude, longitude, nsp_count, parent_poc_id
        FROM nsp_poc WHERE island IS NOT NULL
        UNION ALL
        SELECT d.point_of_connection, d.island, 'dispatch_prices', n.nsp_row_status,
          n.region_id, coalesce(n.region_count, 0), n.latitude, n.longitude,
-         coalesce(n.nsp_count, 0)
+         coalesce(n.nsp_count, 0), n.parent_poc_id
        FROM dispatch_islands d LEFT JOIN nsp_poc n ON n.poc_id = d.point_of_connection
        WHERE n.island IS NULL`,
     );
@@ -496,7 +499,7 @@ export async function publishEntityMappings(options: {
     const selects: Record<(typeof TABLES)[number], string> = {
       entity_points_of_connection: `SELECT ${stamp}, poc_id, substr(poc_id, 1, 3) AS site_id,
           island, island_source, nsp_row_status, region_id, region_count, latitude, longitude,
-          nsp_count, DATE ${lit(nsp[0])} AS nsp_snapshot_date
+          nsp_count, parent_poc_id, DATE ${lit(nsp[0])} AS nsp_snapshot_date
         FROM poc ORDER BY poc_id`,
       entity_regions: `SELECT ${stamp}, network_reporting_region_id AS region_id,
           min(network_reporting_region) AS region_name,

@@ -59,7 +59,7 @@ One publisher call, `publishEntityMappings`, writes all tables for one trading d
 
 | Table | One row per | Source columns kept |
 | --- | --- | --- |
-| `entity_points_of_connection` | POC with an island | `poc_id`; island and its source (`nsp` or `dispatch_prices`); NSP row status; region ID and count; coordinates; NSP count; NSP snapshot date. |
+| `entity_points_of_connection` | POC with an island | `poc_id`; island and its source (`nsp` or `dispatch_prices`); NSP row status; region ID and count; coordinates; NSP count; nullable `parent_poc_id` from the chosen NSP `embedded_under_point_of_connection`; NSP snapshot date. |
 | `entity_regions` | region | region ID and name; `has_nsp_in_force`, false for a region that only closed rows use. |
 | `entity_participants` | participant | participant ID; name; flags for plant operator and network participant. Network participants come from NSP rows in force. |
 | `entity_plants` | plant ID | `plant_id`, `site_id`, `plant_name`, fuel category, and the lists `fuel_codes`, `points_of_connection` and `network_codes` of its Generation_MD keys. |
@@ -89,7 +89,7 @@ An unmapped identifier does not fail the build. A dataset with no partition for 
 
 ### Runner contract
 
-The runner ([#13](https://github.com/joshmcarthur/gridwatch/issues/13)) finds stale silver days by comparing `bronze_sha256` with the manifest. Entity tables have no bronze input, so each table has an `inputs_sha256` column instead. It is a SHA-256 over the fuel map (codes and plant overrides) and the `bronze_sha256` values of every silver partition the build read, with the partition path, in a fixed order. The inputs are the NSP snapshot, the fleet snapshot, the dispatch energy prices and Generation_MD partitions up to the day, and that day's nodal partition. The call returns the same value as `inputsSha256`. A fuel-map change therefore rebuilds every mapping date.
+The runner ([#13](https://github.com/joshmcarthur/gridwatch/issues/13)) finds stale silver days by comparing `bronze_sha256` with the manifest. Entity tables have no bronze input, so each table has an `inputs_sha256` column instead. It is a SHA-256 over the fuel map (codes and plant overrides), a schema token for `parent_poc_id`, and the `bronze_sha256` values of every silver partition the build read, with the partition path, in a fixed order. The inputs are the NSP snapshot, the fleet snapshot, the dispatch energy prices and Generation_MD partitions up to the day, and that day's nodal partition. The call returns the same value as `inputsSha256`. A fuel-map or schema-token change therefore rebuilds every mapping date.
 
 - The publisher runner builds entity mappings last, after all other datasets.
 - It builds them for the dates in its range.
