@@ -132,6 +132,23 @@ export function renderSankeySvg(chart: EnergySankey): string {
   return svg.outerHTML;
 }
 
+const SHARED_LEGEND_LABEL: Partial<Record<SankeyNode["kind"], string>> = {
+  load: "Modelled load",
+  residual: "Residual",
+};
+
+/** One legend entry per drawn band colour, in column order. */
+export function sankeyLegend(
+  chart: EnergySankey,
+): Array<{ label: string; colour: string }> {
+  const entries = new Map<string, string>();
+  for (const node of chart.nodes) {
+    const label = SHARED_LEGEND_LABEL[node.kind] ?? node.label;
+    if (!entries.has(label)) entries.set(label, nodeFill(node));
+  }
+  return [...entries].map(([label, colour]) => ({ label, colour }));
+}
+
 function layout(chart: EnergySankey): Box[] {
   const flowOf = flowMap(chart);
   const fuels = chart.nodes.filter(
