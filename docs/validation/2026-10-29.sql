@@ -31,7 +31,9 @@
 -- Load once
 -- =====================================================================
 
--- Fuel map: exact copy of publisher/src/silver/fuel-map.ts (both vocabularies).
+-- Fuel_Code map: the two vocabularies in publisher/src/silver/fuel-map.ts FUEL_MAP.
+-- Plant overrides (FUEL_PLANT_OVERRIDES, WPG/waipori → wind) are applied in gold, not here.
+-- Gold vs published Fuel_Code therefore shows that 0.700 GWh on 2026-10-29.
 -- Unmapped codes are an anti-join to this table, not a second NOT IN list.
 CREATE TEMP TABLE fuel_map AS
 SELECT * FROM (VALUES
