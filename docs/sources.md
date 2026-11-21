@@ -449,3 +449,48 @@ Keep native resolution: **daily** HMD storage/inflows, **weekly** water values. 
 **Do not buy NZX and do not scrape Transpower** unless you say so. Live island storage in GWh is the series the brief wants for "hydro conditions", and it is the one we cannot have for free.
 
 **Owner questions.** (1) Collect HMD for history? (2) Live storage: wait for a public series, take an NZX licence, or leave it off the daily page? (3) Extract Jade weekly inputs if/when 2026 folders appear? I will not collect HMD, Jade or NZX until you say so.
+
+## 10. Frequency keeping and other ancillary services
+
+Research for [issue #48](https://github.com/joshmcarthur/gridwatch/issues/48). Checked on 21 November 2026 (NZ time). Beyond reserve prices ([#11](https://github.com/joshmcarthur/gridwatch/issues/11), [ADR-0013](adr/0013-gold-reserve-prices.md)). **Measured** means I saw it directly.
+
+**Finding.** Instantaneous reserve (FIR/SIR) prices are already gold. Frequency keeping is a separate daily CSV pair on the blob. Other ancillary products (constrained on/off, black start, voltage support) have **no live dataset** in the wholesale blob.
+
+### 10.1 Already in gold: instantaneous reserve
+
+[Dispatch Reserve Prices](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/DispatchReservePrices) — section 3.2. FIR and SIR dollars per megawatt-hour at `HAY2201` and `BEN2201`. Gold table and daily chart exist.
+
+[Final reserve prices](https://emidatasets.blob.core.windows.net/publicdata/Datasets/Wholesale/DispatchAndPricing/FinalReservePrices/) — settled counterpart, about 2.7 KB per day, files named `yyyymmdd_FinalReservePrices.csv` in one flat folder (measured `20251120`, 2,659 bytes). Same role as Final energy prices (section 6, item 5). Not collected.
+
+### 10.2 Frequency keeping
+
+Catalogue: [EMI](https://www.emi.ea.govt.nz/Wholesale/Datasets/FrequencyKeeping), [hub](https://www.ea.govt.nz/data-and-insights/datasets/wholesale/frequency-keeping/). Blob prefix `Datasets/Wholesale/FrequencyKeeping/`. Offers are selected by the frequency-keeping selection tool **before** SPD (page).
+
+Two products:
+
+| Dataset | Pattern | Columns (measured, 19 Nov 2026) | 12-month size |
+|---|---|---|---|
+| DispatchedOffers | Daily CSV. Year folders through **2026-07-13**, then `New/2026/` from **2026-07-10** (overlap of a few days). Last file 2026-11-20. | `TradingDate, TradingPeriodNumber, TimeZoneIndicator, IntervalDateTime, SubmissionDate, SubmissionTime, SubmissionDateTime, PointOfConnectionCode, UnitCode, DispatchBlockCode, IslandCode, ParticipantCode, ParticipantShortName, Megawatts, Dollars`. POC and unit are often blank; `DispatchBlockCode` is `WTR` (SI, Meridian, 15 MW at $220) or `WTO` (NI, Mercury, 15 MW at $1,500) on that night. 128 data rows (~one selected block per island per period). | **367 files, 4.6 MB** |
+| Offers | Daily CSV. `New/2026/` current. 19 Nov 2026: 5,628 rows, 796 KB. | Same keys plus `SubmissionOrder, IsLatestSubmissionFlag, Tranche, MinimumMegawatts, MaximumMegawatts`. | **370 files, 356 MB** |
+
+The whole tree is about **1.5 GB** (measured listing). History: dispatched offers from 2005 (old header uses `DaylightSavingIndicator` instead of `TimeZoneIndicator`); offers from 2013. Licence: CC BY 4.0 (section 5).
+
+DST: `TimeZoneIndicator` is `NZDT` on 19 Nov 2026. 46/50-period days: **unchecked**.
+
+### 10.3 Not a live ancillary dataset
+
+| Source | Why not |
+|---|---|
+| [Constrained on/off costs](https://www.emi.ea.govt.nz/Wholesale/Datasets/ConstrainedOnOffCostsAndAmounts) | Compensation, not FK. Last file `202202_`. Process out of service (section 8.3). |
+| `BidsAndOffers/Offers` | Energy (and possibly reserve) offer stacks from 2013 through 2026. Cleared Offers already covers dispatched energy. Not opened. |
+| Black start, voltage support, over-frequency arming | No folder under `Datasets/Wholesale/` (measured listing). |
+
+### 10.4 Recommendation
+
+**Do collect FrequencyKeeping DispatchedOffers** for the 12-month window (~4.6 MB). It names who kept frequency, in which island, at what MW and dollars, at trading-period grain. Join to the entity model is by `DispatchBlockCode` / `ParticipantCode`, not POC — that needs a small map (`WTR`, `WTO`, `CLU` seen in offers).
+
+**Do not collect FrequencyKeeping Offers** unless we need the uncleared stack. 356 MB/year for a later-phase chart.
+
+**Do not collect Final reserve prices** unless the owner wants settled FIR/SIR next to the interim dispatch prices we already publish.
+
+**Owner questions.** (1) Collect dispatched frequency-keeping offers? (2) Offers stack too? (3) Final reserve prices? I will not add a collector until you say so.
