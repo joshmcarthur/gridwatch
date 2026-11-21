@@ -1,4 +1,4 @@
-# ADR-0020: Nodal price map lives on its own page
+# ADR-0023: Nodal price map lives on its own page
 
 - Status: Proposed
 - Date: 2026-11-21
