@@ -18,7 +18,7 @@ import {
  * Bump by hand when the logic of any table in this file changes. The runner then rebuilds every
  * date (ADR-0011).
  */
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
 
 const OTA = "OTA2201";
 const HAY = "HAY2201";
@@ -44,7 +44,11 @@ export const TABLES = [
   "price_daily_summary",
   "price_spreads",
   "price_distribution",
+  "nodal_price_periods",
 ] as const;
+
+/** The four tables the site prices section reads. `nodal_price_periods` is a separate section. */
+export const PRICE_SECTION_TABLES = TABLES.slice(0, 4);
 
 const DISPATCH: GoldInput = {
   table: "dispatch_energy_prices",
@@ -57,7 +61,7 @@ export const INPUTS: GoldInput[] = [DISPATCH];
 /**
  * Publish the gold price tables for one trading date, from the silver dispatch energy prices
  * of that date: `<goldDir>/<table>/trading_date=<date>/data.parquet` for each of `TABLES`
- * (ADR-0011, ADR-0012).
+ * (ADR-0011, ADR-0012, ADR-0023).
  *
  * Rule B (owner decision, 2026-11-20): silver's `trading_period` is the period a row belongs
  * to. Within one POC and period, rows sort by `source_published_at`. A price applies from its
@@ -213,6 +217,20 @@ export async function publishGoldPrices(
        LEFT JOIN poc_periods p ON p.trading_period = s.trading_period
        GROUP BY s.trading_period, s.event_start_utc, s.event_end_utc
        ORDER BY s.trading_period`,
+      // Every POC that had a silver row that day, on every expected period. Null price when
+      // that POC has no silver row in the period (ADR-0023). No coordinates: those join at export.
+      nodal_price_periods: `SELECT ${tradingDate}, e.point_of_connection, s.trading_period,
+         s.event_start_utc, s.event_end_utc,
+         p.price, p.min_price, p.max_price,
+         coalesce(p.rows_present, 0)::INTEGER AS rows_present,
+         coalesce(p.has_proxy_price, false) AS has_proxy_price,
+         ${stamp("p.rows_present IS NOT NULL")}
+       FROM (SELECT DISTINCT point_of_connection FROM poc_periods) e
+       CROSS JOIN spans s
+       LEFT JOIN poc_periods p
+         ON p.point_of_connection = e.point_of_connection
+         AND p.trading_period = s.trading_period
+       ORDER BY e.point_of_connection, s.trading_period`,
     };
 
     await writeGoldTables(

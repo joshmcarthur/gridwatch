@@ -4,7 +4,12 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { type DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 import type { PublisherDataset } from "../datasets.ts";
-import { type GoldInput, goldPartitionPath, ISLANDS } from "../gold/common.ts";
+import {
+  type GoldInput,
+  goldPartitionPath,
+  ISLANDS,
+  silverPartitionPath,
+} from "../gold/common.ts";
 import {
   INPUTS as ENERGY_BALANCE_INPUTS,
   TABLES as ENERGY_BALANCE_TABLES,
@@ -20,6 +25,7 @@ import {
 import { TABLES as HVDC_TABLES } from "../gold/hvdc.ts";
 import {
   INPUTS as PRICE_INPUTS,
+  PRICE_SECTION_TABLES,
   TABLES as PRICE_TABLES,
   REFERENCE_NODES,
   SPREAD_PAIRS,
@@ -43,6 +49,9 @@ import {
   type FuelCategory,
   type GenerationSection,
   type Island,
+  type NodalMapPoc,
+  type NodalMapSection,
+  type NodalMapUnlocated,
   type PricesSection,
   type ReserveClass,
   type ReservesSection,
@@ -69,10 +78,10 @@ import {
  * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
  * rebuilt (ADR-0014).
  */
-export const EXPORT_VERSION = 4;
+export const EXPORT_VERSION = 5;
 
 interface Section {
-  name: "generation" | "prices" | "sankey" | "episodes" | "reserves";
+  name: "generation" | "prices" | "sankey" | "episodes" | "reserves" | "nodal_map";
   /** The first gold table. Its partition holds the section's `inputs_sha256`. */
   sentinel: string;
   inputs: readonly GoldInput[];
@@ -103,12 +112,24 @@ const RESERVES_SECTION: Section = {
   sentinel: RESERVE_TABLES[0],
   inputs: RESERVE_INPUTS,
 };
+const ENTITY_POINTS: GoldInput = {
+  table: "entity_points_of_connection",
+  layer: "silver",
+  versionColumn: "inputs_sha256",
+  completenessDataset: "entity_mappings",
+};
+const NODAL_MAP_SECTION: Section = {
+  name: "nodal_map",
+  sentinel: "nodal_price_periods",
+  inputs: [...PRICE_INPUTS, ENTITY_POINTS],
+};
 const SECTIONS: readonly Section[] = [
   GENERATION_SECTION,
   PRICES_SECTION,
   SANKEY_SECTION,
   EPISODES_SECTION,
   RESERVES_SECTION,
+  NODAL_MAP_SECTION,
 ];
 const [, HVDC_DAY_TABLE] = HVDC_TABLES;
 
@@ -289,7 +310,7 @@ async function buildPrices(
   const section = PRICES_SECTION;
   const base = {
     silver_tables: section.inputs.map((input) => input.table),
-    gold_tables: [...PRICE_TABLES],
+    gold_tables: [...PRICE_SECTION_TABLES],
     datasets: sectionDatasets(section),
   };
   const stamp = await readStamp(
@@ -587,6 +608,131 @@ const islandList = (value: unknown): Island[] =>
     return [];
   });
 
+const asIsland = (value: unknown): Island | null => {
+  const text = value === null || value === undefined ? "" : String(value);
+  if (text === "NI" || text === "SI") return text;
+  return null;
+};
+
+function missingNodalMap(
+  base: Pick<NodalMapSection, "silver_tables" | "gold_tables" | "datasets">,
+): NodalMapSection {
+  return {
+    ...base,
+    state: "missing",
+    missing_periods: [],
+    analysis_version: null,
+    inputs_sha256: null,
+    pocs: [],
+    unlocated: [],
+  };
+}
+
+async function buildNodalMap(
+  connection: DuckDBConnection,
+  goldDir: string,
+  silverDir: string,
+  date: string,
+  completeness: CompletenessView,
+  axis: SiteDay["periods"],
+): Promise<NodalMapSection> {
+  const section = NODAL_MAP_SECTION;
+  const base = {
+    silver_tables: ["dispatch_energy_prices", "entity_points_of_connection"],
+    gold_tables: ["nodal_price_periods"],
+    datasets: sectionDatasets(section),
+  };
+  const stamp = await readStamp(
+    connection,
+    goldPartitionPath(goldDir, section.sentinel, date),
+  );
+  if (!stamp) return missingNodalMap(base);
+
+  const entityPath = silverPartitionPath(
+    silverDir,
+    "entity_points_of_connection",
+    date,
+  );
+  const joinSql = existsSync(entityPath)
+    ? `LEFT JOIN read_parquet(${lit(entityPath)}) e ON e.poc_id = n.point_of_connection`
+    : "";
+  const coordSql = existsSync(entityPath)
+    ? "e.latitude, e.longitude, e.island"
+    : "NULL AS latitude, NULL AS longitude, NULL AS island";
+  const reader = await connection.runAndReadAll(
+    `SELECT n.point_of_connection, n.trading_period, n.price, n.has_proxy_price,
+       ${coordSql}
+     FROM read_parquet(${lit(goldPartitionPath(goldDir, section.sentinel, date))}) n
+     ${joinSql}
+     ORDER BY n.point_of_connection, n.trading_period`,
+  );
+  const rows = reader.getRowObjectsJson() as Array<Record<string, unknown>>;
+
+  const byPoc = new Map<
+    string,
+    {
+      island: Island | null;
+      latitude: number | null;
+      longitude: number | null;
+      price: Array<number | null>;
+      proxyPeriods: number[];
+    }
+  >();
+  for (const row of rows) {
+    const poc = String(row.point_of_connection);
+    let entry = byPoc.get(poc);
+    if (!entry) {
+      entry = {
+        island: asIsland(row.island),
+        latitude: numberOrNull(row.latitude),
+        longitude: numberOrNull(row.longitude),
+        price: axis.map(() => null),
+        proxyPeriods: [],
+      };
+      byPoc.set(poc, entry);
+    }
+    const period = Number(row.trading_period);
+    entry.price[period - 1] = roundOrNull(numberOrNull(row.price), 2);
+    if (row.has_proxy_price === true) entry.proxyPeriods.push(period);
+  }
+
+  const pocs: NodalMapPoc[] = [];
+  const unlocated: NodalMapUnlocated[] = [];
+  for (const [point_of_connection, entry] of byPoc) {
+    const shared = {
+      point_of_connection,
+      island: entry.island,
+      price: entry.price,
+      proxy_periods: entry.proxyPeriods.sort((a, b) => a - b),
+    };
+    if (entry.latitude !== null && entry.longitude !== null) {
+      pocs.push({
+        ...shared,
+        latitude: entry.latitude,
+        longitude: entry.longitude,
+      });
+    } else {
+      unlocated.push(shared);
+    }
+  }
+
+  const missingPeriods = axis
+    .map((p) => p.period)
+    .filter((period) =>
+      [...byPoc.values()].every((entry) => entry.price[period - 1] === null),
+    );
+
+  return {
+    ...base,
+    state: sectionState(stamp, section, completeness, date),
+    missing_periods: missingPeriods,
+    analysis_version: stamp.analysis_version,
+    inputs_sha256: stamp.inputs_sha256,
+    pocs,
+    unlocated,
+  };
+}
+
 function missingEpisodes(
   base: Pick<EpisodesSection, "silver_tables" | "gold_tables" | "datasets">,
 ): EpisodesSection {
@@ -739,8 +885,11 @@ export async function buildSiteDay(options: {
   goldDir: string;
   date: string;
   completeness: CompletenessView;
+  /** Silver root. Coordinates for the nodal map are joined from it (ADR-0023). */
+  silverDir?: string;
 }): Promise<SiteDay> {
   const { goldDir, date, completeness } = options;
+  const silverDir = options.silverDir ?? join(goldDir, "..", "silver");
   const periods = periodAxis(date);
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
@@ -772,6 +921,14 @@ export async function buildSiteDay(options: {
       date,
       completeness,
     );
+    const nodalMap = await buildNodalMap(
+      connection,
+      goldDir,
+      silverDir,
+      date,
+      completeness,
+      periods,
+    );
     const datasets = Object.fromEntries(
       DATASET_IDS.map((id) => [id, datasetStatus(completeness, id, date)]),
     );
@@ -788,6 +945,7 @@ export async function buildSiteDay(options: {
       reserves,
       sankey,
       episodes,
+      nodal_map: nodalMap,
     };
   } finally {
     connection.closeSync();
@@ -861,8 +1019,10 @@ export async function exportSite(options: {
   registry: readonly PublisherDataset[];
   range?: { from: string; to: string };
   force?: boolean;
+  silverDir?: string;
 }): Promise<DatasetSummary> {
   const { goldDir, completeness, registry, range, force } = options;
+  const silverDir = options.silverDir ?? join(goldDir, "..", "silver");
   const summary: DatasetSummary = {
     id: SITE_EXPORT_ID,
     published: 0,
@@ -908,7 +1068,12 @@ export async function exportSite(options: {
       continue;
     }
     try {
-      const day = await buildSiteDay({ goldDir, date, completeness });
+      const day = await buildSiteDay({
+        goldDir,
+        silverDir,
+        date,
+        completeness,
+      });
       assertSiteDay(day);
       await writeJson(dayFile, day);
       days.set(date, {
@@ -921,6 +1086,7 @@ export async function exportSite(options: {
           sankey: day.sankey?.state ?? "missing",
           episodes: day.episodes?.state ?? "missing",
           reserves: day.reserves?.state ?? "missing",
+          nodal_map: day.nodal_map?.state ?? "missing",
         },
         export_sha256: wanted,
       });
@@ -934,7 +1100,7 @@ export async function exportSite(options: {
   const entries = [...days.values()];
   const latest = latestCompleteDates(completeness);
   const latestSection = (
-    name: "generation" | "prices" | "sankey" | "episodes" | "reserves",
+    name: "generation" | "prices" | "sankey" | "episodes" | "reserves" | "nodal_map",
   ) =>
     entries.filter((day) => day.sections[name] === "complete").at(-1)?.date ??
     null;
@@ -952,6 +1118,7 @@ export async function exportSite(options: {
       sankey: latestSection("sankey"),
       episodes: latestSection("episodes"),
       reserves: latestSection("reserves"),
+      nodal_map: latestSection("nodal_map"),
     },
   };
   assertSiteIndex(index);

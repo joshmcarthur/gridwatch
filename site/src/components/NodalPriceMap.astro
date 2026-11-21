@@ -1,0 +1,249 @@
+---
+import type { SiteDay } from "@gridwatch/publisher/site-contract";
+import {
+  clientPayload,
+  coverageSentence,
+  formatPrice,
+  nodalMapView,
+  periodSummary,
+  renderMapSvg,
+  rowsForPeriod,
+} from "../lib/nodal-map";
+
+interface Props {
+  day: SiteDay;
+}
+
+const { day } = Astro.props;
+const view = nodalMapView(day);
+const period = view?.defaultPeriod ?? 1;
+const rows = view ? rowsForPeriod(view, period) : [];
+const svg = view
+  ? renderMapSvg(view, period, {
+      id: "nodal-map-chart",
+      title: "Wholesale prices at named places on the New Zealand grid",
+      summary: periodSummary(view, period),
+    })
+  : null;
+const payload = view ? JSON.stringify(clientPayload(view)) : null;
+const clock =
+  view?.periods.find((item) => item.period === period)?.time ?? "";
+---
+
+{
+  view === null || svg === null ? (
+    <p>
+      A map of wholesale prices at each named place on the grid has not been
+      published for this day yet.
+    </p>
+  ) : (
+    <div class="nodal" data-nodal-map>
+      {view.incomplete && (
+        <p>
+          Some wholesale price numbers are incomplete, so a place can be
+          missing a colour for a 30-minute slice.
+        </p>
+      )}
+      <p>{coverageSentence(view)}</p>
+      <p>
+        A trading period is a 30-minute slice of the day. The map opens on the
+        slice with the widest spread of prices. Move the slider to colour the
+        same places for another slice. Scripts off, this page stays on that
+        opening slice and the table below.
+      </p>
+      <div class="control">
+        <label for="nodal-period">Trading period</label>
+        <input
+          id="nodal-period"
+          type="range"
+          min="1"
+          max={view.periods.length}
+          value={period}
+          step="1"
+        />
+        <p id="nodal-period-label">
+          Trading period {period} of {view.periods.length}, starting {clock}
+        </p>
+      </div>
+      <p id="nodal-map-live-summary" aria-live="polite">
+        {periodSummary(view, period)}
+      </p>
+      <figure class="map">
+        <Fragment set:html={svg} />
+        <figcaption>
+          <p>
+            Colour is the wholesale price in dollars per megawatt-hour ($/MWh),
+            from low (teal) to high (amber). A larger dot is among the cheapest
+            or dearest 5 percent of places in that slice: a large difference.
+            Hover a dot for its name and price.
+          </p>
+          <p>
+            Contains data sourced from the LINZ Data Service licensed for reuse
+            under CC BY 4.0. LINZ is Land Information New Zealand. CC BY 4.0 is
+            Creative Commons Attribution 4.0. Coastline simplified; Chatham and
+            subantarctic islands are not drawn.
+          </p>
+        </figcaption>
+      </figure>
+      <p>
+        Source: Electricity Authority dispatch energy prices at each named
+        place on the grid. Prices are interim and may be revised. Coordinates
+        come from the Authority's network supply point mapping files: the
+        public list of where local networks meet the grid. A proxy price is a
+        copy of a nearby place's price, used when a place is out of service.
+      </p>
+      <div class="table-wrap">
+      <table id="nodal-map-table">
+        <caption>
+          Wholesale price at each named place for the selected 30-minute slice.
+          Places without coordinates have a blank location.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">
+              <button type="button" data-sort="point_of_connection">
+                Place
+              </button>
+            </th>
+            <th scope="col">
+              <button type="button" data-sort="location">Location</button>
+            </th>
+            <th scope="col">
+              <button type="button" data-sort="island">Island</button>
+            </th>
+            <th scope="col">
+              <button type="button" data-sort="price">
+                Price ($/MWh)
+              </button>
+            </th>
+            <th scope="col">
+              <button type="button" data-sort="outlier">Note</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            rows.map((row) => (
+              <tr>
+                <th scope="row">{row.point_of_connection}</th>
+                <td>{row.location}</td>
+                <td>{row.island}</td>
+                <td>{formatPrice(row.price)}</td>
+                <td>
+                  {[
+                    row.outlier ? "Large difference" : "",
+                    row.proxy ? "Proxy price" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(". ")}
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+      </div>
+      {payload && (
+        <script
+          is:inline
+          type="application/json"
+          id="nodal-map-payload"
+          set:html={payload}
+        />
+      )}
+    </div>
+  )
+}
+
+<script>
+  import { bindNodalMap } from "../lib/nodal-map-client";
+  bindNodalMap();
+</script>
+
+<style>
+  .nodal {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .control {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  input[type="range"] {
+    width: 100%;
+    max-width: 24rem;
+  }
+
+  .map {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .map :global(svg) {
+    width: 100%;
+    max-width: 28rem;
+    height: auto;
+    aspect-ratio: 330 / 480;
+    display: block;
+    background: var(--color-page);
+    border-radius: var(--radius-card);
+  }
+
+  figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    font-size: var(--text-label);
+    color: var(--color-ink-muted);
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  table {
+    border-collapse: collapse;
+    font-size: var(--text-label);
+    width: 100%;
+    min-width: 28rem;
+  }
+
+  caption {
+    text-align: left;
+    caption-side: top;
+    margin-bottom: var(--space-2);
+    color: var(--color-ink-muted);
+  }
+
+  th,
+  td {
+    padding: var(--space-1) var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+    text-align: left;
+  }
+
+  thead th {
+    font-weight: 700;
+  }
+
+  tbody th {
+    font-weight: 400;
+  }
+
+  thead button {
+    font: inherit;
+    font-weight: 700;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+</style>
