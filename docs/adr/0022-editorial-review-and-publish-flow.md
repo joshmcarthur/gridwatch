@@ -1,4 +1,4 @@
-# ADR-0020: Editorial review and publish flow for events
+# ADR-0022: Editorial review and publish flow for events
 
 - Status: Proposed
 - Date: 2026-11-21
