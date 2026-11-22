@@ -159,6 +159,23 @@ test("completenessNotice names incomplete datasets in plain language", () => {
   expect(text).not.toMatch(/dispatch_energy_prices/);
 });
 
+test("completenessNotice labels missing reserve prices", () => {
+  const day = {
+    complete: false,
+    datasets: {
+      dispatch_reserve_prices: { status: "missing" as const },
+      dispatch_energy_prices: { status: "complete" as const },
+      generation_md: { status: "partial" as const },
+    },
+    generation: { state: "incomplete" as const },
+    prices: { state: "complete" as const },
+  };
+  const text = completenessNotice(day).paragraphs.join(" ");
+  expect(text).toMatch(/reserve prices/i);
+  expect(text).toMatch(/standing ready/i);
+  expect(text).not.toMatch(/dispatch_reserve_prices/);
+});
+
 test("headline falls back when generation or prices are missing", () => {
   const day: HeadlineSource = {
     generation: { state: "missing", totals: null },

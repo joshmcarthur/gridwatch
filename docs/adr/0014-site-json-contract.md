@@ -20,7 +20,7 @@ The site must read prepared data and must not query the lake ([brief 4.2 and 9.3
 - **Rounding.** Megawatt-hours and megawatts keep 3 decimals. Prices and spreads keep 2 decimals. Silver holds kWh, so the 3 decimals lose nothing. Units are in the field names, and the price is $/MWh ([ADR-0012](0012-gold-prices.md)).
 - **No run timestamps.** A day has no `generated_at` or `processed_at`. A repeat export writes the same bytes.
 - **Rebuild.** `export_sha256` in each index entry is the held version. It hashes the export version, the contract version, the gold fingerprint of each section and the full `_completeness` status of each input dataset. A day is rebuilt when its held version differs from the wanted one. `EXPORT_VERSION` in `export.ts` is bumped by hand when the export logic changes, like `ANALYSIS_VERSION`. `--from` and `--to` limit only which days rebuild. The manual rebuild is `publisher --force --dataset site_days`.
-- **The index.** It lists every gold trading date, even outside a `--from` and `--to` range. It is written last, through a temporary file and a rename. A day that leaves gold drops out of the index. Its file stays on disk. `latest_complete` gives, for each silver dataset in the registry (partition root not set), the latest trading date whose `_completeness` status is `complete`, or null. Gold datasets are not in it. `latest_complete_sections` gives, for `generation`, `prices`, `sankey` and `episodes`, the latest index day whose section state is `complete`, or null. `sankey` and `episodes` on the index are optional so older files still validate.
+- **The index.** It lists every gold trading date, even outside a `--from` and `--to` range. It is written last, through a temporary file and a rename. A day that leaves gold drops out of the index. Its file stays on disk. `latest_complete` gives, for each silver dataset in the registry (partition root not set), the latest trading date whose `_completeness` status is `complete`, or null. Gold datasets are not in it. `latest_complete_sections` gives, for `generation`, `prices`, `reserves`, `sankey` and `episodes`, the latest index day whose section state is `complete`, or null. `sankey`, `episodes` and `reserves` on the index are optional so older files still validate.
 - **Extension points.** `reserves`, `sankey`, `observations` and `episodes` are optional. A consumer treats absence as "not built". Adding an optional field is not a breaking change. A breaking change bumps `SITE_CONTRACT_VERSION`, and that rebuilds every day.
 
 ### Amendment (#36): detected episodes
@@ -30,6 +30,15 @@ Amended 2026-11-21. The exporter writes an `episodes` section on every day. The 
 - **Shape.** `items` is the day's grouped observations ([ADR-0021](0021-episodes.md)), highest severity first: id, times, member count, observation types, islands, severity. A quiet day is `complete` with an empty list. A day with no gold `episode_days` row is `missing`, never invented.
 - **`complete` on the day.** Still generation and prices only.
 - **Index.** `sections.episodes` and `latest_complete_sections.episodes` are optional so older files still validate.
+
+### Amendment (#29): reserve prices
+
+Amended 2026-11-22. The exporter writes a `reserves` section on every day. The contract version stays 1: the field was already an optional extension. `EXPORT_VERSION` is 4.
+
+- **Shape.** One row per reserve class (`FIR`, then `SIR`) and island (`NI`, then `SI`, null last): daily mean, min and max price in $/MWh, periods present and expected, rows present, and `inputs_complete`. Empty when the section is missing. Period prices stay in gold; the site file carries the daily row only.
+- **State.** `missing` when gold has no `reserve_by_class_island_period` partition. It is never zeros. `incomplete` when gold `inputs_complete` is false, or when `dispatch_reserve_prices` is not `complete` in `_completeness`. `complete` otherwise.
+- **`complete` on the day.** Still generation and prices only. Reserves do not take part.
+- **Index.** `sections.reserves` and `latest_complete_sections.reserves` are optional so older files still validate.
 
 ### Amendment (#97): energy balance and HVDC transfer
 
