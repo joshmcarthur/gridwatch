@@ -1,21 +1,18 @@
 import { createHash } from "node:crypto";
 import { expect, test } from "vitest";
-import type { EvidencePackage } from "./evidence.ts";
-import { serializeEvidencePackage } from "./evidence.ts";
 import {
   DEFAULT_MODEL,
   generateNarrative,
   NARRATIVE_SCHEMA_VERSION,
   PROMPT_VERSION,
+  type PromptPackage,
   parseNarrativeText,
   promptPayload,
   SYSTEM_PROMPT,
   serializeNarrative,
 } from "./narrative.ts";
 
-const pkg = {
-  schema_version: 1,
-  builder_version: 1,
+const pkg: PromptPackage = {
   episode: {
     episode_id: "abc123",
     trading_date: "2026-07-27",
@@ -44,7 +41,9 @@ const pkg = {
   limits: [{ issue: 44, text: "No SPD case files." }],
   links: { daily_page: "/2026/07/27/" },
   completeness: [{ table: "price_periods", status: "complete" }],
-} as unknown as EvidencePackage;
+};
+
+const packageId = "file-bytes-sha256";
 
 test("the system prompt is pinned: a changed prompt without a PROMPT_VERSION bump fails here", () => {
   expect(PROMPT_VERSION).toBe(1);
@@ -63,6 +62,7 @@ test("the prompt carries claims, limits and links, not context series", () => {
   expect(json).toContain("/2026/07/27/");
   expect(json).not.toContain("generation_by_fuel");
   expect(payload.claims).toHaveLength(2);
+  expect(payload.claims[1]?.confidence).toBe("possible explanation");
 });
 
 test("parseNarrativeText reads the three JSON fields and strips fences", () => {
@@ -87,6 +87,7 @@ test("generateNarrative stores package id, model, prompt version and date", asyn
     complete,
     model: "anthropic/claude-haiku-4.5",
     now: new Date("2026-11-23T00:00:00Z"),
+    packageId,
   });
   expect(record.schema_version).toBe(1);
   expect(record.prompt_version).toBe(1);
@@ -94,9 +95,7 @@ test("generateNarrative stores package id, model, prompt version and date", asyn
   expect(record.trading_date).toBe("2026-07-27");
   expect(record.model).toBe("anthropic/claude-haiku-4.5");
   expect(record.generated_at).toBe("2026-11-23T00:00:00Z");
-  expect(record.package_id).toBe(
-    createHash("sha256").update(serializeEvidencePackage(pkg)).digest("hex"),
-  );
+  expect(record.package_id).toBe(packageId);
   expect(record.what_happened).toContain("3,296.04");
   const roundTrip = JSON.parse(serializeNarrative(record));
   expect(roundTrip.package_id).toBe(record.package_id);
@@ -108,6 +107,7 @@ test("generateNarrative fails when the model omits a section", async () => {
       complete: async () => JSON.stringify({ what_happened: "only" }),
       model: "x",
       now: new Date("2026-11-23T00:00:00Z"),
+      packageId,
     }),
   ).rejects.toThrow(/why|what_it_means/);
 });

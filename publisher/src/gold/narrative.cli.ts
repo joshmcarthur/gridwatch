@@ -1,13 +1,14 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { chat } from "@tanstack/ai";
 import { createOpenRouterText } from "@tanstack/ai-openrouter";
 import { dataPaths } from "../data-root.ts";
-import type { EvidencePackage } from "./evidence.ts";
 import {
   DEFAULT_MODEL,
   generateNarrative,
+  type PromptPackage,
   serializeNarrative,
 } from "./narrative.ts";
 
@@ -46,7 +47,8 @@ if (key === undefined || key === "") {
 const model = (process.env.GRIDWATCH_LLM_MODEL ?? DEFAULT_MODEL) as Parameters<
   typeof createOpenRouterText
 >[0];
-const pkg = JSON.parse(await readFile(evidencePath, "utf8")) as EvidencePackage;
+const bytes = await readFile(evidencePath);
+const pkg = JSON.parse(bytes.toString("utf8")) as PromptPackage;
 const record = await generateNarrative(pkg, {
   complete: async ({ system, user }) => {
     const result = await chat({
@@ -60,6 +62,7 @@ const record = await generateNarrative(pkg, {
   },
   model,
   now: new Date(),
+  packageId: createHash("sha256").update(bytes).digest("hex"),
 });
 const path = join(
   gold,

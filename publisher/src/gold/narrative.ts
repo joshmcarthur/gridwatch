@@ -1,13 +1,34 @@
-import { createHash } from "node:crypto";
-import {
-  type Confidence,
-  type EvidencePackage,
-  serializeEvidencePackage,
-} from "./evidence.ts";
+import type { ClaimValue, Confidence, InputStatus } from "./evidence.ts";
 
 export const NARRATIVE_SCHEMA_VERSION = 1;
 export const PROMPT_VERSION = 1;
 export const DEFAULT_MODEL = "anthropic/claude-haiku-4.5";
+
+export interface PromptClaim {
+  id: string;
+  label: string;
+  value: ClaimValue;
+  unit: string;
+  confidence: Confidence;
+  note?: string;
+}
+
+/** The fields the prompt reads. Not the full evidence package. */
+export interface PromptPackage {
+  episode: {
+    episode_id: string;
+    trading_date: string;
+    start_trading_period: number;
+    end_trading_period: number;
+    observation_types: string[];
+    islands: string[];
+    severity: number;
+  };
+  claims: PromptClaim[];
+  limits: Array<{ issue: number; text: string }>;
+  links: { daily_page: string };
+  completeness: Array<{ table: string; status: InputStatus }>;
+}
 
 export interface NarrativeSections {
   what_happened: string;
@@ -35,6 +56,8 @@ export interface GenerateNarrativeOptions {
   complete: CompleteNarrative;
   model: string;
   now: Date;
+  /** SHA-256 of the evidence file bytes, not a re-serialised object. */
+  packageId: string;
 }
 
 const confidenceLabel = (level: Confidence): string => {
@@ -66,16 +89,8 @@ Plain language. No jargon unless the package uses it, then explain it once.
 Reply with JSON only, no markdown, in this shape:
 {"what_happened":"...","why":"...","what_it_means":"..."}`;
 
-export const promptPayload = (pkg: EvidencePackage) => ({
-  episode: {
-    episode_id: pkg.episode.episode_id,
-    trading_date: pkg.episode.trading_date,
-    start_trading_period: pkg.episode.start_trading_period,
-    end_trading_period: pkg.episode.end_trading_period,
-    observation_types: pkg.episode.observation_types,
-    islands: pkg.episode.islands,
-    severity: pkg.episode.severity,
-  },
+export const promptPayload = (pkg: PromptPackage) => ({
+  episode: pkg.episode,
   claims: pkg.claims.map((claim) => ({
     id: claim.id,
     label: claim.label,
@@ -86,10 +101,7 @@ export const promptPayload = (pkg: EvidencePackage) => ({
   })),
   limits: pkg.limits,
   links: { daily_page: pkg.links.daily_page },
-  completeness: pkg.completeness.map((entry) => ({
-    table: entry.table,
-    status: entry.status,
-  })),
+  completeness: pkg.completeness,
 });
 
 export const parseNarrativeText = (text: string): NarrativeSections => {
@@ -122,7 +134,7 @@ export const parseNarrativeText = (text: string): NarrativeSections => {
 };
 
 export const generateNarrative = async (
-  pkg: EvidencePackage,
+  pkg: PromptPackage,
   options: GenerateNarrativeOptions,
 ): Promise<NarrativeRecord> => {
   const user = JSON.stringify(promptPayload(pkg));
@@ -135,9 +147,7 @@ export const generateNarrative = async (
   return {
     schema_version: NARRATIVE_SCHEMA_VERSION,
     prompt_version: PROMPT_VERSION,
-    package_id: createHash("sha256")
-      .update(serializeEvidencePackage(pkg))
-      .digest("hex"),
+    package_id: options.packageId,
     episode_id: pkg.episode.episode_id,
     trading_date: pkg.episode.trading_date,
     model: options.model,
