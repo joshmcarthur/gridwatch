@@ -33,6 +33,12 @@ test("rankAgainstEarlier needs 30 earlier days and uses the 25 / 75 / 95 bands",
   );
 });
 
+test("rankAgainstEarlier ranks a value that ties with most earlier days as usual", () => {
+  const earlier = Array.from({ length: 40 }, () => 0.01);
+  expect(rankAgainstEarlier(0.01, earlier)).toBe("about usual");
+  expect(rankAgainstEarlier(0.02, earlier)).toBe("one of the highest");
+});
+
 test("rankAgainstEarlier looks at the latest 365 earlier values", () => {
   const earlier = [
     ...Array.from({ length: 365 }, () => 1),
@@ -440,6 +446,11 @@ test("thirty earlier complete days produce a rank band in past tense", () => {
   expect(
     cards.every((card) =>
       card.bandNote?.startsWith("That was one of the highest"),
+    ),
+  ).toBe(true);
+  expect(
+    cards.every((card) =>
+      card.bandNote?.includes("30 earlier complete days on this site"),
     ),
   ).toBe(true);
   expect(cards.every((card) => card.date === dates[30])).toBe(true);

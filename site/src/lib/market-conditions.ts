@@ -66,7 +66,10 @@ export interface RecentDay {
 
 export type DayLoader = (date: string) => SiteDay;
 
-/** Fraction of `earlier` values strictly below `value`. Null when there are fewer than 30. */
+/**
+ * Band for `value` against `earlier`. A tie counts half, so a value equal to most earlier days
+ * ranks as usual. Null when there are fewer than 30 earlier values.
+ */
 export function rankAgainstEarlier(
   value: number,
   earlier: number[],
@@ -74,7 +77,8 @@ export function rankAgainstEarlier(
   if (earlier.length < RANK_MINIMUM) return null;
   const window = earlier.slice(-RANK_WINDOW);
   const below = window.filter((candidate) => candidate < value).length;
-  const rank = below / window.length;
+  const tied = window.filter((candidate) => candidate === value).length;
+  const rank = (below + tied / 2) / window.length;
   if (rank >= 0.95) return "one of the highest";
   if (rank >= 0.75) return "higher than most";
   if (rank >= 0.25) return "about usual";
@@ -344,22 +348,29 @@ function sectionIsComplete(
 }
 
 function bandLabel(band: RankBand | null, earlierCount: number): string | null {
+  if (band === null) {
+    return earlierCount < RANK_MINIMUM
+      ? "Not enough complete days yet to compare with the past year."
+      : null;
+  }
+  const days = Math.min(earlierCount, RANK_WINDOW);
+  const pastYear = days >= RANK_WINDOW;
+  const against = pastYear
+    ? "the past year"
+    : `the ${days} earlier complete days on this site`;
+  const most = pastYear ? "most days in the past year" : `most of ${against}`;
   if (band === "lower than most days in the past year") {
-    return "That was lower than most days in the past year.";
+    return `That was lower than ${most}.`;
   }
   if (band === "about usual") {
-    return "That was about usual.";
+    return `That was about usual against ${against}.`;
   }
   if (band === "higher than most") {
-    return "That was higher than most days in the past year.";
+    return `That was higher than ${most}.`;
   }
-  if (band === "one of the highest") {
-    return "That was one of the highest days in the past year.";
-  }
-  if (earlierCount < RANK_MINIMUM) {
-    return "Not enough complete days yet to compare with the past year.";
-  }
-  return null;
+  return pastYear
+    ? "That was one of the highest days in the past year."
+    : `That was one of the highest of ${against}.`;
 }
 
 function formatReserveMoney(value: number): string {
