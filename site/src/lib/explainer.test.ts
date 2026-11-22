@@ -1,12 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
-import {
-  EXPLAINER_HEADINGS,
-  explainerHeadingId,
-  renderExplainerMarkdown,
-  splitExplainerBody,
-} from "./explainer.ts";
+import { EXPLAINER_HEADINGS, splitExplainerHtml } from "./explainer.ts";
 
 const nodalPricing = readFileSync(
   fileURLToPath(
@@ -17,52 +12,29 @@ const nodalPricing = readFileSync(
 
 const nodalBody = nodalPricing.replace(/^---[\s\S]*?---\s*/, "");
 
-test("explainerHeadingId slugifies the five brief headings", () => {
-  expect(EXPLAINER_HEADINGS.map(explainerHeadingId)).toEqual([
-    "simple-explanation",
-    "a-more-technical-explanation",
-    "visual",
-    "historical-example",
-    "links-to-gridwatch-data-and-events",
-  ]);
-});
+const headings = EXPLAINER_HEADINGS.map((text) => ({
+  depth: 2,
+  slug: text.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
+  text,
+}));
+const html = EXPLAINER_HEADINGS.map(
+  (text, index) => `<h2 id="s${index}">${text}</h2>\n<p>Body ${index}.</p>\n`,
+).join("");
 
-test("splitExplainerBody requires the five headings in order", () => {
-  const sections = splitExplainerBody(nodalBody);
+test("splitExplainerHtml returns the five brief sections in order", () => {
+  const sections = splitExplainerHtml(html, headings);
   expect(sections.map((section) => section.heading)).toEqual([
     ...EXPLAINER_HEADINGS,
   ]);
-  expect(sections[2]?.markdown).toMatch(/Haywards–Benmore spread/);
+  expect(sections[2]?.html).toContain("Body 2.");
+  expect(sections[2]?.html).not.toContain("Body 3.");
+  expect(sections[0]?.id).toBe("simple-explanation");
 });
 
-test("splitExplainerBody throws when a heading is missing", () => {
-  expect(() => splitExplainerBody("## Simple explanation\n\nHello.\n")).toThrow(
+test("splitExplainerHtml throws when a heading is missing", () => {
+  expect(() => splitExplainerHtml(html, headings.slice(0, 1))).toThrow(
     /must be exactly/,
   );
-});
-
-test("renderExplainerMarkdown turns paragraphs, lists, links and code into HTML", () => {
-  const html = renderExplainerMarkdown(
-    "A node is a place.\n\n- `OTA2201`, Ōtāhuhu\n- [Monday 27 July 2026](/2026/07/27/)\n\nSee **prices**.",
-  );
-  expect(html).toContain("<p>A node is a place.</p>");
-  expect(html).toContain("<ul>");
-  expect(html).toContain("<code>OTA2201</code>");
-  expect(html).toContain('<a href="/2026/07/27/">Monday 27 July 2026</a>');
-  expect(html).toContain("<strong>prices</strong>");
-  expect(html).toContain("Ōtāhuhu");
-});
-
-test("renderExplainerMarkdown escapes HTML and drops javascript hrefs", () => {
-  const html = renderExplainerMarkdown(
-    'Use <b>bold</b> & "quotes".\n\n[x](javascript:alert(1))',
-  );
-  expect(html).toContain("&lt;b&gt;bold&lt;/b&gt;");
-  expect(html).toContain("&amp;");
-  expect(html).toContain("&quot;quotes&quot;");
-  expect(html).not.toContain('href="javascript:');
-  expect(html).toContain("[x](javascript:alert(1))");
-  expect(html).not.toContain("<b>");
 });
 
 test("nodal pricing quotes period 36 from the reconstruction and links the daily page", () => {

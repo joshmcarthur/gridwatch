@@ -1,13 +1,9 @@
 ---
-import { getCollection, type CollectionEntry } from "astro:content";
+import { getCollection, render, type CollectionEntry } from "astro:content";
 import PriceChart from "../../components/PriceChart.astro";
 import Layout from "../../layouts/Layout.astro";
 import { dailyPath } from "../../lib/daily-page";
-import {
-  renderExplainerMarkdown,
-  splitExplainerBody,
-  VISUAL_HEADING,
-} from "../../lib/explainer";
+import { splitExplainerHtml, VISUAL_HEADING } from "../../lib/explainer";
 import { formatTradingDate, loadSiteDayIfPresent } from "../../lib/site-data";
 
 export async function getStaticPaths() {
@@ -23,7 +19,8 @@ interface Props {
 }
 
 const { entry } = Astro.props;
-const sections = splitExplainerBody(entry.body ?? "");
+const { headings } = await render(entry);
+const sections = splitExplainerHtml(entry.rendered?.html ?? "", headings);
 const exampleDate = entry.data.example_date;
 const exampleDay = loadSiteDayIfPresent(exampleDate);
 const examplePath = dailyPath(exampleDate);
@@ -53,8 +50,7 @@ const exampleLabel = formatTradingDate(exampleDate);
           aria-labelledby={section.id}
         >
           <div class="prose">
-            <h2 id={section.id}>{section.heading}</h2>
-            <Fragment set:html={renderExplainerMarkdown(section.markdown)} />
+            <Fragment set:html={section.html} />
           </div>
           {section.heading === VISUAL_HEADING &&
             (exampleDay ? (
