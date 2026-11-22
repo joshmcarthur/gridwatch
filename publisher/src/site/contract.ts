@@ -162,6 +162,21 @@ export interface SankeySection extends SectionBase {
   inputs_complete: boolean | null;
 }
 
+/**
+ * The observation that leads one type in an episode: the highest severity, then the
+ * largest absolute measured value. Pair subjects set `pair_from` / `pair_to` and leave
+ * `point_of_connection` null. Older JSON omits `highlights`.
+ */
+export interface SiteEpisodeHighlight {
+  observation_type: string;
+  point_of_connection: string | null;
+  pair_from: string | null;
+  pair_to: string | null;
+  island: Island | null;
+  measured_value: number;
+  baseline_value: number;
+}
+
 /** One grouped stretch of unusual readings (ADR-0021). */
 export interface SiteEpisode {
   episode_id: string;
@@ -174,6 +189,8 @@ export interface SiteEpisode {
   observation_types: string[];
   islands: Island[];
   severity: number;
+  /** One row per observation type. Omitted on older JSON. */
+  highlights?: SiteEpisodeHighlight[];
 }
 
 /**
@@ -714,6 +731,28 @@ function checkEpisodes(
     for (let j = 0; j < islands.length; j++)
       oneOf(islands[j], ISLANDS, `${at}.islands[${j}]`);
     number(row.severity, `${at}.severity`);
+    if (row.highlights !== undefined) {
+      const highlights = list(row.highlights, `${at}.highlights`);
+      highlights.forEach((item, h) => {
+        const pathAt = `${at}.highlights[${h}]`;
+        const highlight = record(item, pathAt);
+        text(highlight.observation_type, `${pathAt}.observation_type`);
+        nullable(
+          highlight.point_of_connection,
+          text,
+          `${pathAt}.point_of_connection`,
+        );
+        nullable(highlight.pair_from, text, `${pathAt}.pair_from`);
+        nullable(highlight.pair_to, text, `${pathAt}.pair_to`);
+        nullable(
+          highlight.island,
+          (value, islandPath) => oneOf(value, ISLANDS, islandPath),
+          `${pathAt}.island`,
+        );
+        number(highlight.measured_value, `${pathAt}.measured_value`);
+        number(highlight.baseline_value, `${pathAt}.baseline_value`);
+      });
+    }
   });
   return base.datasets;
 }
