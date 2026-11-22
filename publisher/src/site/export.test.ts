@@ -1797,6 +1797,10 @@ test("the exporter lock sample matches end to end, on trimmed generation and syn
     state: "missing",
     items: [],
   });
+  expect(built.events).toMatchObject({
+    state: "missing",
+    items: [],
+  });
   expect(built.reserves).toMatchObject({
     state: "missing",
     classes: [],
@@ -1807,6 +1811,8 @@ test("the exporter lock sample matches end to end, on trimmed generation and syn
   expect(parsedIndex.latest_complete_sections.sankey).toBeNull();
   expect(parsedIndex.days[0]?.sections.episodes).toBe("missing");
   expect(parsedIndex.latest_complete_sections.episodes).toBeNull();
+  expect(parsedIndex.days[0]?.sections.events).toBe("missing");
+  expect(parsedIndex.latest_complete_sections.events).toBeNull();
   expect(parsedIndex.days[0]?.sections.reserves).toBe("missing");
   expect(parsedIndex.latest_complete_sections.reserves).toBeNull();
   expect(

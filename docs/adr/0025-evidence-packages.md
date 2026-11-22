@@ -15,7 +15,7 @@ The package gives the editorial flow ([#41](https://github.com/joshmcarthur/grid
 
 ### On demand, one JSON file, not a gold table
 
-`npm run build:evidence -- --date YYYY-MM-DD --episode <episode_id>` builds the package and writes `<gold>/evidence/<date>/<episode_id>.json`. The runner does not build it and the site does not read it. The site contract ([ADR-0014](0014-site-json-contract.md)) is unchanged. The file is a derived artefact: the same gold and silver give the same bytes. It has no timestamp.
+`npm run build:evidence -- --date YYYY-MM-DD --episode <episode_id>` builds the package and writes `<gold>/evidence/<date>/<episode_id>.json`. The runner does not write that file. The site does not read it. The site exporter may call the same builder for each `is_candidate` row and copy claims into the day's `events` section ([ADR-0014](0014-site-json-contract.md), [#42](https://github.com/joshmcarthur/gridwatch/issues/42)). The unpublished JSON is a derived artefact: the same gold and silver give the same bytes. It has no timestamp.
 
 A gold Parquet table of claims was considered and rejected: a claim is a small tree (value, source, `depends_on`), and the builder reads silver as well as gold. A package for every episode on every run would also cost reads that nobody uses.
 

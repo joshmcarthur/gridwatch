@@ -20,8 +20,8 @@ The site must read prepared data and must not query the lake ([brief 4.2 and 9.3
 - **Rounding.** Megawatt-hours and megawatts keep 3 decimals. Prices and spreads keep 2 decimals. Silver holds kWh, so the 3 decimals lose nothing. Units are in the field names, and the price is $/MWh ([ADR-0012](0012-gold-prices.md)).
 - **No run timestamps.** A day has no `generated_at` or `processed_at`. A repeat export writes the same bytes.
 - **Rebuild.** `export_sha256` in each index entry is the held version. It hashes the export version, the contract version, the gold fingerprint of each section and the full `_completeness` status of each input dataset. A day is rebuilt when its held version differs from the wanted one. `EXPORT_VERSION` in `export.ts` is bumped by hand when the export logic changes, like `ANALYSIS_VERSION`. `--from` and `--to` limit only which days rebuild. The manual rebuild is `publisher --force --dataset site_days`.
-- **The index.** It lists every gold trading date, even outside a `--from` and `--to` range. It is written last, through a temporary file and a rename. A day that leaves gold drops out of the index. Its file stays on disk. `latest_complete` gives, for each silver dataset in the registry (partition root not set), the latest trading date whose `_completeness` status is `complete`, or null. Gold datasets are not in it. `latest_complete_sections` gives, for `generation`, `prices`, `reserves`, `sankey`, `episodes` and `nodal_map`, the latest index day whose section state is `complete`, or null. `sankey`, `episodes`, `reserves` and `nodal_map` on the index are optional so older files still validate.
-- **Extension points.** `reserves`, `sankey`, `observations`, `episodes`, `events` and `nodal_map` are optional. A consumer treats absence as "not built". Adding an optional field is not a breaking change. A breaking change bumps `SITE_CONTRACT_VERSION`, and that rebuilds every day. `events` is not built yet. Each event will carry `review_status` ([ADR-0022](0022-editorial-review-and-publish-flow.md)).
+- **The index.** It lists every gold trading date, even outside a `--from` and `--to` range. It is written last, through a temporary file and a rename. A day that leaves gold drops out of the index. Its file stays on disk. `latest_complete` gives, for each silver dataset in the registry (partition root not set), the latest trading date whose `_completeness` status is `complete`, or null. Gold datasets are not in it. `latest_complete_sections` gives, for `generation`, `prices`, `reserves`, `sankey`, `episodes`, `events` and `nodal_map`, the latest index day whose section state is `complete`, or null. `sankey`, `episodes`, `events`, `reserves` and `nodal_map` on the index are optional so older files still validate.
+- **Extension points.** `reserves`, `sankey`, `observations`, `episodes`, `events` and `nodal_map` are optional. A consumer treats absence as "not built". Adding an optional field is not a breaking change. A breaking change bumps `SITE_CONTRACT_VERSION`, and that rebuilds every day. Each event carries `review_status` ([ADR-0022](0022-editorial-review-and-publish-flow.md)). See the #42 amendment below.
 
 ### Amendment (#36): detected episodes
 
@@ -68,3 +68,13 @@ Amended 2026-11-22. The exporter writes a `nodal_map` section on every day. The 
 - **`complete` on the day.** Still generation and prices only.
 - **Index.** `sections.nodal_map` and `latest_complete_sections.nodal_map` are optional so older files still validate.
 - **Do not grow `prices.nodes`.** That array stays the three reference nodes. The site prices section still reads only `PRICE_SECTION_TABLES`.
+
+### Amendment (#42): site events
+
+Amended 2026-11-23. The exporter writes an `events` section on every day. The contract version stays 1. `EXPORT_VERSION` is 6.
+
+- **List.** An event is an episode with `is_candidate` true ([ADR-0024](0024-episode-ranking.md), [#182](https://github.com/joshmcarthur/gridwatch/issues/182)). There is no step between ranking and events. Each item carries `review_status`, default `unreviewed` ([ADR-0022](0022-editorial-review-and-publish-flow.md)).
+- **Shape.** `items` is that day's candidates: identity, claims from the evidence builder ([ADR-0025](0025-evidence-packages.md)), the evidence window's reference-node prices and reserve series, limits, and the daily-page path. A quiet ranking day is `complete` with an empty list. A day with no `episode_ranking_days` partition is `missing`.
+- **`complete` on the day.** Still generation and prices only.
+- **Index.** `sections.events` and `latest_complete_sections.events` are optional so older files still validate.
+- **No parallel events tree.** The site does not read `gold/evidence` or `gold/site/events/`.

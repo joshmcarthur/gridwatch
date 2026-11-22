@@ -26,6 +26,7 @@ import {
   sectionDatasets,
 } from "./export-common.ts";
 import { buildEpisodes, EPISODES_SECTION } from "./export-episodes.ts";
+import { buildEvents, EVENTS_RANKING_SENTINEL } from "./export-events.ts";
 import { buildGeneration, GENERATION_SECTION } from "./export-generation.ts";
 import { buildNodalMap, NODAL_MAP_SECTION } from "./export-nodal-map.ts";
 import { buildPrices, PRICES_SECTION } from "./export-prices.ts";
@@ -39,7 +40,7 @@ export { round };
  * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
  * rebuilt (ADR-0014).
  */
-export const EXPORT_VERSION = 5;
+export const EXPORT_VERSION = 6;
 
 const SECTIONS: readonly Section[] = [
   GENERATION_SECTION,
@@ -113,6 +114,13 @@ export async function buildSiteDay(options: {
       completeness,
       periods,
     );
+    const events = await buildEvents({
+      connection,
+      goldDir,
+      silverDir,
+      date,
+      completeness,
+    });
     const datasets = Object.fromEntries(
       DATASET_IDS.map((id) => [id, datasetStatus(completeness, id, date)]),
     );
@@ -121,7 +129,7 @@ export async function buildSiteDay(options: {
       trading_date: date,
       periods,
       // Sankey follows the HVDC month lag, so it does not take part in `complete` (ADR-0014).
-      // Reserves are optional and do not take part either.
+      // Reserves are optional and do not take part either. Events follow ranking.
       complete: generation.state === "complete" && prices.state === "complete",
       datasets,
       generation,
@@ -129,6 +137,7 @@ export async function buildSiteDay(options: {
       reserves,
       sankey,
       episodes,
+      events,
       nodal_map: nodalMap,
     };
   } finally {
@@ -144,11 +153,13 @@ function wantedExportHash(
   date: string,
   versions: ReadonlyArray<string | undefined>,
   completeness: CompletenessView,
+  rankingSha: string | undefined,
 ): string {
   const lines = [
     `export_version ${EXPORT_VERSION}`,
     `contract ${SITE_CONTRACT_VERSION}`,
     ...SECTIONS.map((section, i) => `${section.name} ${versions[i] ?? "none"}`),
+    `events ${rankingSha ?? "none"}`,
     ...DATASET_IDS.map(
       (id) =>
         `dataset ${id} ${JSON.stringify(datasetStatus(completeness, id, date))}`,
@@ -227,6 +238,12 @@ export async function exportSite(options: {
       ),
     ),
   );
+  const rankingVersions = await partitionVersions(
+    goldDir,
+    EVENTS_RANKING_SENTINEL,
+    "trading_date",
+    "inputs_sha256",
+  );
   const dates = [...new Set(versions.flatMap((v) => [...v.keys()]))].sort();
   if (dates.length === 0 && !existsSync(indexPath)) return summary;
 
@@ -238,6 +255,7 @@ export async function exportSite(options: {
       date,
       versions.map((v) => v.get(date)),
       completeness,
+      rankingVersions.get(date),
     );
     const previous = held.get(date);
     const inRange = !range || (date >= range.from && date <= range.to);
@@ -269,6 +287,7 @@ export async function exportSite(options: {
           prices: day.prices.state,
           sankey: day.sankey?.state ?? "missing",
           episodes: day.episodes?.state ?? "missing",
+          events: day.events?.state ?? "missing",
           reserves: day.reserves?.state ?? "missing",
           nodal_map: day.nodal_map?.state ?? "missing",
         },
@@ -289,6 +308,7 @@ export async function exportSite(options: {
       | "prices"
       | "sankey"
       | "episodes"
+      | "events"
       | "reserves"
       | "nodal_map",
   ) =>
@@ -307,6 +327,7 @@ export async function exportSite(options: {
       prices: latestSection("prices"),
       sankey: latestSection("sankey"),
       episodes: latestSection("episodes"),
+      events: latestSection("events"),
       reserves: latestSection("reserves"),
       nodal_map: latestSection("nodal_map"),
     },

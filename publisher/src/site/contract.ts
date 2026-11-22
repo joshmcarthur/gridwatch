@@ -1,8 +1,22 @@
 /**
  * The site JSON contract (ADR-0014). The publisher writes these files and the site reads them.
- * This file has no imports, so the site can import types and assert helpers through the
- * `exports` entry of the publisher package, and nothing else from the publisher.
+ * The site imports types and assert helpers through the `exports` entry
+ * `@gridwatch/publisher/site-contract`. This module may import sibling contract files. It does
+ * not import gold or DuckDB.
  */
+
+import { checkSiteEvent, type SiteEvent } from "./contract-events.ts";
+
+export type {
+  EventConfidence,
+  EventIsland,
+  EventReserveClass,
+  EventSourceKind,
+  ReviewStatus,
+  SiteEvent,
+  SiteEventClaim,
+  SiteEventWindow,
+} from "./contract-events.ts";
 
 /** Bump only for a breaking change. Adding an optional field is not one (ADR-0014). */
 export const SITE_CONTRACT_VERSION = 1;
@@ -185,6 +199,15 @@ export interface EpisodesSection extends SectionBase {
   items: SiteEpisode[];
 }
 
+/**
+ * Public events for the day (ADR-0014 #42). Optional: absence means the exporter has not
+ * built it. A day with no ranking partition is `missing`. An empty `items` list is a ranking
+ * day with no candidate.
+ */
+export interface EventsSection extends SectionBase {
+  items: SiteEvent[];
+}
+
 /** One reserve class and island's daily prices (ADR-0013). */
 export interface ReservesClassDay {
   reserve_class: ReserveClass;
@@ -259,6 +282,8 @@ export interface SiteDay {
   sankey?: SankeySection;
   observations?: SiteExtension;
   episodes?: EpisodesSection;
+  /** Optional. Absence means not built. The exporter writes it on every day, `missing` when gold has no ranking. */
+  events?: EventsSection;
   /** Optional. Absence means not built. The exporter writes it on every day, `missing` when gold has no row. */
   nodal_map?: NodalMapSection;
 }
@@ -275,6 +300,8 @@ export interface SiteIndexDay {
     sankey?: SectionState;
     /** Optional. Detected episodes for the day (ADR-0021). */
     episodes?: SectionState;
+    /** Optional. Site events from `is_candidate` (ADR-0014 #42). */
+    events?: SectionState;
     /** Optional. Daily reserve prices (ADR-0013). Older index files omit it. */
     reserves?: SectionState;
     /** Optional. Nodal price map for the day (ADR-0023). */
@@ -298,6 +325,8 @@ export interface SiteIndex {
     sankey?: string | null;
     /** Optional. Latest day whose episodes section is complete. */
     episodes?: string | null;
+    /** Optional. Latest day whose events section is complete. */
+    events?: string | null;
     /** Optional. Latest day whose reserves section is complete. */
     reserves?: string | null;
     /** Optional. Latest day whose nodal map section is complete. */
@@ -323,6 +352,7 @@ const EXTENSIONS = [
   "sankey",
   "observations",
   "episodes",
+  "events",
   "nodal_map",
 ] as const;
 const DAY_LENGTHS = [46, 48, 50];
@@ -718,6 +748,21 @@ function checkEpisodes(
   return base.datasets;
 }
 
+function checkEvents(
+  value: unknown,
+  path: string,
+  periodCount: number,
+): string[] {
+  const section = record(value, path);
+  const base = checkSectionBase(section, path, periodCount);
+  const items = list(section.items, `${path}.items`);
+  checkEmptyWhenMissing(items, base.state, `${path}.items`);
+  items.forEach((item, i) => {
+    checkSiteEvent(item, `${path}.items[${i}]`, periodCount);
+  });
+  return base.datasets;
+}
+
 /**
  * Throws a `TypeError` with the path of the first field that does not match the contract. The
  * exporter calls it on every day it writes, and the site may call it on every day it reads.
@@ -753,6 +798,9 @@ export function assertSiteDay(value: unknown): asserts value is SiteDay {
         break;
       case "episodes":
         sectionDatasets.push(...checkEpisodes(day[key], key, periods.length));
+        break;
+      case "events":
+        sectionDatasets.push(...checkEvents(day[key], key, periods.length));
         break;
       case "nodal_map":
         sectionDatasets.push(...checkNodalMap(day[key], key, periods.length));
@@ -798,6 +846,8 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
       oneOf(sections.sankey, SECTION_STATES, `${at}.sections.sankey`);
     if (sections.episodes !== undefined)
       oneOf(sections.episodes, SECTION_STATES, `${at}.sections.episodes`);
+    if (sections.events !== undefined)
+      oneOf(sections.events, SECTION_STATES, `${at}.sections.events`);
     if (sections.reserves !== undefined)
       oneOf(sections.reserves, SECTION_STATES, `${at}.sections.reserves`);
     if (sections.nodal_map !== undefined)
@@ -818,6 +868,8 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
     nullable(sections.sankey, text, "latest_complete_sections.sankey");
   if (sections.episodes !== undefined)
     nullable(sections.episodes, text, "latest_complete_sections.episodes");
+  if (sections.events !== undefined)
+    nullable(sections.events, text, "latest_complete_sections.events");
   if (sections.reserves !== undefined)
     nullable(sections.reserves, text, "latest_complete_sections.reserves");
   if (sections.nodal_map !== undefined)

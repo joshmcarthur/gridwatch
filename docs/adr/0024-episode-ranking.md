@@ -7,7 +7,7 @@
 
 Detection finds unusual things. It does not decide which of them are worth explaining ([brief §6.3](../brief.md), [#37](https://github.com/joshmcarthur/gridwatch/issues/37)). Episodes ([ADR-0021](0021-episodes.md)) group observations into one situation each. This ADR scores each episode and proposes a short list of candidates for each day. The score has four components. Each is stored, so a reader can see why an episode ranked where it did.
 
-Ranking writes `is_candidate` on `episode_scores` and does not write site JSON. Owner decision on [#182](https://github.com/joshmcarthur/gridwatch/issues/182) (2026-11-23): `is_candidate` feeds site events directly, so event pages ([#42](https://github.com/joshmcarthur/gridwatch/issues/42)) emit an event for each candidate, labelled Unreviewed ([ADR-0022](0022-editorial-review-and-publish-flow.md)). The site contract stays unchanged until #42 amends [ADR-0014](0014-site-json-contract.md).
+Ranking writes `is_candidate` on `episode_scores` and does not write site JSON. Owner decision on [#182](https://github.com/joshmcarthur/gridwatch/issues/182) (2026-11-23): `is_candidate` feeds site events directly. Event pages ([#42](https://github.com/joshmcarthur/gridwatch/issues/42)) emit an event for each candidate into the day's `events` section ([ADR-0014](0014-site-json-contract.md)), labelled Unreviewed ([ADR-0022](0022-editorial-review-and-publish-flow.md)).
 
 Code: `publisher/src/gold/episode-ranking.ts`. Dataset id `gold_episode_ranking`. It runs after `gold_episodes`.
 
