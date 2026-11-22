@@ -19,6 +19,7 @@ import {
   priceChartTable,
   priceSpreadSummary,
 } from "../lib/price-chart";
+import { placeName } from "../lib/price-regions";
 
 interface Props {
   day: SiteDay;
@@ -121,7 +122,7 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
               style={`border-top-color: ${islandColour(node.island)}; border-top-style: ${node.dashed ? "dashed" : "solid"}`}
               aria-hidden="true"
             />
-            {node.poc}, {node.label}
+            {node.label}
           </li>
         ))}
         {chart.plottedSpreads.map((spread) => (
@@ -131,15 +132,21 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
               style={`border-top-color: ${spreadColour(spread)}; border-top-style: ${spread.dashed ? "dashed" : "solid"}`}
               aria-hidden="true"
             />
-            Spread {spread.name}, first node minus second
+            Spread {placeName(spread.from)} minus {placeName(spread.to)}
           </li>
         ))}
       </Fragment>
       <Fragment slot="caption">
         <p>
-          Each point is the average price over a 30-minute period. A short
-          spike inside a period is smoothed out, so the highest price of the day
-          can be above the line.
+          Average wholesale price over each 30-minute period at three sample
+          points.
+        </p>
+      </Fragment>
+      <Fragment slot="method">
+        <p>
+          Each point is the average over the period. A short spike inside a
+          period is smoothed out, so the highest price of the day can be above
+          the line.
         </p>
         <p>
           Where two spread lines have the same values, one sits on top of the
@@ -150,8 +157,8 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
           <p>{line}</p>
         ))}
         <p>
-          Source: Electricity Authority dispatch energy prices at three reference
-          nodes. Prices are interim and may be revised.
+          Source: Electricity Authority dispatch energy prices at Otahuhu,
+          Haywards and Benmore. Prices are interim and may be revised.
         </p>
       </Fragment>
     </ChartFigure>

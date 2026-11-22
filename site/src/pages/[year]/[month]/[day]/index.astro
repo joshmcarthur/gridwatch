@@ -8,12 +8,12 @@ import {
   dailyPath,
   dailyStaticPaths,
   dateFromParams,
-  headlineParagraphs,
+  dayHeadline,
   mapPath,
   monthGroups,
   neighbouringDays,
 } from "../../../../lib/daily-page";
-import { episodeHeadline } from "../../../../lib/episode-copy";
+import { episodeClockRange, episodeHeadline } from "../../../../lib/episode-copy";
 import {
   formatTradingDate,
   loadSiteDay,
@@ -30,7 +30,7 @@ const date = dateFromParams(year, month, dayParam);
 const index = loadSiteIndex();
 const day = loadSiteDay(date, index);
 const titleDate = formatTradingDate(date);
-const headlines = headlineParagraphs(day);
+const headline = dayHeadline(day);
 const notice = completenessNotice(day);
 const neighbours = neighbouringDays(index, date);
 const months = monthGroups(index);
@@ -47,16 +47,34 @@ const months = monthGroups(index);
   <article class="prose">
     <header class="lede">
       <h1>{titleDate}</h1>
-      {headlines.map((paragraph) => <p>{paragraph}</p>)}
+      <p>{headline.sentence}</p>
+      <dl class="stats">
+        {
+          headline.stats.map((stat) => (
+            <div>
+              <dt>
+                <a href={stat.href}>{stat.label}</a>
+              </dt>
+              <dd>{stat.value}</dd>
+            </div>
+          ))
+        }
+      </dl>
     </header>
 
-    <section
-      class:list={["notice", notice.tone]}
-      aria-labelledby="completeness-heading"
-    >
-      <h2 id="completeness-heading">How complete is this day?</h2>
-      {notice.paragraphs.map((paragraph) => <p>{paragraph}</p>)}
-    </section>
+    {
+      notice && (
+        <section
+          class:list={["notice", notice.tone]}
+          aria-labelledby="completeness-heading"
+        >
+          <h2 id="completeness-heading">How complete is this day?</h2>
+          {notice.paragraphs.map((paragraph) => (
+            <p>{paragraph}</p>
+          ))}
+        </section>
+      )
+    }
 
     <section class="slot" aria-labelledby="generation-mix">
       <h2 id="generation-mix">What made the power</h2>
@@ -81,11 +99,8 @@ const months = monthGroups(index);
     <section class="slot" aria-labelledby="detected-episodes">
       <h2 id="detected-episodes">What stood out</h2>
       <p>
-        Detectors look for unusual stretches in the public files and group the
-        ones that overlap. Wholesale prices are what generators and retailers
-        paid each other, not a household bill. Reserve prices are the cost of
-        backup generation kept ready if something trips. These grouped
-        readings are not yet a written-up public event.
+        Unusual stretches grouped from the public files. Not a written-up
+        public event yet.
       </p>
       {
         day.episodes === undefined || day.episodes.state === "missing" ? (
@@ -97,11 +112,7 @@ const months = monthGroups(index);
             {day.episodes.items.map((episode) => (
               <li id={`episode-${episode.episode_id}`}>
                 <p>{episodeHeadline(episode)}</p>
-                <p>
-                  Trading periods {episode.start_trading_period} to{" "}
-                  {episode.end_trading_period}. {episode.member_count}{" "}
-                  {episode.member_count === 1 ? "reading" : "readings"}.
-                </p>
+                <p>{episodeClockRange(episode, day)}</p>
               </li>
             ))}
           </ol>
@@ -131,26 +142,66 @@ const months = monthGroups(index);
         }
       </div>
 
-      {
-        months.map((group) => (
-          <section aria-labelledby={`month-${group.key}`}>
-            <h2 id={`month-${group.key}`}>{group.label}</h2>
-            <ol>
-              {group.days.map((entry) => (
-                <li>
-                  <a
-                    href={dailyPath(entry.date)}
-                    aria-current={entry.date === date ? "page" : undefined}
-                  >
-                    {formatTradingDate(entry.date)}
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </section>
-        ))
-      }
+      <details class="archive">
+        <summary>All days on this site</summary>
+        {
+          months.map((group) => (
+            <section aria-labelledby={`month-${group.key}`}>
+              <h2 id={`month-${group.key}`}>{group.label}</h2>
+              <ol>
+                {group.days.map((entry) => (
+                  <li>
+                    <a
+                      href={dailyPath(entry.date)}
+                      aria-current={entry.date === date ? "page" : undefined}
+                    >
+                      {formatTradingDate(entry.date)}
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ))
+        }
+      </details>
     </nav>
+
+    <details class="words" id="words">
+      <summary>Words on this page</summary>
+      <dl>
+        <div id="word-wholesale-price">
+          <dt>Wholesale price</dt>
+          <dd>
+            What generators and retailers paid each other, not the rate on a
+            household bill. More on{" "}
+            <a href="/about/#wholesale">About</a>.
+          </dd>
+        </div>
+        <div id="word-megawatt-hour">
+          <dt>Megawatt-hour</dt>
+          <dd>
+            1,000 kilowatt-hours, the same kWh unit as a line on a power bill.
+            More on{" "}
+            <a href="/about/#wholesale">About</a>.
+          </dd>
+        </div>
+        <div id="word-islands">
+          <dt>The two islands</dt>
+          <dd>
+            New Zealand's electricity system runs as two islands joined by a
+            cable. Otahuhu, Haywards and Benmore are sample points, not a
+            house. More on{" "}
+            <a href="/about/#islands">About</a>.
+          </dd>
+        </div>
+        <div id="word-reserve-price">
+          <dt>Reserve price</dt>
+          <dd>
+            The cost of backup generation kept ready if something trips.
+          </dd>
+        </div>
+      </dl>
+    </details>
   </article>
 </Layout>
 
@@ -163,7 +214,8 @@ const months = monthGroups(index);
   .lede,
   .notice,
   .slot,
-  .days {
+  .days,
+  .words {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
@@ -171,7 +223,8 @@ const months = monthGroups(index);
 
   .notice,
   .slot,
-  .days {
+  .days,
+  .words {
     background: var(--color-card);
     border-radius: var(--radius-card);
     padding: var(--space-5);
@@ -182,10 +235,51 @@ const months = monthGroups(index);
     outline-offset: -2px;
   }
 
+  .stats {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .stats div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .stats dt {
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  .stats dd {
+    margin: 0;
+    font-size: var(--text-heading);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink);
+  }
+
+  @media (min-width: 40rem) {
+    .stats {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
   .turn {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+  }
+
+  .archive {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .archive[open] {
+    gap: var(--space-4);
   }
 
   ol {
@@ -202,6 +296,22 @@ const months = monthGroups(index);
     flex-wrap: nowrap;
     list-style: decimal;
     padding-left: 1.5rem;
+  }
+
+  .words dl {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .words dt {
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  .words dd {
+    margin: 0.25rem 0 0;
   }
 
   a[aria-current="page"] {

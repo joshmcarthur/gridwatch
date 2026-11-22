@@ -52,14 +52,16 @@ const legend = chart ? sankeyLegend(chart) : [];
       </Fragment>
       <Fragment slot="caption">
         <p>
-          Megawatt-hours for the whole trading day. Bands run from generation by
-          fuel, to each island, across the inter-island cable (the HVDC link),
-          then to modelled load. Hover a band for the number.
+          Energy for the whole day, from fuel to each island, across the cable,
+          then to modelled load.
         </p>
+      </Fragment>
+      <Fragment slot="method">
         <p>
-          The New Zealand grid is meshed: electricity does not travel on one
-          path from a station to a house. This chart is a set of regional
-          balances, not generator-to-consumer flows.
+          Megawatt-hours for the trading day. Hover a band for the number. The
+          New Zealand grid is meshed: electricity does not travel on one path
+          from a station to a house. This chart is a set of regional balances,
+          not generator-to-consumer flows.
         </p>
         <p>
           Load is modelled from the system operator's real-time dispatch. A

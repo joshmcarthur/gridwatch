@@ -8,8 +8,8 @@ import {
   dailyPath,
   dailyStaticPaths,
   dateFromParams,
+  dayHeadline,
   type HeadlineSource,
-  headlineParagraphs,
   mapPath,
   monthGroups,
   neighbouringDays,
@@ -120,27 +120,40 @@ test("fixture days build a path for each committed sample", () => {
   expect(day.complete).toBe(true);
 });
 
-test("headline explains wholesale prices and megawatt-hours in plain language", () => {
-  const paragraphs = headlineParagraphs(loadSiteDay("2026-09-27"));
-  const text = paragraphs.join(" ");
-  expect(text).toMatch(/108,910 megawatt-hours/);
-  expect(text).toMatch(/1,000 kilowatt-hours/);
-  expect(text).toMatch(/kWh/);
-  expect(text).toMatch(/wholesale prices/i);
-  expect(text).toMatch(/household bill/);
-  expect(text).toMatch(/\$73 per megawatt-hour/);
-  expect(text).toMatch(/Upper North Island/);
-  expect(text).toMatch(/Otahuhu/);
-  expect(text).not.toMatch(/\bEMI\b/);
-  expect(text).not.toMatch(/\bEA\b/);
-  expect(text).not.toMatch(/\bNI\b/);
-  expect(text).not.toMatch(/\bSI\b/);
+test("headline names the kind of day without a unit lecture", () => {
+  const headline = dayHeadline(loadSiteDay("2026-09-27"));
+  expect(headline.sentence).toBe(
+    "Hydro made most of the power, and wholesale prices pulled apart between the islands.",
+  );
+  expect(headline.sentence).not.toMatch(/kilowatt/);
+  expect(headline.sentence).not.toMatch(/household bill/);
+  expect(headline.sentence).not.toMatch(/cable/);
+  expect(headline.sentence).not.toMatch(/\bEMI\b/);
+  expect(headline.sentence).not.toMatch(/\bOTA2201\b/);
+  expect(headline.stats).toEqual([
+    {
+      id: "power",
+      label: "Power made",
+      href: "#word-megawatt-hour",
+      value: "108,910 MWh",
+    },
+    {
+      id: "price",
+      label: "Wholesale price",
+      href: "#word-wholesale-price",
+      value: "$20 to $73 / MWh",
+    },
+    {
+      id: "islands",
+      label: "The two islands",
+      href: "#word-islands",
+      value: "Pulled apart",
+    },
+  ]);
 });
 
-test("completenessNotice says a complete day is complete", () => {
-  const notice = completenessNotice(loadSiteDay("2026-09-27"));
-  expect(notice.tone).toBe("ok");
-  expect(notice.paragraphs.join(" ")).toMatch(/look complete/);
+test("completenessNotice is omitted for a complete day", () => {
+  expect(completenessNotice(loadSiteDay("2026-09-27"))).toBeNull();
 });
 
 test("completenessNotice names incomplete datasets in plain language", () => {
@@ -155,15 +168,15 @@ test("completenessNotice names incomplete datasets in plain language", () => {
     prices: { state: "incomplete" as const },
   };
   const notice = completenessNotice(day);
-  expect(notice.tone).toBe("warn");
-  const text = notice.paragraphs.join(" ");
+  expect(notice?.tone).toBe("warn");
+  const text = notice?.paragraphs.join(" ") ?? "";
   expect(text).toMatch(/incomplete/i);
   expect(text).toMatch(/wholesale energy prices/i);
-  expect(text).toMatch(/household bill/);
   expect(text).toMatch(/only partial/i);
   expect(text).toMatch(/plant names and locations/i);
   expect(text).toMatch(/missing/i);
   expect(text).not.toMatch(/dispatch_energy_prices/);
+  expect(text).not.toMatch(/household bill/);
 });
 
 test("completenessNotice labels missing reserve prices", () => {
@@ -177,7 +190,7 @@ test("completenessNotice labels missing reserve prices", () => {
     generation: { state: "incomplete" as const },
     prices: { state: "complete" as const },
   };
-  const text = completenessNotice(day).paragraphs.join(" ");
+  const text = completenessNotice(day)?.paragraphs.join(" ");
   expect(text).toMatch(/reserve prices/i);
   expect(text).toMatch(/standing ready/i);
   expect(text).not.toMatch(/dispatch_reserve_prices/);
@@ -185,10 +198,63 @@ test("completenessNotice labels missing reserve prices", () => {
 
 test("headline falls back when generation or prices are missing", () => {
   const day: HeadlineSource = {
-    generation: { state: "missing", totals: null },
+    generation: { state: "missing", totals: null, daily: [] },
     prices: { state: "missing", nodes: [] },
   };
-  const text = headlineParagraphs(day).join(" ");
-  expect(text).toMatch(/generation numbers for this day are missing/i);
-  expect(text).toMatch(/wholesale prices for this day are missing/i);
+  const headline = dayHeadline(day);
+  expect(headline.sentence).toMatch(
+    /generation and wholesale prices for this day are missing/i,
+  );
+  expect(headline.stats.map((stat) => stat.value)).toEqual([
+    "No numbers yet",
+    "No numbers yet",
+    "No numbers yet",
+  ]);
+});
+
+test("close sample prices use one typical figure", () => {
+  const day: HeadlineSource = {
+    generation: {
+      state: "complete",
+      totals: { primary_megawatt_hours: 1000, battery_megawatt_hours: 0 },
+      daily: [
+        { fuel: "hydro", megawatt_hours: 800 },
+        { fuel: "wind", megawatt_hours: 200 },
+      ],
+    },
+    prices: {
+      state: "complete",
+      nodes: [
+        { price_region: "upper_north_island", daily: { mean_price: 51 } },
+        { price_region: "lower_north_island", daily: { mean_price: 50 } },
+        { price_region: "south_island", daily: { mean_price: 49 } },
+      ],
+    },
+  };
+  const headline = dayHeadline(day);
+  expect(headline.sentence).toBe(
+    "Hydro made most of the power, and wholesale prices at the sample points stayed close.",
+  );
+  expect(headline.stats[1]?.value).toBe("$50 / MWh");
+  expect(headline.stats[2]?.value).toBe("Stayed close");
+});
+
+test("a wide regional gap is pulled apart, not differed", () => {
+  const day: HeadlineSource = {
+    generation: {
+      state: "complete",
+      totals: { primary_megawatt_hours: 1000, battery_megawatt_hours: 0 },
+      daily: [{ fuel: "gas", megawatt_hours: 1000 }],
+    },
+    prices: {
+      state: "complete",
+      nodes: [
+        { price_region: "upper_north_island", daily: { mean_price: 200 } },
+        { price_region: "south_island", daily: { mean_price: 40 } },
+      ],
+    },
+  };
+  const headline = dayHeadline(day);
+  expect(headline.sentence).toMatch(/pulled apart/);
+  expect(headline.stats[2]?.value).toBe("Pulled apart");
 });

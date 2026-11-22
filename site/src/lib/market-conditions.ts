@@ -3,7 +3,7 @@ import type {
   SiteIndex,
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
-import { dailyPath, headlineParagraphs } from "./daily-page.ts";
+import { dailyPath, dayHeadline } from "./daily-page.ts";
 import { formatTradingDate } from "./site-data.ts";
 
 const RANK_WINDOW = 365;
@@ -142,7 +142,10 @@ export function latestMarketUpdate(
     };
   }
   const day = loadDay(date);
-  const headlines = headlineParagraphs(day);
+  const headlines = [
+    dayHeadline(day).sentence,
+    "Wholesale prices are what generators and retailers paid each other, not the rate on a household bill.",
+  ];
   const latestGeneration = index.latest_complete_sections.generation;
   const generationMissing = day.generation.state === "missing";
   const generationLag = generationMissing

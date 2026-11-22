@@ -1,10 +1,11 @@
 import type {
   DatasetState,
+  FuelCategory,
   SectionState,
   SiteIndex,
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
-import { PRICE_REGIONS } from "./price-regions.ts";
+import { FUEL_LABELS, type StackFuel } from "./generation-mix.ts";
 
 const energyFormat = new Intl.NumberFormat("en-NZ", {
   maximumFractionDigits: 0,
@@ -15,12 +16,16 @@ const moneyFormat = new Intl.NumberFormat("en-NZ", {
   maximumFractionDigits: 0,
 });
 
+/** Daily mean prices this far apart still count as close. */
+const CLOSE_DOLLARS = 10;
+/** Daily mean prices this far apart or more have pulled apart. */
+const APART_DOLLARS = 50;
+
 const DATASET_LABELS: Record<string, string> = {
-  dispatch_energy_prices:
-    "wholesale energy prices (the prices generators and retailers traded at, not a household bill)",
+  dispatch_energy_prices: "wholesale energy prices",
   dispatch_reserve_prices:
     "reserve prices (the cost of standing ready to lift or drop generation)",
-  generation_md: "generation (what power stations made)",
+  generation_md: "generation",
   entity_mappings: "plant names and locations",
 };
 
@@ -38,6 +43,7 @@ export type HeadlineSource = {
       primary_megawatt_hours: number;
       battery_megawatt_hours: number;
     } | null;
+    daily: Array<{ fuel: FuelCategory; megawatt_hours: number }>;
   };
   prices: {
     state: SectionState;
@@ -46,6 +52,18 @@ export type HeadlineSource = {
       daily: { mean_price: number | null };
     }>;
   };
+};
+
+export type DayStat = {
+  id: string;
+  label: string;
+  href: string;
+  value: string;
+};
+
+export type DayHeadline = {
+  sentence: string;
+  stats: DayStat[];
 };
 
 export function dailyPath(date: string): string {
@@ -113,20 +131,25 @@ export function monthGroups(
   return groups;
 }
 
-export function headlineParagraphs(day: HeadlineSource): string[] {
-  return [generationHeadline(day), pricesHeadline(day)];
+export function dayHeadline(day: HeadlineSource): DayHeadline {
+  const fuel = topFuelLabel(day);
+  const means = meanPrices(day);
+  const agreement = islandAgreement(means);
+  return {
+    sentence: kindOfDay(day, fuel, agreement),
+    stats: [
+      powerStat(day),
+      priceStat(day, means, agreement),
+      islandsStat(day, agreement),
+    ],
+  };
 }
 
 export function completenessNotice(day: CompletenessSource): {
-  tone: "ok" | "warn";
+  tone: "warn";
   paragraphs: string[];
-} {
-  if (day.complete) {
-    return {
-      tone: "ok",
-      paragraphs: ["The files behind this page look complete."],
-    };
-  }
+} | null {
+  if (day.complete) return null;
   const paragraphs = ["This day is incomplete."];
   for (const [id, dataset] of Object.entries(day.datasets)) {
     if (dataset.status === "complete") continue;
@@ -147,46 +170,152 @@ export function completenessNotice(day: CompletenessSource): {
   return { tone: "warn", paragraphs };
 }
 
-function generationHeadline(day: HeadlineSource): string {
-  const totals = day.generation.totals;
-  if (day.generation.state === "missing" || totals === null) {
-    return "Generation numbers for this day are missing.";
+function kindOfDay(
+  day: HeadlineSource,
+  fuel: string | null,
+  agreement: IslandAgreement | null,
+): string {
+  const genMissing =
+    day.generation.state === "missing" || day.generation.totals === null;
+  const priceMissing = day.prices.state === "missing" || agreement === null;
+  if (genMissing && priceMissing) {
+    return "Generation and wholesale prices for this day are missing.";
   }
-  const made = energyFormat.format(totals.primary_megawatt_hours);
-  const battery = energyFormat.format(totals.battery_megawatt_hours);
-  const intro =
-    day.generation.state === "incomplete"
-      ? `Incomplete generation numbers say power stations made about ${made} megawatt-hours of electricity.`
-      : `Power stations made about ${made} megawatt-hours of electricity.`;
-  return `${intro} A megawatt-hour is 1,000 kilowatt-hours, the same kWh unit as the line on a power bill. Batteries moved another ${battery} megawatt-hours, charging and discharging rather than making new power.`;
+  const fuelClause = fuel ? `${fuel} made most of the power` : null;
+  const priceClause = agreementPhrase(agreement);
+  const parts = [fuelClause, priceClause].filter(
+    (part): part is string => part !== null,
+  );
+  if (parts.length === 0) {
+    if (day.generation.state === "incomplete") {
+      return "Generation numbers for this day are incomplete.";
+    }
+    return "Wholesale prices for this day are incomplete.";
+  }
+  const joined =
+    parts.length === 1
+      ? `${capitalize(parts[0])}.`
+      : `${parts[0]}, and ${parts[1]}.`;
+  if (day.generation.state === "incomplete" && fuelClause) {
+    return `Incomplete generation numbers. ${capitalize(joined)}`;
+  }
+  if (day.prices.state === "incomplete" && priceClause && !fuelClause) {
+    return `Incomplete wholesale prices. ${capitalize(joined)}`;
+  }
+  return capitalize(joined);
 }
 
-function pricesHeadline(day: HeadlineSource): string {
-  const means = day.prices.nodes.filter(
-    (node) => node.daily.mean_price !== null,
-  );
-  if (day.prices.state === "missing" || means.length === 0) {
-    return "Wholesale prices for this day are missing.";
+function powerStat(day: HeadlineSource): DayStat {
+  const totals = day.generation.totals;
+  const value =
+    day.generation.state === "missing" || totals === null
+      ? "No numbers yet"
+      : `${energyFormat.format(totals.primary_megawatt_hours)} MWh`;
+  return {
+    id: "power",
+    label: "Power made",
+    href: "#word-megawatt-hour",
+    value,
+  };
+}
+
+function priceStat(
+  day: HeadlineSource,
+  means: number[],
+  agreement: IslandAgreement | null,
+): DayStat {
+  let value = "No numbers yet";
+  if (means.length === 1) {
+    value = `${moneyFormat.format(means[0] ?? 0)} / MWh`;
+  } else if (means.length > 1 && agreement === "close") {
+    const typical = means.reduce((sum, price) => sum + price, 0) / means.length;
+    value = `${moneyFormat.format(typical)} / MWh`;
+  } else if (means.length > 1) {
+    const low = moneyFormat.format(Math.min(...means));
+    const high = moneyFormat.format(Math.max(...means));
+    value = `${low} to ${high} / MWh`;
   }
-  const parts = means.map((node) => {
-    const region = regionLabel(node.price_region);
-    const price = moneyFormat.format(node.daily.mean_price ?? 0);
-    return `${price} per megawatt-hour in ${region}`;
-  });
-  const list = joinAnd(parts);
-  const prefix =
-    day.prices.state === "incomplete"
-      ? "Incomplete wholesale prices"
-      : "Wholesale prices";
-  return `${prefix} (what generators and retailers paid each other, not the rate on a household bill) averaged ${list}. New Zealand's electricity system runs as two islands joined by a cable; those three substations are sample points, not your house.`;
+  return {
+    id: "price",
+    label: "Wholesale price",
+    href: "#word-wholesale-price",
+    value:
+      day.prices.state === "missing" && means.length === 0
+        ? "No numbers yet"
+        : value,
+  };
+}
+
+function islandsStat(
+  day: HeadlineSource,
+  agreement: IslandAgreement | null,
+): DayStat {
+  const value =
+    day.prices.state === "missing" || agreement === null
+      ? "No numbers yet"
+      : agreement === "close"
+        ? "Stayed close"
+        : agreement === "differed"
+          ? "Differed"
+          : "Pulled apart";
+  return {
+    id: "islands",
+    label: "The two islands",
+    href: "#word-islands",
+    value,
+  };
+}
+
+type IslandAgreement = "close" | "differed" | "apart";
+
+function islandAgreement(means: number[]): IslandAgreement | null {
+  if (means.length === 0) return null;
+  if (means.length === 1) return "close";
+  const range = Math.max(...means) - Math.min(...means);
+  if (range < CLOSE_DOLLARS) return "close";
+  if (range < APART_DOLLARS) return "differed";
+  return "apart";
+}
+
+function agreementPhrase(agreement: IslandAgreement | null): string | null {
+  switch (agreement) {
+    case "close":
+      return "wholesale prices at the sample points stayed close";
+    case "differed":
+      return "wholesale prices differed between the islands";
+    case "apart":
+      return "wholesale prices pulled apart between the islands";
+    default:
+      return null;
+  }
+}
+
+function topFuelLabel(day: HeadlineSource): string | null {
+  if (day.generation.state === "missing" || day.generation.totals === null) {
+    return null;
+  }
+  const sums = new Map<string, number>();
+  for (const row of day.generation.daily) {
+    if (row.fuel === "battery") continue;
+    sums.set(row.fuel, (sums.get(row.fuel) ?? 0) + row.megawatt_hours);
+  }
+  let best: { fuel: string; mwh: number } | null = null;
+  for (const [fuel, mwh] of sums) {
+    if (!best || mwh > best.mwh) best = { fuel, mwh };
+  }
+  if (!best || best.mwh <= 0) return null;
+  return FUEL_LABELS[best.fuel as StackFuel] ?? best.fuel;
+}
+
+function meanPrices(day: HeadlineSource): number[] {
+  if (day.prices.state === "missing") return [];
+  return day.prices.nodes
+    .map((node) => node.daily.mean_price)
+    .filter((price): price is number => typeof price === "number");
 }
 
 function datasetLabel(id: string): string {
   return DATASET_LABELS[id] ?? id.replaceAll("_", " ");
-}
-
-function regionLabel(id: string): string {
-  return PRICE_REGIONS[id] ?? id.replaceAll("_", " ");
 }
 
 function datasetStatusHeading(status: DatasetState): string {
@@ -221,8 +350,7 @@ function sectionStatusPhrase(status: SectionState): string {
   }
 }
 
-function joinAnd(parts: string[]): string {
-  if (parts.length === 0) return "";
-  if (parts.length === 1) return parts[0] ?? "";
-  return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
+function capitalize(text: string): string {
+  if (text.length === 0) return text;
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 }

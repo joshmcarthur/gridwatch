@@ -21,7 +21,7 @@ export type StackFuel = (typeof STACK_ORDER)[number];
 
 export const BATTERY_HEADER = "Battery (stored power, not counted above)";
 
-const FUEL_LABELS: Record<StackFuel, string> = {
+export const FUEL_LABELS: Record<StackFuel, string> = {
   hydro: "Hydro",
   geothermal: "Geothermal",
   wind: "Wind",

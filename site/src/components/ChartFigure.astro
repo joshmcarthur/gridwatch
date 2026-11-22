@@ -36,6 +36,16 @@ const { plots, tableCaptionId, tableCaption, headers, rows, legendLabel, notice 
     <slot name="caption" />
   </figcaption>
 </figure>
+{
+  Astro.slots.has("method") && (
+    <details class="chart-method">
+      <summary>How to read this</summary>
+      <div class="method">
+        <slot name="method" />
+      </div>
+    </details>
+  )
+}
 <details class="chart-table">
   <summary>Show the numbers as a table</summary>
   <div class="table-scroll">
@@ -103,6 +113,25 @@ const { plots, tableCaptionId, tableCaption, headers, rows, legendLabel, notice 
 
   /* prose.css styles every p, so inherit from figcaption instead. */
   figcaption :global(p) {
+    margin: 0;
+    font: inherit;
+    color: inherit;
+  }
+
+  .chart-method {
+    font-size: var(--text-label);
+    line-height: 1.5;
+    color: var(--color-ink-muted);
+  }
+
+  .chart-method .method {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+
+  .chart-method :global(p) {
     margin: 0;
     font: inherit;
     color: inherit;
