@@ -138,7 +138,7 @@ The kit default is unchanged: omit `baselineByTradingPeriod` and all periods of 
 - **Size cutoff.** A plant is a subject only when the mean of `average_megawatts` over complete baseline-window rows is at least 30 MW. `subjectsSql` reads the temp table `input`. The cutoff is the plant's typical size, not a one-day spike.
 - **Battery.** `fuel_category` `battery` is not a subject. Battery is storage, not primary generation (ADR-0008, ADR-0017).
 - **Observation types.** `generation_high` and `generation_low`.
-- **Config.** `PLANT_GENERATION_CHANGE_CONFIG`. The values are provisional.
+- **Config.** `PLANT_GENERATION_CHANGE_CONFIG`. `ANALYSIS_VERSION` is 2 after [#179](https://github.com/joshmcarthur/gridwatch/issues/179).
 
 | Key | Value | Why |
 | --- | --- | --- |
@@ -146,7 +146,7 @@ The kit default is unchanged: omit `baselineByTradingPeriod` and all periods of 
 | `minBaselinePeriods` | 14 | Day-count. Half the window of same-period samples. |
 | `highPercentile` | 0.99 | Same as prices. With n ≈ 14 the value sits near the max; the MW floor is the real guard. |
 | `lowPercentile` | 0.01 | The mirror of the high percentile. |
-| `minDeviationFromMedian` | 30 | MW. A 14-sample percentile must not fire on a few MW of noise. 30 MW is about a small hydro unit, not a rounding wiggle. |
+| `minDeviationFromMedian` | 200 | MW. 30 MW flagged ordinary hydro scheduling and wind weather (19 plant hits a day). 200 MW still sits under Huntly 1–4's +238 MW on 27 July 2026. |
 | `minPeriods` | 2 | As for prices. |
 | `baselineByTradingPeriod` | true | Compare period 20 to other period 20s, not to nights. |
 | `minPlantAverageMw` | 30 | Drop plants whose baseline-window mean is below 30 MW. Recorded in `parameters`. |
@@ -160,7 +160,7 @@ The kit default is unchanged: omit `baselineByTradingPeriod` and all periods of 
 - **No size cutoff.** Island-fuel series are already large aggregates.
 - **Skipped.** `battery`, and rows whose `island` is null.
 - **Observation types.** `generation_high` and `generation_low`, the same names as the plant detector. `detector_id` and `subject_type` separate them.
-- **Config.** `FUEL_GENERATION_CHANGE_CONFIG`. `minDeviationFromMedian` is 100 MW because an island-fuel series is a sum of plants.
+- **Config.** `FUEL_GENERATION_CHANGE_CONFIG`. `minDeviationFromMedian` is 200 MW after [#179](https://github.com/joshmcarthur/gridwatch/issues/179).
 
 | Key | Value | Why |
 | --- | --- | --- |
@@ -168,7 +168,7 @@ The kit default is unchanged: omit `baselineByTradingPeriod` and all periods of 
 | `minBaselinePeriods` | 14 | As for the plant detector. |
 | `highPercentile` | 0.99 | As for the plant detector. |
 | `lowPercentile` | 0.01 | As for the plant detector. |
-| `minDeviationFromMedian` | 100 | MW. An island-fuel move of a few tens of MW is ordinary plant mix; 100 MW is a real shift. |
+| `minDeviationFromMedian` | 200 | MW. 100 MW is ordinary island-fuel mix. 200 MW still flags the Huntly island series on 27 July 2026. 250 MW would drop it. |
 | `minPeriods` | 2 | As for prices. |
 | `baselineByTradingPeriod` | true | As for the plant detector. |
 
@@ -186,7 +186,11 @@ A period with no same-period samples in the window (`sample_count = 0`), for exa
 - **One shared `observations` table.** Rejected. The runner reads one sentinel fingerprint for each dataset, and `writeGoldTables` replaces a whole partition. Two detectors in one partition would overwrite each other.
 - **A separate `analysis/` layer.** Rejected. Detectors are gold tables that read gold. They use `goldDataset` with a windowed `GoldInput`.
 - **A baseline for each time of day.** Rejected. Each cell has about 28 values, which cannot support a 99th percentile.
-- **A pooled all-periods baseline for generation.** Rejected for #33. Solar, wind and hydro have a strong daily shape. Pooling puts ordinary nights in the same set as midday, so a stable ramp looks like a low every morning and a daytime trip can hide in the pooled low tail. Generation uses `baselineByTradingPeriod`. The 14-sample cell cannot support a 99th percentile on its own; `minDeviationFromMedian` of 30 MW (plant) or 100 MW (island-fuel) is the floor.
+- **A pooled all-periods baseline for generation.** Rejected for #33. Solar, wind and hydro have a strong daily shape. Pooling puts ordinary nights in the same set as midday, so a stable ramp looks like a low every morning and a daytime trip can hide in the pooled low tail. Generation uses `baselineByTradingPeriod`. The 14-sample cell cannot support a 99th percentile on its own; `minDeviationFromMedian` is the floor (200 MW after #179).
+- **Plant `minDeviationFromMedian` of 30 MW, fuel 100 MW.** Rejected after the 2026-11-22 backfill ([#179](https://github.com/joshmcarthur/gridwatch/issues/179)). Those floors gave 19 plant hits a day, mostly hydro scheduling and wind weather, with median severity 1.09. 200 MW keeps Huntly on 27 July 2026. 250 MW would drop it.
+- **Excluding hydro from the plant detector.** Rejected. Manapouri dropping to 0 MW (742 MW from its median) would disappear. The MW floor cuts ordinary scheduling without a fuel special case.
+- **`minPeriods` of 4.** Rejected as a second knob. The 200 MW floor already drops short 30–100 MW wiggles.
+- **`baselineSameWeekday` for generation.** Rejected. A 28-day window then yields about four samples, which cannot support a 99th percentile.
 - **A baseline that includes the current day.** Rejected. A spike would raise its own threshold.
 - **Fixed thresholds only.** Rejected. A fixed threshold does not follow a change of regime, which the brief asks for.
 - **A separate `detector_version` column.** Rejected. It would repeat `analysis_version`.
@@ -222,6 +226,8 @@ A period with no same-period samples in the window (`sample_count = 0`), for exa
 - Examples: `reserve_price_high` on 2026-07-27, SIR|NI periods 35 to 40 (6 periods) — measured $2154.45, median $0.49, threshold $13.13, severity 170.5. FIR|NI on 2026-09-27 (DST, 46 periods) periods 32 to 39, measured $211.95, median $0.96, threshold $77.19, severity 2.77. 2026-04-05 (50 periods) has no observations.
 - The $10 floor is holding: SI 99th percentiles in this window sit around $5–$6, so SI hits are the days that also clear $10. No `ANALYSIS_VERSION` bump.
 - Generation-change uses a per-time-of-day baseline. A plant that changes its usual daily shape, for example a hydro station that starts peaking, is flagged until that shape is 14 days old, then becomes the baseline.
-- A 14-sample 99th percentile is close to the max of that cell. The 30 MW / 100 MW floors are what stop a noisy percentile from firing. They also mean a 20 MW plant trip never flags, by design of the size cutoff and the deviation guard.
+- A 14-sample 99th percentile is close to the max of that cell. The 200 MW floors are what stop a noisy percentile from firing. They also mean a 20 MW plant trip never flags, by design of the size cutoff and the deviation guard.
 - Periods 49 and 50 exist on one DST-end day a year. They usually have `sample_count = 0` in a 28-day window and cannot fire. They do not mark the day `partial`.
-- Generation-change backfill counts are pending. This environment has no gold lake, so the run over the full backfill has not happened. Counts, examples and false positives seen will be added here after that run.
+- Generation-change backfill, 285 days (`gold/generation_by_plant_period` from 2026-01-20 to 2026-10-31, `analysis_version` 2 after [#179](https://github.com/joshmcarthur/gridwatch/issues/179)). Plant: 250 observations (0.9 per day over 285 days; max 7). Fuel: 696 observations (2.4 per day over the same window). Version 1 was 5,447 plant (19.1 per day, max 53) and 996 fuel.
+- Plant remaining by station: BEN/benmore 105, MAN/manapouri 80, CYD/clyde 41, HLY/huntly_1_4 13, ROX/roxburgh 5, HLY/huntly_e3p 5, OHA/ohau_a 1. Wind and geothermal plant hits are gone. Fuel remaining is still mostly island hydro and NI wind.
+- Examples: `generation_high` on 2026-07-27, HLY/huntly_1_4 periods 16–17 — measured 341 MW, median 103 MW, delta 238 MW, severity 1.18. `generation_low` on 2026-08-23, MAN/manapouri 7 periods — 0 MW versus 742 MW median, severity 3.71. `generation_low` on 2026-05-09, HLY/huntly_e3p 22 periods — 0 MW versus 246 MW.
