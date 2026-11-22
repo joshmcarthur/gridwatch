@@ -1,4 +1,5 @@
 ---
+import type { SiteDay } from "@gridwatch/publisher/site-contract";
 import Layout from "../layouts/Layout.astro";
 import { dailyPath } from "../lib/daily-page";
 import { episodeHeadline } from "../lib/episode-copy";
@@ -15,7 +16,14 @@ import {
 } from "../lib/site-data";
 
 const index = loadSiteIndex();
-const loadDay = (date: string) => loadSiteDay(date, index);
+const loaded = new Map<string, SiteDay>();
+const loadDay = (date: string): SiteDay => {
+  const cached = loaded.get(date);
+  if (cached) return cached;
+  const day = loadSiteDay(date, index);
+  loaded.set(date, day);
+  return day;
+};
 const update = latestUpdate(index, loadDay);
 const cards = conditionCards(index, loadDay);
 const recent = recentDays(index);

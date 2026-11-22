@@ -1,9 +1,4 @@
-import type {
-  SectionState,
-  SiteDay,
-  SiteIndex,
-  SiteIndexDay,
-} from "@gridwatch/publisher/site-contract";
+import type { SiteDay, SiteIndex } from "@gridwatch/publisher/site-contract";
 import { headlineParagraphs } from "./daily-page.ts";
 import {
   gasCoalShare,
@@ -53,14 +48,6 @@ export type RecentDay = {
 
 type SectionName = "generation" | "prices" | "reserves";
 
-const sectionState = (
-  day: SiteIndexDay,
-  name: SectionName,
-): SectionState | undefined => {
-  if (name === "reserves") return day.sections.reserves;
-  return day.sections[name];
-};
-
 const LAG_NOTE =
   "Generation numbers for this day are not in yet. They usually arrive later than prices.";
 
@@ -75,7 +62,7 @@ function earlierValues(
   metric: (day: SiteDay) => number | null,
 ): number[] {
   const earlier = index.days.filter(
-    (day) => day.date < before && sectionState(day, section) === "complete",
+    (day) => day.date < before && day.sections[section] === "complete",
   );
   return earlier.slice(-365).flatMap((entry) => {
     const value = metric(loadDay(entry.date));
@@ -131,37 +118,42 @@ export function conditionCards(
   const rankOf = (
     section: SectionName,
     date: string | null,
-    day: SiteDay | null,
+    value: number | null,
     metric: (day: SiteDay) => number | null,
   ): Rank => {
-    if (!date || !day) return { kind: "unknown", reason: "not_enough_days" };
-    const value = metric(day);
-    if (value === null) return { kind: "unknown", reason: "not_enough_days" };
+    if (!date || value === null) {
+      return { kind: "unknown", reason: "not_enough_days" };
+    }
     return rankAgainstHistory(
       value,
       earlierValues(index, section, date, loadDay, metric),
     );
   };
 
-  const priceRank = rankOf("prices", priceDate, priceDay, meanWholesalePrice);
+  const priceValue = priceDay ? meanWholesalePrice(priceDay) : null;
+  const supplyValue = generationDay ? gasCoalShare(generationDay) : null;
+  const reserveValue = reservesDay ? peakReservePrice(reservesDay) : null;
+  const regionalValue = priceDay ? hayBenAbsSpread(priceDay) : null;
+
+  const priceRank = rankOf("prices", priceDate, priceValue, meanWholesalePrice);
   const supplyRank = rankOf(
     "generation",
     generationDate,
-    generationDay,
+    supplyValue,
     gasCoalShare,
   );
   const reserveRank = rankOf(
     "reserves",
     reservesDate,
-    reservesDay,
+    reserveValue,
     peakReservePrice,
   );
-  const regionalRank = rankOf("prices", priceDate, priceDay, hayBenAbsSpread);
-
-  const priceValue = priceDay ? meanWholesalePrice(priceDay) : null;
-  const supplyValue = generationDay ? gasCoalShare(generationDay) : null;
-  const reserveValue = reservesDay ? peakReservePrice(reservesDay) : null;
-  const regionalValue = priceDay ? hayBenAbsSpread(priceDay) : null;
+  const regionalRank = rankOf(
+    "prices",
+    priceDate,
+    regionalValue,
+    hayBenAbsSpread,
+  );
 
   return [
     {
