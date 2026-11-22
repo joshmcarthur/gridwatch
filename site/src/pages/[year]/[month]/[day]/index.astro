@@ -103,14 +103,14 @@ const months = monthGroups(index);
     <section class="slot" aria-labelledby="detected-episodes">
       <h2 id="detected-episodes">What stood out</h2>
       <p>
-        Unusual stretches grouped from the public files. Not a written-up
-        public event yet.
+        Stretches of the day that looked unusual in the public files. Not a
+        written-up public event yet.
       </p>
       {
         day.episodes === undefined || day.episodes.state === "missing" ? (
-          <p>Grouped readings have not been published for this day yet.</p>
+          <p>The list of unusual stretches is not ready for this day yet.</p>
         ) : day.episodes.items.length === 0 ? (
-          <p>No overlapping unusual stretches were grouped on this day.</p>
+          <p>No unusual stretches overlapped on this day.</p>
         ) : (
           <ol class="episodes">
             {day.episodes.items.map((episode) => (
