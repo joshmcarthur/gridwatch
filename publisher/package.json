@@ -17,9 +17,12 @@
     "publish:hvdc-flows": "node src/silver/hvdc-flows.cli.ts",
     "publish:entity-mappings": "node src/silver/entity-mappings.cli.ts",
     "build:evidence": "node src/gold/evidence.cli.ts",
+    "build:narrative": "node src/gold/narrative.cli.ts",
     "typecheck": "tsc -p ."
   },
   "dependencies": {
-    "@duckdb/node-api": "2.0.0-r.1"
+    "@duckdb/node-api": "2.0.0-r.1",
+    "@tanstack/ai": "^1.8.0",
+    "@tanstack/ai-openrouter": "^1.1.2"
   }
 }

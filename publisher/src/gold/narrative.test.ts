@@ -1,0 +1,113 @@
+import { createHash } from "node:crypto";
+import { expect, test } from "vitest";
+import type { EvidencePackage } from "./evidence.ts";
+import { serializeEvidencePackage } from "./evidence.ts";
+import {
+  DEFAULT_MODEL,
+  generateNarrative,
+  NARRATIVE_SCHEMA_VERSION,
+  PROMPT_VERSION,
+  parseNarrativeText,
+  promptPayload,
+  SYSTEM_PROMPT,
+  serializeNarrative,
+} from "./narrative.ts";
+
+const pkg = {
+  schema_version: 1,
+  builder_version: 1,
+  episode: {
+    episode_id: "abc123",
+    trading_date: "2026-07-27",
+    start_trading_period: 36,
+    end_trading_period: 39,
+    observation_types: ["price_high", "reserve_price_high"],
+    islands: ["NI"],
+    severity: 10,
+  },
+  claims: [
+    {
+      id: "price.OTA2201.p36",
+      label: "Otahuhu period price",
+      value: 3296.04,
+      unit: "$/MWh",
+      confidence: "confirmed",
+    },
+    {
+      id: "spread.guess",
+      label: "a possible reading",
+      value: "constraint",
+      unit: "",
+      confidence: "possible_explanation",
+    },
+  ],
+  limits: [{ issue: 44, text: "No SPD case files." }],
+  links: { daily_page: "/2026/07/27/" },
+  completeness: [{ table: "price_periods", status: "complete" }],
+} as unknown as EvidencePackage;
+
+test("the system prompt is pinned: a changed prompt without a PROMPT_VERSION bump fails here", () => {
+  expect(PROMPT_VERSION).toBe(1);
+  expect(NARRATIVE_SCHEMA_VERSION).toBe(1);
+  expect(DEFAULT_MODEL).toBe("anthropic/claude-haiku-4.5");
+  expect(createHash("sha256").update(SYSTEM_PROMPT).digest("hex")).toBe(
+    "474253bcc7dd3aad05861b7ff3994ceb502973285010ff51be4317f323b7455d",
+  );
+});
+
+test("the prompt carries claims, limits and links, not context series", () => {
+  const payload = promptPayload(pkg);
+  const json = JSON.stringify(payload);
+  expect(json).toContain("3296.04");
+  expect(json).toContain("No SPD case files.");
+  expect(json).toContain("/2026/07/27/");
+  expect(json).not.toContain("generation_by_fuel");
+  expect(payload.claims).toHaveLength(2);
+});
+
+test("parseNarrativeText reads the three JSON fields and strips fences", () => {
+  const text = `\`\`\`json
+{"what_happened":"Prices rose.","why":"Thermal ramped.","what_it_means":"The islands split."}
+\`\`\``;
+  expect(parseNarrativeText(text)).toEqual({
+    what_happened: "Prices rose.",
+    why: "Thermal ramped.",
+    what_it_means: "The islands split.",
+  });
+});
+
+test("generateNarrative stores package id, model, prompt version and date", async () => {
+  const complete = async () =>
+    JSON.stringify({
+      what_happened: "Otahuhu hit $3,296.04/MWh.",
+      why: "Possible explanation: a constraint. Confirmed: the price.",
+      what_it_means: "North Island scarcity.",
+    });
+  const record = await generateNarrative(pkg, {
+    complete,
+    model: "anthropic/claude-haiku-4.5",
+    now: new Date("2026-11-23T00:00:00Z"),
+  });
+  expect(record.schema_version).toBe(1);
+  expect(record.prompt_version).toBe(1);
+  expect(record.episode_id).toBe("abc123");
+  expect(record.trading_date).toBe("2026-07-27");
+  expect(record.model).toBe("anthropic/claude-haiku-4.5");
+  expect(record.generated_at).toBe("2026-11-23T00:00:00Z");
+  expect(record.package_id).toBe(
+    createHash("sha256").update(serializeEvidencePackage(pkg)).digest("hex"),
+  );
+  expect(record.what_happened).toContain("3,296.04");
+  const roundTrip = JSON.parse(serializeNarrative(record));
+  expect(roundTrip.package_id).toBe(record.package_id);
+});
+
+test("generateNarrative fails when the model omits a section", async () => {
+  await expect(
+    generateNarrative(pkg, {
+      complete: async () => JSON.stringify({ what_happened: "only" }),
+      model: "x",
+      now: new Date("2026-11-23T00:00:00Z"),
+    }),
+  ).rejects.toThrow(/why|what_it_means/);
+});
