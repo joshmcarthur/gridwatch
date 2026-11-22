@@ -23,7 +23,8 @@ test.skipIf(!existsSync(builtPage))(
     );
     expect(html).toMatch(/<h2 id="recent-days-heading"[^>]*>Recent days<\/h2>/);
     expect(html).toContain("Wholesale prices");
-    expect(html).toContain("Supply");
+    expect(html).not.toMatch(/<h3[^>]*>Supply<\/h3>/);
+    expect(html).toContain("three sample places");
     expect(html).toContain("Reserves");
     expect(html).toContain("Regional price differences");
     expect(html).toContain("Gas and coal");

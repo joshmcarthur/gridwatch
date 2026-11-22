@@ -389,6 +389,9 @@ test("each condition card uses its own latest complete date and has no composite
   expect(cards.find((card) => card.id === "reserves")?.date).toBe("2026-11-18");
   expect(cards.find((card) => card.id === "regional")?.date).toBe("2026-11-18");
   expect(cards.find((card) => card.id === "prices")?.figure).toMatch(/\$200/);
+  expect(cards.find((card) => card.id === "prices")?.figure).toMatch(
+    /three sample places/,
+  );
   expect(cards.find((card) => card.id === "supply")?.figure).toMatch(/50%/);
   expect(cards.find((card) => card.id === "reserves")?.figure).toMatch(
     /backup generation/,

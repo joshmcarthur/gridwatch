@@ -202,7 +202,7 @@ function pricesCard(index: SiteIndex, loadDay: DayLoader): MarketConditionCard {
     loadDay,
     metricFrom: meanReferencePrice,
     figure: (value) =>
-      `Wholesale prices averaged ${money.format(value)} per megawatt-hour.`,
+      `Across three sample places (Otahuhu, Haywards and Benmore), wholesale prices averaged ${money.format(value)} per megawatt-hour.`,
     empty: "No complete wholesale-prices day yet.",
     noFigure: "Wholesale prices for this day have no figure.",
   });
@@ -211,7 +211,7 @@ function pricesCard(index: SiteIndex, loadDay: DayLoader): MarketConditionCard {
 function supplyCard(index: SiteIndex, loadDay: DayLoader): MarketConditionCard {
   return conditionCard({
     id: "supply",
-    title: "Supply",
+    title: "Gas and coal",
     date: index.latest_complete_sections.generation,
     index,
     section: "generation",
@@ -237,7 +237,7 @@ function reservesCard(
     loadDay,
     metricFrom: meanReservePrice,
     figure: (value) =>
-      `Reserve prices, the cost of backup generation kept ready if something trips, averaged ${formatReserveMoney(value)} per megawatt-hour.`,
+      `Reserve prices, the cost of backup generation kept ready if something trips, averaged ${formatReserveMoney(value)} per megawatt-hour, counting every kind of reserve in both islands.`,
     empty:
       "Reserve prices, the cost of backup generation kept ready if something trips, have not been published yet.",
     noFigure: "Reserve prices for this day have no figure.",
