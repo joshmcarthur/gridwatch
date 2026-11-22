@@ -17,7 +17,7 @@ Detectors in play: `price_high` / `price_low` ([#22](https://github.com/joshmcar
 
 ### Gold table sketch
 
-Follow [ADR-0011](0011-gold-table-pattern.md). `ANALYSIS_VERSION` starts at 1. The module holds one config object, `EPISODE_GROUPING_CONFIG`. Any change to a rule or a value bumps `ANALYSIS_VERSION`. A test pins the hash of the config object, as detectors do.
+Follow [ADR-0011](0011-gold-table-pattern.md). `ANALYSIS_VERSION` starts at 1. It is 2 after [#183](https://github.com/joshmcarthur/gridwatch/issues/183) (unused flags removed). The module holds one config object, `EPISODE_GROUPING_CONFIG`. Any change to a rule or a value bumps `ANALYSIS_VERSION`. A test pins the hash of the config object, as detectors do.
 
 Output is Parquet at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. `writeGoldTables`, a total `ORDER BY`, `SET threads = 1`, `goldStamp`, no `processed_at`. Registry order is after every detector that is an input.
 
@@ -93,15 +93,14 @@ Related conditions in v1 are the scarcity family: high energy price, high reserv
 
 Hydro-style observations do not exist yet. When they do, they will use a much longer window (for example 14 days, same island or same catchment) and will not join dispatch-scale types in v1. A hydro month and an evening price spike stay different episodes until a later ADR says otherwise.
 
-Config values, provisional:
+Config values:
 
 | Key | Value | Why |
 | --- | --- | --- |
 | `adjacentPeriodMax` | 2 | Brief dispatch minutes, not hydro weeks. Two unflagged periods (60 minutes) still join a broken run; three do not. |
 | `adjacentGapMinutes` | 60 | The UTC form of `adjacentPeriodMax`. DST-safe. |
-| `sameDateOnly` | true | Fits `goldDataset` with no forward window. Matches the observation midnight split. |
-| `singletonEpisodes` | true | Every observation is in exactly one episode. |
-| `episodeSeverity` | `max` | The episode is as severe as its worst fact. Members keep their own severity. |
+
+Grouping always stays on one trading date, every observation is in one episode (singletons included), and episode severity is the max of members. Those are invariants, not flags. [#183](https://github.com/joshmcarthur/gridwatch/issues/183) removed `sameDateOnly`, `singletonEpisodes` and `episodeSeverity` because nothing used a non-default value.
 
 ### Generation and demand observations ([#180](https://github.com/joshmcarthur/gridwatch/issues/180))
 

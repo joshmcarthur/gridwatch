@@ -18,17 +18,11 @@ export interface JoinRule {
 export interface EpisodeGroupingConfig {
   adjacentPeriodMax: number;
   adjacentGapMinutes: number;
-  sameDateOnly: boolean;
-  singletonEpisodes: boolean;
-  episodeSeverity: "max";
 }
 
 export const EPISODE_GROUPING_CONFIG: EpisodeGroupingConfig = {
   adjacentPeriodMax: 2,
   adjacentGapMinutes: 60,
-  sameDateOnly: true,
-  singletonEpisodes: true,
-  episodeSeverity: "max",
 };
 
 /** Typed join rules (ADR-0021). Types with no rows yet are no-ops. */
@@ -307,27 +301,9 @@ const isoMax = (values: string[]): string =>
 const uniqueSorted = (values: string[]): string[] =>
   [...new Set(values)].sort();
 
-const episodeSeverity = (
-  members: GroupingObservation[],
-  config: EpisodeGroupingConfig,
-): number => {
-  switch (config.episodeSeverity) {
-    case "max":
-      return members.reduce(
-        (best, member) => Math.max(best, member.severity),
-        Number.NEGATIVE_INFINITY,
-      );
-    default: {
-      const unreachable: never = config.episodeSeverity;
-      return unreachable;
-    }
-  }
-};
-
 const toEpisode = (
   members: GroupingObservation[],
   ruleIds: string[],
-  config: EpisodeGroupingConfig,
 ): GroupedEpisode => {
   const seed = seedOf(members);
   const periods = distinctPeriods(members);
@@ -364,7 +340,10 @@ const toEpisode = (
     plant_ids: uniqueSorted(
       members.map((m) => m.plant_id).filter((id): id is string => id !== null),
     ),
-    severity: episodeSeverity(members, config),
+    severity: members.reduce(
+      (best, member) => Math.max(best, member.severity),
+      Number.NEGATIVE_INFINITY,
+    ),
     grouping_reason: JSON.stringify({
       rules: rules.length === 0 ? ["singleton"] : rules,
     }),
@@ -380,12 +359,11 @@ export const groupObservations = (
   observations: readonly GroupingObservation[],
   config: EpisodeGroupingConfig = EPISODE_GROUPING_CONFIG,
 ): GroupedEpisode[] => {
-  const ofDate = config.sameDateOnly
-    ? observations.filter((row, _, all) => {
-        const date = all[0]?.trading_date;
-        return date === undefined || row.trading_date === date;
-      })
-    : [...observations];
+  const date = observations[0]?.trading_date;
+  const ofDate =
+    date === undefined
+      ? []
+      : observations.filter((row) => row.trading_date === date);
   if (ofDate.length === 0) return [];
 
   const forest = new UnionFind();
@@ -424,13 +402,7 @@ export const groupObservations = (
   const episodes: GroupedEpisode[] = [];
   for (const [root, members] of buckets) {
     const ruleIds = rulesByRoot.get(root) ?? [];
-    if (
-      !config.singletonEpisodes &&
-      members.length === 1 &&
-      ruleIds.length === 0
-    )
-      continue;
-    episodes.push(toEpisode(members, ruleIds, config));
+    episodes.push(toEpisode(members, ruleIds));
   }
   return episodes.sort((a, b) => byString(a.episode_id, b.episode_id));
 };

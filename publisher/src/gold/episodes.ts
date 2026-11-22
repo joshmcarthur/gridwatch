@@ -29,7 +29,7 @@ import { TABLES as RESERVE_PRICE_ANOMALY_TABLES } from "./reserve-price-anomaly.
 /**
  * Bump by hand when the grouping rules or a config value change (ADR-0011, ADR-0021).
  */
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
 
 export { EPISODE_GROUPING_CONFIG, type EpisodeGroupingConfig };
 
