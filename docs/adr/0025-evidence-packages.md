@@ -60,7 +60,7 @@ Plant absence is never a claim ("no Generation_MD row for Huntly 5" is a gap). H
 
 For the peak period the package stores the highest dispatch publish: node, time (UTC), price, and seconds to the next publish of that node (or to the period end when there is none). It stores how many nodes publish at or above $20,000 and at or above $10,000 in that period. SIR is stored the same way. The count is over the whole period, not at one instant.
 
-`EVIDENCE_CONFIG.namedEnergyNodes` is the extra energy nodes whose highest publish in the peak period is stored too. The list is Hepburn Road (`HEP0331`). On 27 July 2026 that means Wellsford at $22,070.66 and Hepburn Road at $21,000 for 85 seconds ([#197](https://github.com/joshmcarthur/gridwatch/issues/197)).
+Each node in `EVIDENCE_CONFIG.namedEnergyNodes` also gets its highest peak-period energy publish. The list is Hepburn Road (`HEP0331`). On 27 July 2026 the package has Wellsford at $22,070.66 and Hepburn Road at $21,000 for 85 seconds ([#197](https://github.com/joshmcarthur/gridwatch/issues/197)).
 
 ### Check against #21
 
