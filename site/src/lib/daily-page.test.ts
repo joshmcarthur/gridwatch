@@ -12,8 +12,11 @@ import {
   dailyStaticPaths,
   dateFromParams,
   dayHeadline,
+  defaultMixCompareDay,
   type HeadlineSource,
   mapPath,
+  mixCompareDays,
+  mixJsonPath,
   monthGroups,
   neighbouringDays,
   pageLead,
@@ -394,4 +397,41 @@ test("a missing episode list does not invent a stretch", () => {
   expect(
     pageLead(missing, "None of the day's main figures was far from normal."),
   ).toBe("None of the day's main figures was far from normal.");
+});
+
+test("mixJsonPath sits next to the daily page", () => {
+  expect(mixJsonPath("2026-09-26")).toBe("/2026/09/26/mix.json");
+});
+
+test("mixCompareDays skips this day and missing generation", () => {
+  const index = {
+    ...threeDayIndex,
+    days: [
+      ...threeDayIndex.days,
+      {
+        date: "2026-09-28",
+        path: "days/2026-09-28.json",
+        complete: false,
+        sections: {
+          generation: "missing" as const,
+          prices: "missing" as const,
+        },
+        export_sha256: "d",
+      },
+    ],
+  };
+  const days = mixCompareDays(index, "2026-09-27");
+  expect(days.map((day) => day.date)).toEqual(["2026-09-26", "2026-10-01"]);
+});
+
+test("defaultMixCompareDay prefers the previous mix day", () => {
+  expect(defaultMixCompareDay(threeDayIndex, "2026-09-27")?.date).toBe(
+    "2026-09-26",
+  );
+});
+
+test("defaultMixCompareDay falls forward when no earlier mix day exists", () => {
+  expect(defaultMixCompareDay(threeDayIndex, "2026-09-26")?.date).toBe(
+    "2026-09-27",
+  );
 });
