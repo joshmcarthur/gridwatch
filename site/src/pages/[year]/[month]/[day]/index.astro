@@ -14,6 +14,7 @@ import {
   neighbouringDays,
 } from "../../../../lib/daily-page";
 import { episodeClockRange, episodeHeadline } from "../../../../lib/episode-copy";
+import { eventPath, reviewWord } from "../../../../lib/event-page";
 import { dayContext, leadFact } from "../../../../lib/market-conditions";
 import {
   formatTradingDate,
@@ -95,12 +96,35 @@ const months = monthGroups(index);
       )
     }
 
+    {
+      (day.events?.items.length ?? 0) > 0 ? (
+        <section class="slot" aria-labelledby="events-on-this-day">
+          <h2 id="events-on-this-day">Events on this day</h2>
+          <ol class="episodes">
+            {day.events?.items.map((event) => (
+              <li>
+                <p>
+                  <a href={eventPath(date, event.episode_id)}>
+                    {episodeHeadline(event)}
+                  </a>
+                </p>
+                <p>{episodeClockRange(event, day)}</p>
+                <p>{reviewWord(event.review_status)}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null
+    }
+
     <section class="slot" aria-labelledby="detected-episodes">
       <h2 id="detected-episodes">What stood out</h2>
       {lead ? <p>{lead}</p> : null}
       <p>
-        Stretches of the day that looked unusual in the public files. Not a
-        written-up public event yet.
+        Stretches of the day that looked unusual in the public files.
+        {(day.events?.items.length ?? 0) === 0
+          ? " Not a written-up public event yet."
+          : ""}
       </p>
       {
         day.episodes === undefined || day.episodes.state === "missing" ? (

@@ -48,6 +48,6 @@ test.skipIf(!existsSync(builtPage))(
     expect(new Set(ids).size).toBe(ids.length);
     expect(html).toMatch(/backup generation/);
     expect(html).toMatch(/Recently detected/);
-    expect(html).not.toMatch(/recent events/i);
+    expect(html).toMatch(/Recent events/);
   },
 );

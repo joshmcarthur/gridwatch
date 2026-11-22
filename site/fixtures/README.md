@@ -4,6 +4,7 @@ The site builds these files when `DATA_ROOT/gold/site/index.json` is missing. Th
 
 | Day | Why it is here |
 | --- | --- |
+| 2026-07-27 | Hollow day so the #21 event page and daily listing have a URL. Charts on that daily page are not ready. The event carries the evening window. |
 | 2026-09-26 | Ordinary Saturday, 48 periods |
 | 2026-09-27 | DST start, 46 periods |
 | 2026-10-29 | Ordinary Thursday, 48 periods |

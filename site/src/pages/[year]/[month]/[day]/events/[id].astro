@@ -1,0 +1,325 @@
+---
+import type {
+  SiteEvent,
+  SiteEventClaim,
+} from "@gridwatch/publisher/site-contract";
+import ChartFigure from "../../../../../components/ChartFigure.astro";
+import Layout from "../../../../../layouts/Layout.astro";
+import { dateFromParams } from "../../../../../lib/daily-page";
+import { episodeClockRange, episodeHeadline } from "../../../../../lib/episode-copy";
+import {
+  claimDomId,
+  claimLabelForSite,
+  confidenceWord,
+  eventStaticPaths,
+  eventWindowChart,
+  formatClaimValue,
+  groupClaims,
+  reviewWord,
+  sourceTableWords,
+} from "../../../../../lib/event-page";
+import { renderLinePlot } from "../../../../../lib/line-plot";
+import {
+  formatTradingDate,
+  loadSiteDay,
+  loadSiteIndex,
+} from "../../../../../lib/site-data";
+
+export function getStaticPaths() {
+  const index = loadSiteIndex();
+  return eventStaticPaths(index, (date: string) => loadSiteDay(date, index));
+}
+
+const { year, month, day: dayParam, id } = Astro.params;
+if (!year || !month || !dayParam || !id) {
+  throw new Error("Missing event params");
+}
+const date = dateFromParams(year, month, dayParam);
+const index = loadSiteIndex();
+const day = loadSiteDay(date, index);
+const event: SiteEvent | undefined = day.events?.items.find(
+  (item: SiteEvent) => item.episode_id === id,
+);
+if (!event) throw new Error(`No event ${id} on ${date}`);
+const titleDate = formatTradingDate(date);
+const headline = episodeHeadline(event);
+const clockRange = episodeClockRange(event, day);
+const status = reviewWord(event.review_status);
+const groups = groupClaims(event.claims);
+const chart = eventWindowChart(event, day);
+const plots = [
+  renderLinePlot(chart.pricePlot, chart.axis, chart.priceSummary),
+  ...(chart.reservePlot
+    ? [renderLinePlot(chart.reservePlot, chart.axis, chart.reserveSummary)]
+    : []),
+];
+const dayHref =
+  day.prices.state !== "missing"
+    ? `${event.daily_page}#wholesale-prices`
+    : event.daily_page;
+---
+
+<Layout
+  title={`${titleDate} event`}
+  description={`${status} event on ${titleDate}: ${headline}`}
+>
+  <p class="home">
+    <a href="/">Gridwatch NZ home</a>
+    {" · "}
+    <a href={event.daily_page}>{titleDate}</a>
+  </p>
+
+  <article class="prose">
+    <header class="lede">
+      <p class="status">{status}</p>
+      <h1>{headline}</h1>
+      <p>{clockRange} on {titleDate}.</p>
+      <p>These figures come from the public files for this stretch.</p>
+    </header>
+
+    <section class="slot" aria-labelledby="confidence-heading">
+      <h2 id="confidence-heading">How sure these figures are</h2>
+      <dl class="confidence">
+        <div>
+          <dt>Confirmed</dt>
+          <dd>
+            The figure is in the public market files, or in a published notice.
+          </dd>
+        </div>
+        <div>
+          <dt>Strong evidence</dt>
+          <dd>Several observations point the same way.</dd>
+        </div>
+        <div>
+          <dt>Possible explanation</dt>
+          <dd>
+            The reading fits the files but is not independently established.
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="slot" aria-labelledby="claims-heading">
+      <h2 id="claims-heading">What the files show</h2>
+      {
+        groups.map((group: (typeof groups)[number]) => (
+          <section aria-labelledby={`claims-${group.id}`}>
+            <h3 id={`claims-${group.id}`}>{group.heading}</h3>
+            <ol class="claims">
+              {group.claims.map((claim: SiteEventClaim) => (
+                <li id={claimDomId(claim.id)}>
+                  <p>{claimLabelForSite(claim.label)}</p>
+                  <p>{formatClaimValue(claim.value, claim.unit)}</p>
+                  <p>{confidenceWord(claim.confidence)}</p>
+                  <p>From {sourceTableWords(claim.source_table)}.</p>
+                  {claim.note ? <p>{claim.note}</p> : null}
+                  <details>
+                    <summary>Where this number lives</summary>
+                    <p>{claim.source_path}</p>
+                  </details>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))
+      }
+    </section>
+
+    <section class="slot" aria-labelledby="window-heading">
+      <h2 id="window-heading">Prices in these hours</h2>
+      <ChartFigure
+        plots={plots}
+        tableCaptionId="event-window-table-caption"
+        tableCaption={chart.caption}
+        headers={chart.headers}
+        rows={chart.rows}
+        legendLabel="Lines in the event charts"
+      >
+        <Fragment slot="legend">
+          <li class="swatch">
+            <span class="line-key north solid" aria-hidden="true" />
+            Ōtāhuhu
+          </li>
+          <li class="swatch">
+            <span class="line-key north dashed" aria-hidden="true" />
+            Haywards
+          </li>
+          <li class="swatch">
+            <span class="line-key south solid" aria-hidden="true" />
+            Benmore
+          </li>
+          {
+            chart.reservePlot ? (
+              <li class="swatch">
+                <span class="line-key north solid" aria-hidden="true" />
+                North Island 60-second reserve
+              </li>
+            ) : null
+          }
+        </Fragment>
+        <Fragment slot="caption">
+          <p>{chart.caption}</p>
+          {
+            chart.reservePlot ? (
+              <p>
+                The second chart is North Island 60-second reserve in the same
+                hours.
+              </p>
+            ) : null
+          }
+        </Fragment>
+      </ChartFigure>
+    </section>
+
+    <section class="slot" aria-labelledby="limits-heading">
+      <h2 id="limits-heading">What these files cannot show</h2>
+      {
+        event.limits.length === 0 ? (
+          <p>The files add no extra caveats for this stretch.</p>
+        ) : (
+          <ul>
+            {event.limits.map((limit) => (
+              <li>{limit.text}</li>
+            ))}
+          </ul>
+        )
+      }
+    </section>
+
+    <p>
+      This stretch sits on the{" "}
+      <a href={dayHref}>{titleDate} page</a>.
+    </p>
+
+    <details class="words" id="words">
+      <summary>Words on this page</summary>
+      <dl>
+        <div id="word-unreviewed">
+          <dt>Unreviewed</dt>
+          <dd>
+            Ranking picked this stretch as a public event. Nobody has marked it
+            reviewed yet.
+          </dd>
+        </div>
+        <div id="word-confirmed">
+          <dt>Confirmed</dt>
+          <dd>
+            The figure is in the public market files, or in a published notice.
+          </dd>
+        </div>
+        <div id="word-strong-evidence">
+          <dt>Strong evidence</dt>
+          <dd>Several observations point the same way.</dd>
+        </div>
+        <div id="word-possible-explanation">
+          <dt>Possible explanation</dt>
+          <dd>
+            The reading fits the files but is not independently established.
+          </dd>
+        </div>
+        <div id="word-wholesale-price">
+          <dt>Wholesale price</dt>
+          <dd>
+            What generators and retailers paid each other, not the rate on a
+            household bill. More on{" "}
+            <a href="/about/#wholesale">About</a>.
+          </dd>
+        </div>
+        <div id="word-places">
+          <dt>The three places</dt>
+          <dd>
+            Ōtāhuhu (Auckland), Haywards (near Wellington) and Benmore (in the
+            South Island) are the three places this page reports prices for.
+          </dd>
+        </div>
+      </dl>
+    </details>
+  </article>
+</Layout>
+
+<style>
+  .home {
+    margin: 0 0 var(--space-5);
+    font-size: var(--text-label);
+  }
+
+  .lede,
+  .slot,
+  .words {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .slot,
+  .words {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    padding: var(--space-5);
+  }
+
+  .status {
+    margin: 0;
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  .confidence,
+  .words dl {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .confidence dt,
+  .words dt {
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  .confidence dd,
+  .words dd {
+    margin: 0.25rem 0 0;
+  }
+
+  .claims {
+    margin: 0;
+    padding-left: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .claims p {
+    margin: 0;
+  }
+
+  .swatch {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .line-key {
+    width: 1.5rem;
+    flex: none;
+    border-top-width: 3px;
+  }
+
+  .north {
+    border-top-color: var(--color-island-north);
+  }
+
+  .south {
+    border-top-color: var(--color-island-south);
+  }
+
+  .solid {
+    border-top-style: solid;
+  }
+
+  .dashed {
+    border-top-style: dashed;
+  }
+</style>

@@ -1,0 +1,434 @@
+{
+  "contract_version": 1,
+  "trading_date": "2026-07-27",
+  "periods": [
+    {
+      "period": 1,
+      "start_utc": "2026-07-26T12:00:00Z"
+    },
+    {
+      "period": 2,
+      "start_utc": "2026-07-26T12:30:00Z"
+    },
+    {
+      "period": 3,
+      "start_utc": "2026-07-26T13:00:00Z"
+    },
+    {
+      "period": 4,
+      "start_utc": "2026-07-26T13:30:00Z"
+    },
+    {
+      "period": 5,
+      "start_utc": "2026-07-26T14:00:00Z"
+    },
+    {
+      "period": 6,
+      "start_utc": "2026-07-26T14:30:00Z"
+    },
+    {
+      "period": 7,
+      "start_utc": "2026-07-26T15:00:00Z"
+    },
+    {
+      "period": 8,
+      "start_utc": "2026-07-26T15:30:00Z"
+    },
+    {
+      "period": 9,
+      "start_utc": "2026-07-26T16:00:00Z"
+    },
+    {
+      "period": 10,
+      "start_utc": "2026-07-26T16:30:00Z"
+    },
+    {
+      "period": 11,
+      "start_utc": "2026-07-26T17:00:00Z"
+    },
+    {
+      "period": 12,
+      "start_utc": "2026-07-26T17:30:00Z"
+    },
+    {
+      "period": 13,
+      "start_utc": "2026-07-26T18:00:00Z"
+    },
+    {
+      "period": 14,
+      "start_utc": "2026-07-26T18:30:00Z"
+    },
+    {
+      "period": 15,
+      "start_utc": "2026-07-26T19:00:00Z"
+    },
+    {
+      "period": 16,
+      "start_utc": "2026-07-26T19:30:00Z"
+    },
+    {
+      "period": 17,
+      "start_utc": "2026-07-26T20:00:00Z"
+    },
+    {
+      "period": 18,
+      "start_utc": "2026-07-26T20:30:00Z"
+    },
+    {
+      "period": 19,
+      "start_utc": "2026-07-26T21:00:00Z"
+    },
+    {
+      "period": 20,
+      "start_utc": "2026-07-26T21:30:00Z"
+    },
+    {
+      "period": 21,
+      "start_utc": "2026-07-26T22:00:00Z"
+    },
+    {
+      "period": 22,
+      "start_utc": "2026-07-26T22:30:00Z"
+    },
+    {
+      "period": 23,
+      "start_utc": "2026-07-26T23:00:00Z"
+    },
+    {
+      "period": 24,
+      "start_utc": "2026-07-26T23:30:00Z"
+    },
+    {
+      "period": 25,
+      "start_utc": "2026-07-27T00:00:00Z"
+    },
+    {
+      "period": 26,
+      "start_utc": "2026-07-27T00:30:00Z"
+    },
+    {
+      "period": 27,
+      "start_utc": "2026-07-27T01:00:00Z"
+    },
+    {
+      "period": 28,
+      "start_utc": "2026-07-27T01:30:00Z"
+    },
+    {
+      "period": 29,
+      "start_utc": "2026-07-27T02:00:00Z"
+    },
+    {
+      "period": 30,
+      "start_utc": "2026-07-27T02:30:00Z"
+    },
+    {
+      "period": 31,
+      "start_utc": "2026-07-27T03:00:00Z"
+    },
+    {
+      "period": 32,
+      "start_utc": "2026-07-27T03:30:00Z"
+    },
+    {
+      "period": 33,
+      "start_utc": "2026-07-27T04:00:00Z"
+    },
+    {
+      "period": 34,
+      "start_utc": "2026-07-27T04:30:00Z"
+    },
+    {
+      "period": 35,
+      "start_utc": "2026-07-27T05:00:00Z"
+    },
+    {
+      "period": 36,
+      "start_utc": "2026-07-27T05:30:00Z"
+    },
+    {
+      "period": 37,
+      "start_utc": "2026-07-27T06:00:00Z"
+    },
+    {
+      "period": 38,
+      "start_utc": "2026-07-27T06:30:00Z"
+    },
+    {
+      "period": 39,
+      "start_utc": "2026-07-27T07:00:00Z"
+    },
+    {
+      "period": 40,
+      "start_utc": "2026-07-27T07:30:00Z"
+    },
+    {
+      "period": 41,
+      "start_utc": "2026-07-27T08:00:00Z"
+    },
+    {
+      "period": 42,
+      "start_utc": "2026-07-27T08:30:00Z"
+    },
+    {
+      "period": 43,
+      "start_utc": "2026-07-27T09:00:00Z"
+    },
+    {
+      "period": 44,
+      "start_utc": "2026-07-27T09:30:00Z"
+    },
+    {
+      "period": 45,
+      "start_utc": "2026-07-27T10:00:00Z"
+    },
+    {
+      "period": 46,
+      "start_utc": "2026-07-27T10:30:00Z"
+    },
+    {
+      "period": 47,
+      "start_utc": "2026-07-27T11:00:00Z"
+    },
+    {
+      "period": 48,
+      "start_utc": "2026-07-27T11:30:00Z"
+    }
+  ],
+  "complete": false,
+  "datasets": {},
+  "generation": {
+    "state": "missing",
+    "missing_periods": [],
+    "analysis_version": null,
+    "inputs_sha256": null,
+    "silver_tables": [],
+    "gold_tables": [],
+    "datasets": [],
+    "series": [],
+    "daily": [],
+    "totals": null
+  },
+  "prices": {
+    "state": "missing",
+    "missing_periods": [],
+    "analysis_version": null,
+    "inputs_sha256": null,
+    "silver_tables": [],
+    "gold_tables": [],
+    "datasets": [],
+    "nodes": [],
+    "spreads": [],
+    "distribution": {
+      "poc_count": [],
+      "min": [],
+      "p05": [],
+      "p25": [],
+      "median": [],
+      "p75": [],
+      "p95": [],
+      "max": []
+    }
+  },
+  "reserves": {
+    "state": "missing",
+    "missing_periods": [],
+    "analysis_version": null,
+    "inputs_sha256": null,
+    "silver_tables": [],
+    "gold_tables": [],
+    "datasets": [],
+    "classes": []
+  },
+  "sankey": {
+    "state": "missing",
+    "missing_periods": [],
+    "analysis_version": null,
+    "inputs_sha256": null,
+    "silver_tables": [],
+    "gold_tables": [],
+    "datasets": [],
+    "islands": [],
+    "link_losses_megawatt_hours": null,
+    "inputs_complete": null
+  },
+  "episodes": {
+    "state": "missing",
+    "missing_periods": [],
+    "analysis_version": null,
+    "inputs_sha256": null,
+    "silver_tables": [],
+    "gold_tables": [],
+    "datasets": [],
+    "items": []
+  },
+  "nodal_map": {
+    "state": "missing",
+    "missing_periods": [],
+    "analysis_version": null,
+    "inputs_sha256": null,
+    "silver_tables": [],
+    "gold_tables": [],
+    "datasets": [],
+    "pocs": [],
+    "unlocated": []
+  },
+  "events": {
+    "state": "complete",
+    "missing_periods": [],
+    "analysis_version": 3,
+    "inputs_sha256": "fixture",
+    "silver_tables": [],
+    "gold_tables": [
+      "episode_ranking_days",
+      "episode_scores"
+    ],
+    "datasets": [],
+    "items": [
+      {
+        "episode_id": "394f75a3bfa948a3",
+        "review_status": "unreviewed",
+        "observation_types": [
+          "price_high",
+          "reserve_price_high"
+        ],
+        "islands": [
+          "NI"
+        ],
+        "member_count": 2,
+        "severity": 12,
+        "start_utc": "2026-07-27T05:30:00Z",
+        "end_utc": "2026-07-27T07:00:00Z",
+        "start_trading_period": 36,
+        "end_trading_period": 38,
+        "claims": [
+          {
+            "id": "price.OTA2201.p36",
+            "label": "Period price at OTA2201, period 36 (time-weighted mean of dispatch publishes)",
+            "value": 3296.04,
+            "unit": "$/MWh",
+            "confidence": "confirmed",
+            "source_kind": "gold",
+            "source_table": "price_periods",
+            "source_path": "gold/price_periods/trading_date=2026-07-27/data.parquet"
+          },
+          {
+            "id": "price.HAY2201.p36",
+            "label": "Period price at HAY2201, period 36 (time-weighted mean of dispatch publishes)",
+            "value": 2853.43,
+            "unit": "$/MWh",
+            "confidence": "confirmed",
+            "source_kind": "gold",
+            "source_table": "price_periods",
+            "source_path": "gold/price_periods/trading_date=2026-07-27/data.parquet"
+          },
+          {
+            "id": "price.BEN2201.p36",
+            "label": "Period price at BEN2201, period 36 (time-weighted mean of dispatch publishes)",
+            "value": 571.46,
+            "unit": "$/MWh",
+            "confidence": "confirmed",
+            "source_kind": "gold",
+            "source_table": "price_periods",
+            "source_path": "gold/price_periods/trading_date=2026-07-27/data.parquet"
+          },
+          {
+            "id": "spread.OTA2201-BEN2201.p36",
+            "label": "Price spread OTA2201 minus BEN2201, period 36",
+            "value": 2724.58,
+            "unit": "$/MWh",
+            "confidence": "confirmed",
+            "source_kind": "gold",
+            "source_table": "price_spreads",
+            "source_path": "gold/price_spreads/trading_date=2026-07-27/data.parquet"
+          },
+          {
+            "id": "reserve.SIR.NI.p36",
+            "label": "SIR reserve price, NI, period 36",
+            "value": 2154.45,
+            "unit": "$/MWh",
+            "confidence": "confirmed",
+            "source_kind": "gold",
+            "source_table": "reserve_by_class_island_period",
+            "source_path": "gold/reserve_by_class_island_period/trading_date=2026-07-27/data.parquet"
+          }
+        ],
+        "window": {
+          "periods": [
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38
+          ],
+          "start_utc": [
+            "2026-07-27T03:30:00Z",
+            "2026-07-27T04:00:00Z",
+            "2026-07-27T04:30:00Z",
+            "2026-07-27T05:00:00Z",
+            "2026-07-27T05:30:00Z",
+            "2026-07-27T06:00:00Z",
+            "2026-07-27T06:30:00Z"
+          ],
+          "prices": [
+            {
+              "point_of_connection": "OTA2201",
+              "price": [
+                150,
+                150,
+                156.25,
+                141.04,
+                3296.04,
+                1311.29,
+                1038.33
+              ]
+            },
+            {
+              "point_of_connection": "HAY2201",
+              "price": [
+                130,
+                130,
+                130.14,
+                119.64,
+                2853.43,
+                1133.28,
+                892.53
+              ]
+            },
+            {
+              "point_of_connection": "BEN2201",
+              "price": [
+                40,
+                40,
+                22.36,
+                54.09,
+                571.46,
+                258.1,
+                83.41
+              ]
+            }
+          ],
+          "reserves": [
+            {
+              "reserve_class": "SIR",
+              "island": "NI",
+              "price": [
+                null,
+                null,
+                null,
+                49.78,
+                2154.45,
+                835.13,
+                787.79
+              ]
+            }
+          ]
+        },
+        "limits": [],
+        "daily_page": "/2026/07/27/"
+      }
+    ]
+  }
+}

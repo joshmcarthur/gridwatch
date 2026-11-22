@@ -143,6 +143,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Episode score.** A number from 0 to 1 for one episode. It adds four stored components: severity, duration, breadth and rarity. Rarity is how seldom a day with the same observation types and islands occurred in the last 90 days. See [ADR-0024](adr/0024-episode-ranking.md).
 
+**Event.** An episode the site explains publicly. Ranking marks it with `is_candidate`. The site shows it as Unreviewed until a later mark-as-reviewed flow. See [ADR-0022](adr/0022-editorial-review-and-publish-flow.md) and [ADR-0024](adr/0024-episode-ranking.md).
+
 **`event_start_utc` and `event_end_utc`.** The UTC start (included) and end (excluded) of a trading period or dispatch interval. They are unambiguous across the daylight saving change. See [ADR-0003](adr/0003-time-column-naming.md).
 
 **Evidence package.** One JSON file for one episode ([ADR-0021](adr/0021-episodes.md)): the episode, its observations, series of prices, reserves, generation, HVDC and load around it, reference data, the completeness of every input, a list of claims and links to the data. The builder writes no prose. It writes `<gold>/evidence/<date>/<episode_id>.json` on demand. See [ADR-0025](adr/0025-evidence-packages.md).

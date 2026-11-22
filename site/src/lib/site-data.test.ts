@@ -8,6 +8,7 @@ import {
   loadSiteDayIfPresent,
   loadSiteIndex,
   recentEpisodes,
+  recentEvents,
 } from "./site-data.ts";
 
 const validIndex = {
@@ -59,6 +60,7 @@ test("loadSiteIndex uses the fixture when gold is absent", () => {
   process.env.DATA_ROOT = dataRoot;
   const index = loadSiteIndex();
   expect(index.days.map((day) => day.date)).toEqual([
+    "2026-07-27",
     "2026-09-26",
     "2026-09-27",
     "2026-10-29",
@@ -99,13 +101,12 @@ test("loadSiteDay throws when the date is not in the index", () => {
 
 test("loadSiteDayIfPresent returns null for a date that is not in the index", () => {
   process.env.DATA_ROOT = dataRoot;
-  expect(loadSiteDayIfPresent("2026-07-27")).toBeNull();
   expect(loadSiteDayIfPresent("1999-01-01")).toBeNull();
 });
 
-test("loadSiteDayIfPresent does not fall back from 2026-07-27 to the fixture day", () => {
+test("loadSiteDayIfPresent loads the hollow 27 July fixture when gold is absent", () => {
   process.env.DATA_ROOT = dataRoot;
-  expect(loadSiteDayIfPresent("2026-07-27")).toBeNull();
+  expect(loadSiteDayIfPresent("2026-07-27")?.trading_date).toBe("2026-07-27");
   expect(loadSiteDayIfPresent("2026-09-27")?.trading_date).toBe("2026-09-27");
 });
 
@@ -198,6 +199,65 @@ test("recentEpisodes walks newest days first and stops at the limit", () => {
     1,
   );
   expect(found).toEqual([{ date: "2026-09-26", episode: newer }]);
+});
+
+test("recentEvents walks newest days first and stops at the limit", () => {
+  const older = {
+    episode_id: "old",
+    review_status: "unreviewed" as const,
+    observation_types: ["price_high"],
+    islands: ["NI" as const],
+    member_count: 1,
+    severity: 9,
+    start_utc: "2026-07-27T05:30:00Z",
+    end_utc: "2026-07-27T07:00:00Z",
+    start_trading_period: 36,
+    end_trading_period: 38,
+    claims: [],
+    window: { periods: [], start_utc: [], prices: [], reserves: [] },
+    limits: [],
+    daily_page: "/2026/07/27/",
+  };
+  const newer = { ...older, episode_id: "new" };
+  const found = recentEvents(
+    {
+      contract_version: 1,
+      days: [
+        {
+          date: "2026-07-27",
+          path: "days/2026-07-27.json",
+          complete: false,
+          sections: { generation: "missing", prices: "missing" },
+          export_sha256: "a",
+        },
+        {
+          date: "2026-09-26",
+          path: "days/2026-09-26.json",
+          complete: true,
+          sections: { generation: "complete", prices: "complete" },
+          export_sha256: "a",
+        },
+      ],
+      latest_complete: { generation_md: "2026-09-26" },
+      latest_complete_sections: { generation: "2026-09-26", prices: null },
+    },
+    (date) =>
+      ({
+        contract_version: 1,
+        trading_date: date,
+        periods: [],
+        complete: date !== "2026-07-27",
+        datasets: {},
+        generation: { state: "complete" },
+        prices: { state: "complete" },
+        events: {
+          state: "complete",
+          items: date === "2026-09-26" ? [newer] : [older],
+        },
+      }) as never,
+    1,
+  );
+  expect(found).toEqual([{ date: "2026-09-26", event: newer }]);
 });
 
 test("loadSiteIndex does not load gold from a cwd-relative data path", async () => {

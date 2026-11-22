@@ -50,4 +50,4 @@ The daily page for [Monday 27 July 2026](/2026/07/27/) has that day's generation
 
 The daily page for this example is [Monday 27 July 2026](/2026/07/27/). It holds the generation mix, wholesale prices, and energy flow for that trading day.
 
-A written-up event page for this evening is not on this site yet. When one is published, it will be linked here.
+The evening has an Unreviewed event page: [Monday 27 July 2026](/2026/07/27/events/394f75a3bfa948a3/).
