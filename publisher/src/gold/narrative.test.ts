@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { expect, test } from "vitest";
 import {
+  checkNarrative,
   DEFAULT_MODEL,
   generateNarrative,
   NARRATIVE_SCHEMA_VERSION,
@@ -110,4 +111,59 @@ test("generateNarrative fails when the model omits a section", async () => {
       packageId,
     }),
   ).rejects.toThrow(/why|what_it_means/);
+});
+
+test("checkNarrative rejects an invented number", () => {
+  const result = checkNarrative(
+    {
+      what_happened: "Otahuhu hit $9,999/MWh.",
+      why: "Possible explanation: a constraint.",
+      what_it_means: "North Island scarcity.",
+    },
+    pkg,
+  );
+  expect(result.ok).toBe(false);
+  expect(result.mismatches).toEqual([{ kind: "number", text: "$9,999" }]);
+});
+
+test("checkNarrative rejects a wrong date", () => {
+  const result = checkNarrative(
+    {
+      what_happened: "On 28 July 2026 prices rose.",
+      why: "Possible explanation: a constraint.",
+      what_it_means: "North Island scarcity.",
+    },
+    pkg,
+  );
+  expect(result.ok).toBe(false);
+  expect(result.mismatches).toEqual([{ kind: "date", text: "28 July 2026" }]);
+});
+
+test("checkNarrative rejects an unknown link", () => {
+  const result = checkNarrative(
+    {
+      what_happened: "See https://example.invalid/nope",
+      why: "Possible explanation: a constraint.",
+      what_it_means: "North Island scarcity.",
+    },
+    pkg,
+  );
+  expect(result.ok).toBe(false);
+  expect(result.mismatches).toEqual([
+    { kind: "link", text: "https://example.invalid/nope" },
+  ]);
+});
+
+test("checkNarrative accepts a 27 July fixture that only uses package facts", () => {
+  const result = checkNarrative(
+    {
+      what_happened:
+        "On 27 July 2026, Otahuhu period 36 reached $3,296.04/MWh. See /2026/07/27/.",
+      why: "Possible explanation: a constraint. Confirmed: the price.",
+      what_it_means: "North Island scarcity.",
+    },
+    pkg,
+  );
+  expect(result.ok).toBe(true);
+  expect(result.mismatches).toEqual([]);
 });

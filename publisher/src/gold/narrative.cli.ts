@@ -6,6 +6,7 @@ import { chat } from "@tanstack/ai";
 import { createOpenRouterText } from "@tanstack/ai-openrouter";
 import { dataPaths } from "../data-root.ts";
 import {
+  checkNarrative,
   DEFAULT_MODEL,
   generateNarrative,
   type PromptPackage,
@@ -64,6 +65,14 @@ const record = await generateNarrative(pkg, {
   now: new Date(),
   packageId: createHash("sha256").update(bytes).digest("hex"),
 });
+const check = checkNarrative(record, pkg);
+if (!check.ok) {
+  console.error("narrative check failed:");
+  for (const mismatch of check.mismatches) {
+    console.error(`  ${mismatch.kind}: ${mismatch.text}`);
+  }
+  process.exit(1);
+}
 const path = join(
   gold,
   "narratives",
