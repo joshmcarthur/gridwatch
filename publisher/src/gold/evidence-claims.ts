@@ -1,4 +1,4 @@
-import { ISLANDS } from "./common.ts";
+import { ISLANDS, listSql } from "./common.ts";
 import type {
   Claim,
   ClaimValue,
@@ -705,12 +705,6 @@ export async function dayClaims(c: ClaimContext): Promise<void> {
   }
 }
 
-/** `['a', 'b']::VARCHAR[]` for a DuckDB `list_contains`. */
-export const listSql = (values: readonly string[]) =>
-  values.length === 0
-    ? "[]::VARCHAR[]"
-    : `[${values.map((value) => `'${value.replaceAll("'", "''")}'`).join(", ")}]::VARCHAR[]`;
-
 /** The highest dispatch publish of the peak period, with counts of nodes at or above set prices. */
 async function publishPeak(
   c: ClaimContext,
@@ -756,6 +750,8 @@ async function publishPeak(
  * Dispatch publishes of the peak period (silver). One rule: store the highest publish (node,
  * time, price, seconds to the next publish of that node, or to the period end when it has none)
  * and the count of nodes that reach each scarcity price in that period. Energy and SIR.
+ * HEP0331 at $21,000 for 85 seconds in the #21 write-up is a named gap: 39 nodes reach $20,000
+ * in that period, and picking Hepburn Road would be a write-up special case (#185).
  */
 export async function dispatchClaims(
   c: ClaimContext,

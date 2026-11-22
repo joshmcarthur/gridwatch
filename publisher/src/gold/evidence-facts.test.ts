@@ -28,6 +28,8 @@ interface Fact {
   series?: string;
   period?: number | null;
   gap_reason?: string;
+  observation_type?: string;
+  subject_id?: string;
 }
 
 const facts = (
@@ -76,6 +78,42 @@ const walk = (root: unknown, path: string): unknown =>
       root,
     );
 
+const observationValue = (pkg: EvidencePackage, fact: Fact): unknown => {
+  if (fact.observation_type === undefined || fact.subject_id === undefined)
+    return undefined;
+  const observation = pkg.observations.find(
+    (item) =>
+      item.observation_type === fact.observation_type &&
+      item.subject_id === fact.subject_id,
+  );
+  if (observation === undefined) return undefined;
+  const field = fact.series ?? "measured_value";
+  switch (field) {
+    case "measured_value":
+      return observation.measured_value;
+    case "start_trading_period":
+      return observation.start_trading_period;
+    case "end_trading_period":
+      return observation.end_trading_period;
+    default:
+      return undefined;
+  }
+};
+
+const seriesValue = (pkg: EvidencePackage, fact: Fact): unknown => {
+  const holder = walk(
+    fact.series?.startsWith("observations") ? pkg : pkg.context,
+    fact.series ?? "",
+  );
+  return Array.isArray(holder)
+    ? holder[
+        fact.period === null || fact.period === undefined
+          ? 0
+          : pkg.window.periods.indexOf(fact.period)
+      ]
+    : holder;
+};
+
 // Catches: a fact of the write-up that the package neither holds nor names as a gap.
 test("every fact of the #21 write-up is a claim, a series value or a named gap", () => {
   expect(new Set(facts.map((fact) => fact.fact_id)).size).toBe(facts.length);
@@ -93,17 +131,7 @@ test("every fact of the #21 write-up is a claim, a series value or a named gap",
       else if (!matches(fact, claim.value))
         problems.push(`${fact.fact_id}: ${claim.value} is not ${fact.value}`);
     } else if (fact.status === "series") {
-      const holder = walk(
-        fact.series?.startsWith("observations") ? pkg : pkg.context,
-        fact.series ?? "",
-      );
-      const actual = Array.isArray(holder)
-        ? holder[
-            fact.period === null || fact.period === undefined
-              ? 0
-              : pkg.window.periods.indexOf(fact.period)
-          ]
-        : holder;
+      const actual = observationValue(pkg, fact) ?? seriesValue(pkg, fact);
       if (!matches(fact, actual))
         problems.push(
           `${fact.fact_id}: series ${fact.series} gives ${actual}, not ${fact.value}`,

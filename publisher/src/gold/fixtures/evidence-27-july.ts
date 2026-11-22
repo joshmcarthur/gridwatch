@@ -15,6 +15,8 @@ import { writeParquet } from "./parquet.ts";
 
 export const DAY = "2026-07-27";
 export const OBSERVATION_ID = "obs-reserve-sir-ni-0727";
+/** Sorts before `OBSERVATION_ID`, so the SIR observation is not at index 0. */
+export const PRICE_OBSERVATION_ID = "obs-price-high-ota-0727";
 export const EPISODE_ID = episodeIdOf(OBSERVATION_ID);
 
 const STAMP_COLUMNS = {
@@ -249,6 +251,14 @@ const PLANTS: Array<{
     fallback: 0,
     mw: { 35: 0, 36: 7.8, 37: 35.4 },
   },
+  {
+    id: "SFD/tcc",
+    name: "taranaki_cc",
+    fuel: "gas",
+    island: "NI",
+    fallback: 5,
+    mw: { 36: 8.2 },
+  },
 ];
 
 const HVDC_MW: ByPeriod = { 34: 1098, 36: 966.4 };
@@ -274,21 +284,24 @@ const DAY_FUEL_MWH: Array<[string, string, number]> = [
 export interface EvidenceLakeOptions {
   goldDir: string;
   date?: string;
-  /** Episode periods. The default is the #21 episode, SIR|NI periods 35 to 40. */
+  /** Episode periods. The default is a grouped episode, periods 35 to 41. */
   episode?: { start: number; end: number };
   /** Gold tables to leave out. */
   omit?: readonly string[];
   /** Gold tables to write with `inputs_complete = false`. */
   incomplete?: readonly string[];
+  /** Gold tables to write with zero rows. The partition is present. */
+  empty?: readonly string[];
   /** Write no episodes row, so the episode partition is empty. */
   noEpisode?: boolean;
 }
 
 /** Write the gold side of the lake. */
 export async function writeEvidenceGold(options: EvidenceLakeOptions) {
-  const { goldDir, date = DAY, episode = { start: 35, end: 40 } } = options;
+  const { goldDir, date = DAY, episode = { start: 35, end: 41 } } = options;
   const omit = new Set(options.omit ?? []);
   const incomplete = new Set(options.incomplete ?? []);
+  const empty = new Set(options.empty ?? []);
   const count = periodsInTradingDate(date);
   const all = Array.from({ length: count }, (_, i) => i + 1);
   const span = (period: number) => {
@@ -304,10 +317,11 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
     rows: object[],
   ) => {
     if (omit.has(table)) return;
+    const body = empty.has(table) ? [] : rows;
     await writeParquet(
       goldPartitionPath(goldDir, table, date),
       { ...columns, ...STAMP_COLUMNS },
-      rows.map((row) => ({ ...row, ...stamp(!incomplete.has(table)) })),
+      body.map((row) => ({ ...row, ...stamp(!incomplete.has(table)) })),
     );
   };
   const TS = "TIMESTAMPTZ";
@@ -325,9 +339,14 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
   const pick = (series: ByPeriod, period: number, fallback: number) =>
     series[period] ?? fallback;
 
-  // Episode and its one observation.
+  // Episode spanning the SIR run (35-40) and a price run that extends it to 41. The price
+  // observation id sorts first, so the SIR observation is not at index 0.
+  const sirEnd = Math.min(episode.end, episode.start + 5);
+  const priceStart = Math.min(episode.end, episode.start + 1);
   const start = periodToUtc(date, episode.start).eventStartUtc.toString();
   const end = periodToUtc(date, episode.end).eventEndUtc.toString();
+  const sirEndUtc = periodToUtc(date, sirEnd).eventEndUtc.toString();
+  const priceStartUtc = periodToUtc(date, priceStart).eventStartUtc.toString();
   await write(
     "episodes",
     {
@@ -360,9 +379,9 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
             period_count: episode.end - episode.start + 1,
             event_start_utc: start,
             event_end_utc: end,
-            member_observation_ids: [OBSERVATION_ID],
-            member_count: 1,
-            observation_types: ["reserve_price_high"],
+            member_observation_ids: [OBSERVATION_ID, PRICE_OBSERVATION_ID],
+            member_count: 2,
+            observation_types: ["price_high", "reserve_price_high"],
             subjects: "SIR|NI",
             islands: ["NI"],
             plant_ids: [],
@@ -392,9 +411,9 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
       observation_type: "reserve_price_high",
       trading_date: date,
       start_trading_period: episode.start,
-      end_trading_period: episode.end,
+      end_trading_period: sirEnd,
       event_start_utc: start,
-      event_end_utc: end,
+      event_end_utc: sirEndUtc,
       subject_type: "reserve_class",
       subject_id: "SIR|NI",
       island: "NI",
@@ -403,7 +422,23 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
       severity: 170.5,
     },
   ]);
-  await write(PRICE_ANOMALY_TABLES[1], observationColumns, []);
+  await write(PRICE_ANOMALY_TABLES[1], observationColumns, [
+    {
+      observation_id: PRICE_OBSERVATION_ID,
+      observation_type: "price_high",
+      trading_date: date,
+      start_trading_period: priceStart,
+      end_trading_period: episode.end,
+      event_start_utc: priceStartUtc,
+      event_end_utc: end,
+      subject_type: "point_of_connection",
+      subject_id: "OTA2201",
+      island: "NI",
+      plant_id: null,
+      measured_value: 3296.04,
+      severity: 29.2,
+    },
+  ]);
   await write(PRICE_SEPARATION_TABLES[1], observationColumns, []);
 
   // Corroborating observations (#180). Two match the episode. Four do not: the other island,
@@ -465,7 +500,7 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
       "island",
       "NI",
       "NI",
-      [41, 44],
+      [42, 44],
     ),
     related("obs-demand-nz", "demand_high", "island", "NZ", null, [35, 40]),
   ]);

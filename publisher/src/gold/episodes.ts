@@ -2,12 +2,14 @@ import { existsSync } from "node:fs";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { lit, type PublishResult } from "../silver/common.ts";
 import {
+  asIso,
   type GoldInput,
   type GoldPublishOptions,
   goldDataset,
   goldPartitionPath,
   goldStamp,
   inputFingerprint,
+  listSql,
   writeGoldTables,
 } from "./common.ts";
 import { TABLES as DEMAND_DEVIATION_TABLES } from "./demand-deviation.ts";
@@ -87,16 +89,6 @@ const asSubjectType = (value: string): SubjectType => {
   throw new TypeError(`unknown subject_type ${value}`);
 };
 
-const asIso = (value: unknown): string => {
-  if (value instanceof Date) return value.toISOString().replace(/\.000Z$/, "Z");
-  if (typeof value === "string") {
-    const ms = Date.parse(value);
-    if (Number.isNaN(ms)) throw new TypeError(`not an instant: ${value}`);
-    return new Date(ms).toISOString().replace(/\.000Z$/, "Z");
-  }
-  throw new TypeError("event time is not a string or Date");
-};
-
 interface ObservationRow {
   observation_id: string;
   observation_type: string;
@@ -134,11 +126,6 @@ const toGrouping = (
   inputs_complete: Boolean(row.inputs_complete),
 });
 
-const varcharArraySql = (values: readonly string[]): string =>
-  values.length === 0
-    ? "[]::VARCHAR[]"
-    : `[${values.map(lit).join(", ")}]::VARCHAR[]`;
-
 const episodeValuesSql = (episode: GroupedEpisode): string =>
   `(${lit(episode.episode_id)}, ${lit(episode.seed_observation_id)},
     DATE ${lit(episode.trading_date)},
@@ -146,12 +133,12 @@ const episodeValuesSql = (episode: GroupedEpisode): string =>
     ${episode.period_count}::INTEGER,
     ${lit(episode.event_start_utc)}::TIMESTAMPTZ,
     ${lit(episode.event_end_utc)}::TIMESTAMPTZ,
-    ${varcharArraySql(episode.member_observation_ids)},
+    ${listSql(episode.member_observation_ids)},
     ${episode.member_count}::INTEGER,
-    ${varcharArraySql(episode.observation_types)},
+    ${listSql(episode.observation_types)},
     ${lit(episode.subjects)},
-    ${varcharArraySql(episode.islands)},
-    ${varcharArraySql(episode.plant_ids)},
+    ${listSql(episode.islands)},
+    ${listSql(episode.plant_ids)},
     ${episode.severity}::DOUBLE,
     ${lit(episode.grouping_reason)},
     ${episode.inputs_complete})`;

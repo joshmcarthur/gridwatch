@@ -4,10 +4,12 @@ import { dirname, join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
+  asIso,
   byString,
   type GoldInput,
   goldPartitionPath,
   inputFingerprint,
+  listSql,
   shiftDate,
   silverPartitionPath,
   wantedFingerprints,
@@ -183,4 +185,18 @@ test("an optional gold input does not decide which dates are wanted, and its arr
   const withIt = (await wantedOf([UPSTREAM, optional])).get(date);
   expect(withIt).not.toBe(without);
   expect(await fingerprintOf([UPSTREAM, optional], date)).toBe(withIt);
+});
+
+test("asIso formats a Date and a string as an instant with Z", () => {
+  expect(asIso(new Date("2026-07-27T05:50:26.000Z"))).toBe(
+    "2026-07-27T05:50:26Z",
+  );
+  expect(asIso("2026-07-27T05:50:26Z")).toBe("2026-07-27T05:50:26Z");
+});
+
+test("listSql quotes values for a DuckDB VARCHAR array", () => {
+  expect(listSql([])).toBe("[]::VARCHAR[]");
+  expect(listSql(["OTA2201", "O'Hara"])).toBe(
+    "['OTA2201', 'O''Hara']::VARCHAR[]",
+  );
 });

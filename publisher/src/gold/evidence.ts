@@ -7,7 +7,13 @@ import {
   completenessKey,
 } from "../silver/completeness.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
-import { byString, goldPartitionPath, silverPartitionPath } from "./common.ts";
+import {
+  asIso,
+  byString,
+  goldPartitionPath,
+  listSql,
+  silverPartitionPath,
+} from "./common.ts";
 import { CORROBORATION_RULES } from "./episodes.ts";
 import {
   type ClaimContext,
@@ -19,7 +25,6 @@ import {
   findPeak,
   generationClaims,
   hvdcClaims,
-  listSql,
   loadClaims,
   priceClaims,
   type Row,
@@ -274,6 +279,17 @@ const GOLD_TABLES = [
   "energy_balance_period",
 ] as const;
 
+/**
+ * Fact tables that must have rows for the date. An empty partition is `partial`. Detector
+ * observation tables may be empty on a quiet day and stay `complete`.
+ */
+const GOLD_TABLES_EMPTY_IS_PARTIAL = new Set<(typeof GOLD_TABLES)[number]>([
+  "price_periods",
+  "generation_by_fuel_period",
+  "generation_by_plant_period",
+  "generation_by_fuel_day",
+]);
+
 /** Silver tables for a trading date. `dataset` is the `_completeness` id. */
 const SILVER_DATE_TABLES = [
   { table: "dispatch_energy_prices", dataset: "dispatch_energy_prices" },
@@ -286,13 +302,6 @@ const SILVER_SNAPSHOT_TABLES = [
   "generation_fleet",
   "network_supply_points",
 ] as const;
-
-const asIso = (value: unknown): string => {
-  const ms =
-    value instanceof Date ? value.getTime() : Date.parse(String(value));
-  if (Number.isNaN(ms)) throw new TypeError(`not an instant: ${String(value)}`);
-  return new Date(ms).toISOString().replace(/\.000Z$/, "Z");
-};
 
 const relativePath = (layer: "gold" | "silver", table: string, date: string) =>
   `${layer}/${table}/trading_date=${date}/data.parquet`;
@@ -348,12 +357,21 @@ async function registerInputs(options: BuildEvidenceOptions, query: Query) {
     };
     if (existsSync(abs)) {
       const [counts] = await query(
-        `SELECT count(*) FILTER (WHERE NOT inputs_complete) AS incomplete
+        `SELECT count(*) AS n,
+            count(*) FILTER (WHERE NOT inputs_complete) AS incomplete
            FROM read_parquet(${lit(abs)})`,
       );
-      entry.status = Number(counts?.incomplete) === 0 ? "complete" : "partial";
-      if (entry.status === "partial")
-        entry.detail = `${counts?.incomplete} row(s) have inputs_complete = false`;
+      const n = Number(counts?.n);
+      const incomplete = Number(counts?.incomplete);
+      if (n === 0 && GOLD_TABLES_EMPTY_IS_PARTIAL.has(table)) {
+        entry.status = "partial";
+        entry.detail = "0 rows";
+      } else if (incomplete === 0) {
+        entry.status = "complete";
+      } else {
+        entry.status = "partial";
+        entry.detail = `${incomplete} row(s) have inputs_complete = false`;
+      }
     }
     uses.set(table, entry);
   }

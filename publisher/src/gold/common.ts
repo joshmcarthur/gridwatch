@@ -48,6 +48,26 @@ export const islandsValuesSql = () =>
     .join(", ")})`;
 
 /**
+ * DuckDB timestamptz / Date as an ISO instant with a `Z` and no milliseconds.
+ * DuckDB may return either a Date or a string.
+ */
+export const asIso = (value: unknown): string => {
+  if (value instanceof Date) return value.toISOString().replace(/\.000Z$/, "Z");
+  if (typeof value === "string") {
+    const ms = Date.parse(value);
+    if (Number.isNaN(ms)) throw new TypeError(`not an instant: ${value}`);
+    return new Date(ms).toISOString().replace(/\.000Z$/, "Z");
+  }
+  throw new TypeError("event time is not a string or Date");
+};
+
+/** `['a', 'b']::VARCHAR[]` for a DuckDB list literal. */
+export const listSql = (values: readonly string[]): string =>
+  values.length === 0
+    ? "[]::VARCHAR[]"
+    : `[${values.map(lit).join(", ")}]::VARCHAR[]`;
+
+/**
  * An input table of a gold module (ADR-0011). `layer` is required. A `gold` input is read from
  * `goldDir`; its `versionColumn` and `completenessDataset` are fixed because gold has no
  * `_completeness` row and its `inputs_sha256` already holds the status of its own inputs. Registry

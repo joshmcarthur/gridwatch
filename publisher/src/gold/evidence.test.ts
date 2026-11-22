@@ -291,13 +291,57 @@ test("derived claims carry the incomplete note of their inputs", async () => {
   expect(claimOf(pkg, "price.OTA2201.p36")?.note).toBeUndefined();
 });
 
-// Catches: the gas peakers dropped by a plain top-N cut.
+// Catches: the gas peakers dropped by a plain top-N cut. Stratford is already in the top
+// ten of this fixture; SFD/tcc is 8.2 MW, below Huntly P40 at 45.9 MW.
 test("North Island thermal plants are listed beyond the top ten", async () => {
   await lake();
   const pkg = await build();
-  expect(Object.keys(pkg.context.generation_by_plant)).toContain(
-    "SFD/stratford",
+  const ids = Object.keys(pkg.context.generation_by_plant);
+  expect(ids).toContain("SFD/tcc");
+  expect(ids).not.toContain("RKA/ruakaka");
+  expect(ids).not.toContain("WHI/whirinaki");
+});
+
+// Catches: an empty price_periods or generation partition counted complete.
+test("an empty price_periods or generation partition is partial", async () => {
+  await lake({
+    empty: [
+      "price_periods",
+      "generation_by_fuel_period",
+      "generation_by_plant_period",
+      "generation_by_fuel_day",
+    ],
+  });
+  const pkg = await build();
+  const status = (table: string) =>
+    pkg.completeness.find((entry) => entry.table === table)?.status;
+  expect(status("price_periods")).toBe("partial");
+  expect(status("generation_by_fuel_period")).toBe("partial");
+  expect(status("generation_by_plant_period")).toBe("partial");
+  expect(status("generation_by_fuel_day")).toBe("partial");
+  expect(status("observations_price_separation")).toBe("complete");
+  expect(
+    pkg.completeness.find((entry) => entry.table === "price_periods")?.detail,
+  ).toBe("0 rows");
+});
+
+// Catches: the SIR observation read from index 0 after a real lake sorts it last.
+test("the SIR observation is found by type and subject, not by list position", async () => {
+  await lake();
+  const pkg = await build();
+  expect(pkg.observations.length).toBe(2);
+  expect(pkg.observations[0]?.subject_id).not.toBe("SIR|NI");
+  const sir = pkg.observations.find(
+    (item) =>
+      item.observation_type === "reserve_price_high" &&
+      item.subject_id === "SIR|NI",
   );
+  expect(sir?.measured_value).toBe(2154.45);
+  expect(sir?.start_trading_period).toBe(35);
+  expect(sir?.end_trading_period).toBe(40);
+  expect(pkg.episode.start_trading_period).toBe(35);
+  expect(pkg.episode.end_trading_period).toBe(41);
+  expect(pkg.episode.period_count).toBe(7);
 });
 
 // Catches: a corroborating observation leaking into the members, or a wrong-island, out-of-span,
@@ -310,6 +354,7 @@ test("related observations overlap the episode on its island and are not members
     "obs-fuel-wind-ni",
   ]);
   expect(pkg.observations.map((o) => o.observation_id)).toEqual([
+    "obs-price-high-ota-0727",
     "obs-reserve-sir-ni-0727",
   ]);
 });
