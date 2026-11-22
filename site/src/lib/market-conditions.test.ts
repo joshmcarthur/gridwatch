@@ -241,10 +241,10 @@ test("fixture day mean price, gas-coal share and island spread", () => {
   process.env.DATA_ROOT = "/tmp/gw-no-gold";
   try {
     const day = loadSiteDay("2026-09-27");
-    expect(meanReferencePrice(day)).toBeCloseTo(93.5, 5);
-    expect(gasCoalShare(day)).toBe(0);
-    expect(meanIslandSpread(day)).toBe(10);
-    expect(meanReservePrice(day)).toBeNull();
+    expect(meanReferencePrice(day)).toBeCloseTo(52.30333, 4);
+    expect(gasCoalShare(day)).toBeCloseTo(0.0070794, 6);
+    expect(meanIslandSpread(day)).toBeCloseTo(42.72543, 4);
+    expect(meanReservePrice(day)).toBeCloseTo(10.5775, 4);
   } finally {
     if (previousDataRoot === undefined) delete process.env.DATA_ROOT;
     else process.env.DATA_ROOT = previousDataRoot;

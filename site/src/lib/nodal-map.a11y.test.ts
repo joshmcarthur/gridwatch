@@ -47,8 +47,8 @@ test.skipIf(!existsSync(builtLatest))(
   "prices/map is the latest complete prices day",
   () => {
     const html = readFileSync(builtLatest, "utf8");
-    expect(html).toContain("27 September 2026");
-    expect(html).toContain("/2026/09/27/map/");
+    expect(html).toContain("29 October 2026");
+    expect(html).toContain("/2026/10/29/map/");
     expect(html).toContain('id="nodal-map-table"');
   },
 );

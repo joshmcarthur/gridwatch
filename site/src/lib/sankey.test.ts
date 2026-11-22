@@ -125,11 +125,18 @@ function fuel(
 
 test("a missing sankey day has no chart and says the transfer is not published yet", () => {
   expect(energySankey(dayOf(missingSankey()))).toBeNull();
-  expect(energySankey(fixture)).toBeNull();
   expect(sankeyMissingCopy()).toMatch(/not published yet/i);
   expect(sankeyMissingCopy()).toMatch(/does not guess/i);
   expect(sankeyMissingCopy()).not.toMatch(/\bNI\b/);
   expect(sankeyMissingCopy()).not.toMatch(/\bSI\b/);
+});
+
+test("the fixture day has a complete sankey with both islands", () => {
+  const chart = energySankey(fixture);
+  if (!chart) throw new Error("expected a sankey");
+  expect(chart.state).toBe("complete");
+  expect(chart.islands.map((island) => island.island)).toEqual(["NI", "SI"]);
+  expect(chart.linkLosses).toBeGreaterThan(0);
 });
 
 test("node values match the #23 gold day table", () => {

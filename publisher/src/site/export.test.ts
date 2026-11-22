@@ -1715,18 +1715,11 @@ function syntheticDispatch(date: string): string {
   ].join("\n");
 }
 
-const siteFixtures = join(
-  import.meta.dirname,
-  "..",
-  "..",
-  "..",
-  "site",
-  "fixtures",
-);
-const FIXTURE_DAY = join(siteFixtures, "days", "2026-09-27.json");
-const FIXTURE_INDEX = join(siteFixtures, "index.json");
+const exporterFixtures = join(import.meta.dirname, "fixtures");
+const FIXTURE_DAY = join(exporterFixtures, "days", "2026-09-27.json");
+const FIXTURE_INDEX = join(exporterFixtures, "index.json");
 
-test("the committed sample day matches the exporter end to end, on real generation and synthetic prices", {
+test("the exporter lock sample matches end to end, on trimmed generation and synthetic prices", {
   timeout: 60_000,
 }, async () => {
   const bronzeDir = join(root, "bronze");
@@ -1775,7 +1768,7 @@ test("the committed sample day matches the exporter end to end, on real generati
   const index = await readFile(join(goldDir, "site", "index.json"), "utf8");
 
   if (process.env.UPDATE_SITE_FIXTURES) {
-    await mkdir(join(siteFixtures, "days"), { recursive: true });
+    await mkdir(join(exporterFixtures, "days"), { recursive: true });
     await writeFile(FIXTURE_DAY, day);
     await writeFile(FIXTURE_INDEX, index);
   }

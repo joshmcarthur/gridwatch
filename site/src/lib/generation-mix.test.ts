@@ -64,20 +64,25 @@ function valuedPoint(point: MixPoint | undefined) {
   return point;
 }
 
-test("fixture period 1 splits hydro and wind into average MW", () => {
+test("fixture period 1 splits the real fuel mix into average MW", () => {
   const mix = generationMix(fixture);
   if (!mix) throw new Error("expected a mix");
   const first = valuedPoint(mix.points[0]);
   expect(mix.layers.map((layer) => layer.label)).toEqual([
     "Hydro",
+    "Geothermal",
     "Wind",
     "Solar",
+    "Gas",
+    "Other",
   ]);
   expect(first.kind).toBe("complete");
-  expect(first.megawatts.hydro).toBeCloseTo(16.66, 3);
-  expect(first.megawatts.wind).toBeCloseTo(136.226, 3);
-  expect(first.primary).toBeCloseTo(152.886, 3);
-  expect(mixPointTitle(first, mix.layers)).toContain("Wind 136.2 MW (89.1%)");
+  expect(first.megawatts.hydro).toBeCloseTo(1855.608, 3);
+  expect(first.megawatts.wind).toBeCloseTo(990.236, 3);
+  expect(first.primary).toBeCloseTo(4014.424, 3);
+  expect(mixPointTitle(first, mix.layers)).toContain(
+    "Hydro 1,855.6 MW (46.2%)",
+  );
 });
 
 test("battery is shown apart and is not in the primary total", () => {
@@ -85,7 +90,7 @@ test("battery is shown apart and is not in the primary total", () => {
   if (!mix) throw new Error("expected a mix");
   const period15 = valuedPoint(mix.points[14]);
   expect(period15.megawatts.battery).toBeCloseTo(10.288, 3);
-  expect(period15.primary).toBeCloseTo(79.848, 3);
+  expect(period15.primary).toBeCloseTo(4522.986, 3);
   expect(mix.layers.map((layer) => layer.label)).not.toContain("Battery");
   expect(mix.battery[14]?.megawatts).toBeCloseTo(10.288, 3);
   expect(mix.battery).toHaveLength(mix.points.length);
@@ -97,18 +102,14 @@ test("battery is shown apart and is not in the primary total", () => {
 test("hydro average over the day matches the daily summary", () => {
   const mix = generationMix(fixture);
   if (!mix) throw new Error("expected a mix");
-  const hydroDaily = fixture.generation.daily.find(
-    (row) => row.fuel === "hydro",
-  );
-  if (!hydroDaily) throw new Error("expected a hydro daily row");
+  const hydroDaily = fixture.generation.daily
+    .filter((row) => row.fuel === "hydro")
+    .reduce((sum, row) => sum + row.average_megawatts, 0);
   const total = mix.points.reduce(
     (sum, point) => (point.kind === "gap" ? sum : sum + point.megawatts.hydro),
     0,
   );
-  expect(total / mix.points.length).toBeCloseTo(
-    hydroDaily.average_megawatts,
-    2,
-  );
+  expect(total / mix.points.length).toBeCloseTo(hydroDaily, 2);
 });
 
 test("two islands are summed, and a null in one island keeps the other", () => {
@@ -277,18 +278,24 @@ test("the table has a battery column and share text in each cell", () => {
   expect(table.headers).toEqual([
     "Time",
     "Hydro",
+    "Geothermal",
     "Wind",
     "Solar",
+    "Gas",
+    "Other",
     "Primary total",
     BATTERY_HEADER,
   ]);
   expect(table.rows).toHaveLength(46);
   expect(table.rows[0]).toEqual([
     "00:00",
-    "16.7 MW (10.9%)",
-    "136.2 MW (89.1%)",
+    "1,855.6 MW (46.2%)",
+    "1,140.7 MW (28.4%)",
+    "990.2 MW (24.7%)",
     "0.0 MW (0.0%)",
-    "152.9 MW",
+    "4.8 MW (0.1%)",
+    "23.1 MW (0.6%)",
+    "4,014.4 MW",
     expect.stringMatching(/MW$/),
   ]);
 });
@@ -297,7 +304,7 @@ test("the summary names the largest fuel by average MW and its share", () => {
   const mix = generationMix(fixture);
   if (!mix) throw new Error("expected a mix");
   expect(generationMixSummary(mix)).toBe(
-    "Wind made the most, about 119 megawatts on average, 80% of the day's primary generation.",
+    "Hydro made the most, about 2,696 megawatts on average, 57% of the day's primary generation.",
   );
 });
 

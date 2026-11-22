@@ -58,7 +58,11 @@ test("formatTradingDate formats a trading date in en-NZ", () => {
 test("loadSiteIndex uses the fixture when gold is absent", () => {
   process.env.DATA_ROOT = dataRoot;
   const index = loadSiteIndex();
-  expect(index.days[0]?.date).toBe("2026-09-27");
+  expect(index.days.map((day) => day.date)).toEqual([
+    "2026-09-26",
+    "2026-09-27",
+    "2026-10-29",
+  ]);
 });
 
 test("loadSiteIndex returns gold when DATA_ROOT points at a valid index", async () => {
