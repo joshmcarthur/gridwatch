@@ -20,11 +20,11 @@ import { FUEL_TABLES as FUEL_GENERATION_CHANGE_TABLES } from "./generation-chang
 /**
  * Bump by hand when a rule or a config value changes (ADR-0011, ADR-0024).
  */
-export const ANALYSIS_VERSION = 2;
+export const ANALYSIS_VERSION = 3;
 
 export const TABLES = ["episode_ranking_days", "episode_scores"] as const;
 
-/** Provisional values. Reasons are in ADR-0024. */
+/** Owner values from #181. Weights stay as after #180. Reasons are in ADR-0024. */
 export const EPISODE_RANKING_CONFIG = {
   weights: {
     severity: 0.3,
@@ -36,6 +36,7 @@ export const EPISODE_RANKING_CONFIG = {
   severityCapByType: {
     price_high: 30,
     reserve_price_high: 170,
+    price_low: 1.49,
   } as Readonly<Record<string, number>>,
   defaultSeverityCap: 10,
   durationCapPeriods: 12,
@@ -45,8 +46,8 @@ export const EPISODE_RANKING_CONFIG = {
   corroborationRules: CORROBORATION_RULES,
   historyDays: 90,
   minPoolSize: 20,
-  candidatesPerDay: 3,
-  minScore: 0.35,
+  candidatesPerDay: 1,
+  minScore: 0.5,
 };
 
 export type EpisodeRankingConfig = typeof EPISODE_RANKING_CONFIG;

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import { lit } from "../silver/common.ts";
 import { goldPartitionPath, shiftDate } from "./common.ts";
 import {
+  ANALYSIS_VERSION,
   EPISODE_RANKING_CONFIG,
   INPUTS,
   publishEpisodeRanking,
@@ -60,9 +61,10 @@ test("the weights add up to 1", () => {
 });
 
 test("the default config is pinned: a changed value without an ANALYSIS_VERSION bump fails here", () => {
+  expect(ANALYSIS_VERSION).toBe(3);
   expect(
     createHash("sha256").update(JSON.stringify(config)).digest("hex"),
-  ).toBe("72592e308eb49bcf1fef72ffe342691caefd76c5ae28b81086ce457fac6551ee");
+  ).toBe("66693bf6acc022db069acd04ab9092dcc01ccf2e6a8b1cc24079781d92dd21af");
 });
 
 test("components are 0 at the threshold and 1 at the caps, and they clamp", () => {
@@ -120,7 +122,7 @@ test("severity is normalised per observation type", () => {
     [episode("a", { severity: 1.49, observation_types: ["price_low"] })],
     COLD,
   );
-  expect(low.severity_component).toBeLessThan(0.2);
+  expect(low.severity_component).toBe(1);
 });
 
 test("a mixed episode takes the largest cap of its types", () => {
@@ -206,8 +208,8 @@ test("ranks by score with ties broken by episode_id, and gates candidates", () =
   ]);
   expect(rows.map((row) => row.candidate_reason)).toEqual([
     "top_n",
-    "below_min_score",
-    "below_min_score",
+    "beyond_top_n",
+    "beyond_top_n",
     "beyond_top_n",
   ]);
   expect(rows.map((row) => row.is_candidate)).toEqual([
@@ -216,6 +218,13 @@ test("ranks by score with ties broken by episode_id, and gates candidates", () =
     false,
     false,
   ]);
+});
+
+test("a weak top-ranked episode is below_min_score", () => {
+  const [row] = scoreEpisodes([episode("a")], COLD);
+  expect(row?.day_rank).toBe(1);
+  expect(row?.candidate_reason).toBe("below_min_score");
+  expect(row?.is_candidate).toBe(false);
 });
 
 // DuckDB
