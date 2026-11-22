@@ -279,11 +279,11 @@ test("latest market update uses the newest complete prices day and notes missing
   );
   expect(update.date).toBe("2026-11-18");
   expect(update.href).toBe("/2026/11/18/");
-  expect(update.headlines.join(" ")).toMatch(/wholesale prices/i);
-  expect(update.headlines.join(" ")).toMatch(/household bill/);
-  expect(update.generationLag).toMatch(/not in yet/i);
-  expect(update.generationLag).toMatch(/31 October 2026/);
-  expect(update.generationHref).toBe("/2026/10/31/");
+  expect(update.summary).toMatch(/wholesale prices/i);
+  expect(update.summary).not.toMatch(/megawatt-hour|household bill/);
+  expect(update.generationLag?.text).toMatch(/not in yet/i);
+  expect(update.generationLag?.latest?.label).toMatch(/31 October 2026/);
+  expect(update.generationLag?.latest?.href).toBe("/2026/10/31/");
 });
 
 test("recent days are the last 14, newest first, with an incomplete note flag", () => {
@@ -389,6 +389,9 @@ test("each condition card uses its own latest complete date and has no composite
   expect(cards.find((card) => card.id === "reserves")?.date).toBe("2026-11-18");
   expect(cards.find((card) => card.id === "regional")?.date).toBe("2026-11-18");
   expect(cards.find((card) => card.id === "prices")?.figure).toMatch(/\$200/);
+  expect(cards.find((card) => card.id === "prices")?.figure).toMatch(
+    /three sample places/,
+  );
   expect(cards.find((card) => card.id === "supply")?.figure).toMatch(/50%/);
   expect(cards.find((card) => card.id === "reserves")?.figure).toMatch(
     /backup generation/,
@@ -493,8 +496,8 @@ test("homepage figures stay past tense and skip good, bad, safe, next", () => {
       loadSiteDay(date, index),
     );
     const text = [
-      update.headlines.join(" "),
-      update.generationLag ?? "",
+      update.summary,
+      update.generationLag?.text ?? "",
       ...cards.flatMap((card) => [card.figure, card.bandNote ?? ""]),
     ].join(" ");
     expect(text).not.toMatch(/\b(good|bad|safe|safer|worse)\b/i);
