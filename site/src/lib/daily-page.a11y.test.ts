@@ -31,9 +31,10 @@ test.skipIf(!existsSync(builtPage))(
     if (html.includes('href="#reserve-prices"')) {
       expect(html).toContain('id="reserve-prices"');
     }
-    // Fixture data has no reserve prices. Real data does, so accept the chart or the missing line.
+    // Fixture data may be a line chart, the older range bars, or the missing-data line.
     expect(
-      html.includes('id="reserve-chart-title"') ||
+      html.includes('id="reserve-fast-title"') ||
+        html.includes('id="reserve-chart-title"') ||
         html.includes("Reserve prices are not ready for this day yet."),
     ).toBe(true);
     expect(html).toContain("Not enough earlier days yet to compare.");
@@ -95,7 +96,11 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain("Haywards");
     expect(html).toContain("Benmore");
     expect(html).toContain("Electricity Authority wholesale energy prices");
-    const reserveCharts = html.includes('id="reserve-chart-title"') ? 1 : 0;
+    const reserveCharts = [
+      ...(html.match(/id="reserve-fast-title"/g) ?? []),
+      ...(html.match(/id="reserve-slow-title"/g) ?? []),
+      ...(html.match(/id="reserve-chart-title"/g) ?? []),
+    ].length;
     expect(html.match(/role="img"/g)?.length).toBe(5 + reserveCharts);
     expect(html).toContain('aria-labelledby="energy-flow"');
     expect(html).toContain(

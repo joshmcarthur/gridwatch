@@ -5,6 +5,9 @@ import type {
 } from "@gridwatch/publisher/site-contract";
 import * as Plot from "@observablehq/plot";
 import { renderPlot } from "./chart-svg.ts";
+import { episodeClockRange } from "./episode-copy.ts";
+import { type LinePlot, type PlotLine, renderLinePlot } from "./line-plot.ts";
+import { clockLabeller, timeTicks, zonedAt } from "./period-clock.ts";
 
 export const RESERVE_MISSING = "Reserve prices are not ready for this day yet.";
 
@@ -174,4 +177,152 @@ export function reserveChartSvg(chart: ReserveChart): string {
       summary: reserveChartSummary(chart),
     },
   );
+}
+
+type ReservePlotDay = Pick<SiteDay, "periods" | "episodes" | "reserves">;
+
+const PLOT_META: Record<ReserveClass, { id: string; title: string }> = {
+  FIR: { id: "reserve-fast", title: "Fast reserve prices through the day" },
+  SIR: { id: "reserve-slow", title: "Slow reserve prices through the day" },
+};
+
+/** True when at least one class has a per-period series (ADR-0014 optional `price`). */
+export function usesReserveLinePlots(day: ReservePlotDay): boolean {
+  return (day.reserves?.classes ?? []).some((row) => row.price !== undefined);
+}
+
+export function reserveHasEpisodeBand(day: ReservePlotDay): boolean {
+  return (day.episodes?.items ?? []).some(isReserveEpisode);
+}
+
+function isReserveEpisode(episode: { observation_types: string[] }): boolean {
+  return episode.observation_types.some((type) =>
+    type.startsWith("reserve_price_"),
+  );
+}
+
+/**
+ * Line plots when `price` is present. Otherwise the day's lowest-to-highest bars,
+ * so older JSON without the series still draws.
+ */
+export function reservePlots(
+  day: ReservePlotDay,
+  chart: ReserveChart,
+): string[] {
+  if (!usesReserveLinePlots(day)) return [reserveChartSvg(chart)];
+  const plots = reserveClassPlots(day);
+  return plots.length > 0 ? plots : [reserveChartSvg(chart)];
+}
+
+function reserveClassPlots(day: ReservePlotDay): string[] {
+  const classes = day.reserves?.classes ?? [];
+  const clockOf = clockLabeller(day);
+  const ticks = timeTicks(day);
+  const bands = reserveBands(day);
+  return (Object.keys(PLOT_META) as ReserveClass[]).flatMap((kind) => {
+    const rows = classes.filter((row) => row.reserve_class === kind);
+    const lines: PlotLine[] = rows.map((row) => ({
+      id: row.island ?? "both",
+      values:
+        row.price ?? Array.from({ length: day.periods.length }, () => null),
+      colour: islandColour(row.island),
+      dashed: false,
+    }));
+    const numbers = lines.flatMap((line) =>
+      line.values.filter((value): value is number => value !== null),
+    );
+    if (numbers.length === 0) return [];
+    const labels = rows.map((row) => islandLineLabel(row.island));
+    const periods = day.periods.map((period, index) => {
+      const time = clockOf(zonedAt(period.start_utc));
+      return {
+        start: new Date(period.start_utc),
+        title: hoverTitle(time, index, labels, lines),
+      };
+    });
+    const meta = PLOT_META[kind];
+    const plot: LinePlot = {
+      id: meta.id,
+      title: meta.title,
+      yLabel: "Price ($ per megawatt-hour)",
+      domain: plotDomain(numbers),
+      lines,
+      bands,
+    };
+    return [
+      renderLinePlot(
+        plot,
+        { periods, ticks },
+        lineSummary(kind, labels, lines),
+      ),
+    ];
+  });
+}
+
+function reserveBands(day: ReservePlotDay): NonNullable<LinePlot["bands"]> {
+  return (day.episodes?.items ?? [])
+    .filter(isReserveEpisode)
+    .map((episode) => ({
+      start: new Date(episode.start_utc),
+      end: new Date(episode.end_utc),
+      title: `Backup prices, ${episodeClockRange(episode, day)}`,
+    }));
+}
+
+function islandColour(island: Island | null): string {
+  switch (island) {
+    case "SI":
+      return "var(--color-island-south)";
+    case "NI":
+    case null:
+      return "var(--color-island-north)";
+    default: {
+      const unreachable: never = island;
+      return unreachable;
+    }
+  }
+}
+
+function islandLineLabel(island: Island | null): string {
+  return island === null ? "Both islands" : ISLAND_NAME[island];
+}
+
+function hoverTitle(
+  time: string,
+  index: number,
+  labels: string[],
+  lines: PlotLine[],
+): string {
+  const parts = [time];
+  for (let i = 0; i < lines.length; i++) {
+    const value = lines[i]?.values[index] ?? null;
+    const label = labels[i] ?? "Island";
+    parts.push(
+      value === null ? `${label} no data` : `${label} ${money.format(value)}`,
+    );
+  }
+  return parts.join(" · ");
+}
+
+function lineSummary(
+  kind: ReserveClass,
+  labels: string[],
+  lines: PlotLine[],
+): string {
+  const parts = lines.flatMap((line, i) => {
+    const plotted = line.values.filter(
+      (value): value is number => value !== null,
+    );
+    if (plotted.length === 0) return [];
+    const label = labels[i] ?? "Island";
+    return [
+      `${label} from ${money.format(Math.min(...plotted))} to ${money.format(Math.max(...plotted))}`,
+    ];
+  });
+  return `${KIND[kind]} prices through the day: ${parts.join("; ")}.`;
+}
+
+function plotDomain(values: number[]): [number, number] {
+  if (values.length === 0) return [0, 1];
+  return [Math.min(0, ...values), Math.max(0, ...values)];
 }
