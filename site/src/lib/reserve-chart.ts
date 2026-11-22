@@ -126,8 +126,6 @@ export function reserveChartSummary(chart: ReserveChart): string {
 /** Each row is a bar from the day's lowest to its highest price, with a dot at the average. */
 export function reserveChartSvg(chart: ReserveChart): string {
   const bars = chart.rows.filter((row) => row.min !== null && row.max !== null);
-  const colour = (island: Island | null) =>
-    island === "SI" ? "var(--color-island-south)" : "var(--color-island-north)";
   const title = (row: ReserveRow) =>
     `${row.label}: lowest ${cell(row.min)}, average ${cell(row.mean)}, highest ${cell(row.max)} per megawatt-hour`;
   return renderPlot(
@@ -152,7 +150,7 @@ export function reserveChartSvg(chart: ReserveChart): string {
           y: "label",
           x1: "min",
           x2: "max",
-          stroke: (row: ReserveRow) => colour(row.island),
+          stroke: (row: ReserveRow) => islandColour(row.island),
           strokeWidth: 6,
           strokeLinecap: "round",
           title,
