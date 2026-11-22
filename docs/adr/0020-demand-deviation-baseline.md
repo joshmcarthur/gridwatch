@@ -15,7 +15,7 @@ The shared run-detector kit ([ADR-0019](0019-observations-and-price-anomaly-dete
 
 ## Decision
 
-The v1 baseline for demand deviation is: the complete `load_mwh` values of the **same trading period** on the **same weekday** in the **last 8 weeks**, excluding the date under test and incomplete days. A period is a hit when its absolute deviation from that cell's median is strictly greater than the percentile fence of the cell, and also strictly greater than a minimum MWh floor.
+The v1 baseline for demand deviation is: the complete `load_mwh` values of the **same trading period** on the **same weekday** in the **last 8 weeks**, excluding the date under test and incomplete days. A period is a hit when it is strictly beyond the larger of the cell's 99th percentile and median + 50 MWh (high), or the smaller of its 1st percentile and median - 50 MWh (low).
 
 This is a proposed method. It is not implemented. Status stays Proposed until the owner says go or changes a value.
 
@@ -31,14 +31,14 @@ For subject S, date D, period P:
 
 1. Look back 56 calendar days (8 weeks). The fingerprint window is those 56 days of `grid_load_period` plus D (windowed gold input, [ADR-0019](0019-observations-and-price-anomaly-detector.md)).
 2. Keep rows whose weekday equals D's weekday, whose `trading_period` equals P, and whose `trading_date` is not D.
-3. Drop a sample when `load_mwh` is null or `inputs_complete` is false. Drop every sample from a day whose island-day `grid_load_day.inputs_complete` is false. For `NZ`, drop the period when either island is incomplete or null.
-4. The cell needs at least 4 samples (`minBaselineSamples`). Otherwise `baseline_ready` is false, the sentinel is written, and there is no observation.
+3. Drop a sample when `load_mwh` is null or `inputs_complete` is false. The input is `grid_load_period` only, so there is no day-level check. For `NZ`, drop the period when either island is incomplete or null.
+4. The cell needs at least 4 samples (`minBaselinePeriods`, the shared-kit key). Otherwise `baseline_ready` is false, the sentinel is written, and there is no observation.
 
 The median, 99th percentile and 1st percentile are taken over that cell only. With 8 samples the 99th percentile is at or next to the sample maximum, and the 1st is at or next to the sample minimum. That is accepted: a hit must sit outside the recent comparable range, and also at least 50 MWh from the median.
 
 ### Hits and runs
 
-A period is a high hit when `load_mwh > max(p99, median + 50)`. It is a low hit when `load_mwh < min(p01, median - 50)`. Equivalently: `|load - median|` is strictly greater than the percentile fence from the median, and strictly greater than 50 MWh.
+A period is a high hit when `load_mwh > max(p99, median + 50)`. It is a low hit when `load_mwh < min(p01, median - 50)`.
 
 Runs follow ADR-0019: consecutive period numbers, at least 2 periods, one trading date, a missing or null period ends a run, no gap bridging. Severity is 1 at the threshold.
 
@@ -54,9 +54,8 @@ A public holiday against ordinary weekdays of the same name is a known false-pos
 
 | Key | Value | Why |
 | --- | --- | --- |
-| `baselineWeeks` | 8 | Eight comparable weekdays. The calendar window is 56 days. |
-| `baselineWindowDays` | 56 | Fingerprint window of gold partitions. |
-| `minBaselineSamples` | 4 | Half the cell, as ADR-0019 takes 14 of 28 days. |
+| `baselineWindowDays` | 56 | Eight comparable weekdays. Also the fingerprint window of gold partitions. |
+| `minBaselinePeriods` | 4 | Half the cell, as ADR-0019 takes 14 of 28 days. |
 | `highPercentile` | 0.99 | Same fence as the price detectors. With n ~ 8 this is the sample max. |
 | `lowPercentile` | 0.01 | The mirror. With n ~ 8 this is the sample min. |
 | `minDeviationFromMedian` | 50 | MWh floor so a tight cluster of Tuesdays does not flag a 5 MWh wiggle. About 2% of a national period (EMI demand 116.9 GWh on 2026-10-29 is ~2435 MWh per period) and about 7% of a South Island period. |
@@ -70,7 +69,7 @@ Values are provisional. A later implementation pins them in one config object an
 - It does not edit `publisher/src/datasets.ts`.
 - It does not add gold tables, tests, or a backfill.
 
-The ADR-0019 kit's `createRunTables` pools every period of the window into one baseline per subject. Demand needs one baseline per (subject, `trading_period`). Implementation, when the owner says go, will extend that kit or keep per-cell SQL in the detector file. That choice is not made here.
+The ADR-0019 kit already has `baselineByTradingPeriod`, which gives one baseline per (subject, `trading_period`) over the prior `baselineWindowDays` days (ADR-0019, generation detectors). Demand needs one more restriction: only samples on the same weekday as the date. Implementation, when the owner says go, adds that restriction to the kit's period-matched mode as an optional config key, so that existing config hashes stay the same. It does not add a second baseline path.
 
 ## Alternatives considered
 
