@@ -1,16 +1,20 @@
+x-gridwatch: &gridwatch
+  image: ghcr.io/joshmcarthur/gridwatch:${GRIDWATCH_IMAGE_TAG:-latest}
+  build: .
+
 services:
   collector:
-    build: .
+    <<: *gridwatch
     entrypoint: ["node", "collector/src/main.ts"]
     volumes:
       - ./data:/data
   publisher:
-    build: .
+    <<: *gridwatch
     entrypoint: ["node", "publisher/src/main.ts"]
     volumes:
       - ./data:/data
   site-build:
-    build: .
+    <<: *gridwatch
     profiles: ["publish"]
     entrypoint: ["node", "site/publish.ts"]
     volumes:
