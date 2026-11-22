@@ -2,6 +2,7 @@
 import EnergySankeyChart from "../../../../components/EnergySankeyChart.astro";
 import GenerationMixChart from "../../../../components/GenerationMixChart.astro";
 import PriceChart from "../../../../components/PriceChart.astro";
+import ReserveChart from "../../../../components/ReserveChart.astro";
 import Layout from "../../../../layouts/Layout.astro";
 import {
   completenessNotice,
@@ -135,6 +136,11 @@ const months = monthGroups(index);
       </p>
     </section>
 
+    <section class="slot" aria-labelledby="reserve-prices">
+      <h2 id="reserve-prices">What backup cost</h2>
+      <ReserveChart day={day} />
+    </section>
+
     <section class="slot" aria-labelledby="energy-flow">
       <h2 id="energy-flow">Where the energy went</h2>
       <EnergySankeyChart day={day} />
@@ -218,7 +224,8 @@ const months = monthGroups(index);
         <div id="word-reserve-price">
           <dt>Reserve price</dt>
           <dd>
-            The cost of backup generation kept ready if something trips.
+            The cost of backup generation kept ready if something trips. Fast
+            reserve acts within 6 seconds and slow reserve within 60 seconds.
           </dd>
         </div>
       </dl>

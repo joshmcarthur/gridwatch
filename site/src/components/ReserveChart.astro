@@ -1,0 +1,104 @@
+---
+import type { SiteDay } from "@gridwatch/publisher/site-contract";
+import {
+  RESERVE_MISSING,
+  RESERVE_NOTICE,
+  reserveChart,
+  reserveChartSvg,
+  reserveChartTable,
+} from "../lib/reserve-chart";
+import ChartFigure from "./ChartFigure.astro";
+
+interface Props {
+  day: SiteDay;
+}
+
+const { day } = Astro.props;
+const chart = reserveChart(day);
+const table = chart ? reserveChartTable(chart) : null;
+---
+
+{
+  chart === null || table === null ? (
+    <p class="chart-missing">{RESERVE_MISSING}</p>
+  ) : (
+    <ChartFigure
+      plots={[reserveChartSvg(chart)]}
+      tableCaptionId="reserve-prices-table-caption"
+      tableCaption="Reserve prices for the day in $/MWh, by island and kind of reserve."
+      headers={table.headers}
+      rows={table.rows}
+      legendLabel="Islands and the average marker"
+      notice={chart.partial ? RESERVE_NOTICE : undefined}
+    >
+      <Fragment slot="legend">
+        <li>
+          <span
+            class="line-key"
+            style="border-top-color: var(--color-island-north)"
+            aria-hidden="true"
+          />
+          North Island
+        </li>
+        <li>
+          <span
+            class="line-key"
+            style="border-top-color: var(--color-island-south)"
+            aria-hidden="true"
+          />
+          South Island
+        </li>
+        <li>Dot: the day's average</li>
+      </Fragment>
+      <Fragment slot="caption">
+        <p>
+          Reserve is spare generating capacity held ready in case a power
+          station trips. A reserve price is what the market paid to keep it
+          ready. A high reserve price is not a sign the grid was at risk.
+        </p>
+      </Fragment>
+      <Fragment slot="method">
+        <p>
+          There are two kinds. Fast reserve must act within 6 seconds. Slow
+          reserve must act within 60 seconds.
+        </p>
+        <p>
+          Each bar runs from the lowest to the highest price that day. The dot
+          is the average. Prices are in dollars per megawatt-hour.
+        </p>
+        <p>
+          A reserve price is not a measure of security. A high one means backup
+          was dear. It does not mean the lights nearly went out. This page does
+          not say whether the grid was secure.
+        </p>
+        <p>
+          This is one summary for the day. It does not show when in the day
+          prices rose.
+        </p>
+        <p>
+          Source: Electricity Authority reserve prices. These are
+          first-published prices and can change.
+        </p>
+      </Fragment>
+    </ChartFigure>
+  )
+}
+
+<style>
+  .chart-missing {
+    margin: 0;
+  }
+
+  li {
+    align-items: center;
+    gap: var(--space-2);
+    display: flex;
+  }
+
+  .line-key {
+    border-top-width: 3px;
+    border-top-style: solid;
+    flex: none;
+    width: 1.5rem;
+  }
+</style>
