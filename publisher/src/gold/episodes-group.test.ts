@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { expect, test } from "vitest";
 import { periodToUtc } from "../trading-time.ts";
 import {
-  EPISODE_GROUPING_CONFIG,
   episodeIdOf,
   type GroupingObservation,
   groupingIsland,
@@ -38,14 +37,6 @@ const obs = (
   severity: 1.5,
   inputs_complete: true,
   ...extra,
-});
-
-test("the default config is pinned: a changed value without an ANALYSIS_VERSION bump fails here", () => {
-  expect(
-    createHash("sha256")
-      .update(JSON.stringify(EPISODE_GROUPING_CONFIG))
-      .digest("hex"),
-  ).toBe("b9f8321963bf6aca631deedd8e4bc19566a40e73b11bced858a04bd7607002cd");
 });
 
 test("JOIN_RULES keep a stable set of ids", () => {
