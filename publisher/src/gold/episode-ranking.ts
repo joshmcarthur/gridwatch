@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { lit, type PublishResult } from "../silver/common.ts";
 import {
+  byString,
   type GoldGoldInput,
   type GoldPublishOptions,
   goldDataset,
@@ -116,9 +117,7 @@ export function scoreEpisodes(
   const { weights } = config;
   const cold = history.length < config.minPoolSize;
   // Sorted by id first: the stable score sort below then breaks ties by episode_id.
-  const byId = [...today].sort((a, b) =>
-    a.episode_id.localeCompare(b.episode_id),
-  );
+  const byId = [...today].sort((a, b) => byString(a.episode_id, b.episode_id));
   const scored = byId.map((episode) => {
     const typeCount = episode.observation_types.length;
     const islandCount = episode.islands.length;

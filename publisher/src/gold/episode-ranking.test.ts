@@ -174,6 +174,14 @@ test("fewer prior days than minPoolSize gives neutral rarity and records the sam
   expect(row?.history_sample_size).toBe(config.minPoolSize - 1);
 });
 
+test("score ties break by code-unit episode_id, including case and accent", () => {
+  const rows = scoreEpisodes(
+    [episode("é"), episode("Z"), episode("a"), episode("A")],
+    COLD,
+  );
+  expect(rows.map((row) => row.episode_id)).toEqual(["A", "Z", "a", "é"]);
+});
+
 test("ranks by score with ties broken by episode_id, and gates candidates", () => {
   const rows = scoreEpisodes(
     [

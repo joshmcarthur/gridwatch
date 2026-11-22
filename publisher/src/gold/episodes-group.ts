@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { byString } from "./common.ts";
 import type { SubjectType } from "./observation.ts";
 
 export type TimePredicate = "overlap" | "overlap_or_adjacent";
@@ -268,8 +269,6 @@ class UnionFind {
     this.parent.set(drop, keep);
   }
 }
-
-const byString = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 const seedOf = (members: GroupingObservation[]): GroupingObservation => {
   const sorted = [...members].sort((a, b) => {
