@@ -22,6 +22,10 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).not.toMatch(/\bNI\b/);
     expect(html).not.toMatch(/\bSI\b/);
     expect(html).not.toMatch(/Trading periods/);
+    expect(html).toMatch(
+      /Prices here come from three places: Otahuhu in Auckland, Haywards near\s+Wellington, and Benmore in the South Island/,
+    );
+    expect(html).not.toMatch(/sample points?/i);
     expect(html).toContain("Words on this page");
     expect(html).toContain('id="word-wholesale-price"');
     expect(html).toContain('id="word-megawatt-hour"');
