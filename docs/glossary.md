@@ -12,7 +12,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Dry year.** A year with low inflows to the hydro lakes. New Zealand relies on hydro, so a dry year needs more thermal generation, and prices rise. The Huntly Rankine units are kept as dry-year cover.
 
-**FIR and SIR.** The two reserve classes in the reserve price and cleared offer files. FIR is 6-second reserve. SIR is 60-second reserve. Gold reserve tables have one row per class, island and trading period. See [sources 3.2](sources.md#32-dispatch-reserve-prices) and [ADR-0013](adr/0013-gold-reserve-prices.md).
+**FIR and SIR.** The two reserve classes in the reserve price and cleared offer files. FIR is 6-second reserve. SIR is 60-second reserve. The daily page calls them fast reserve and slow reserve, and shows a daily summary, not a per-period series. Gold reserve tables have one row per class, island and trading period. See [sources 3.2](sources.md#32-dispatch-reserve-prices) and [ADR-0013](adr/0013-gold-reserve-prices.md).
 
 **Frequency keeping.** A service that keeps the system frequency at 50 Hz from moment to moment. The brief lists it as an ancillary service for a later phase.
 
@@ -28,7 +28,9 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Proxy price.** A price copied from a nearby point of connection after an outage. The `IsProxyPriceFlag` column marks it (`Y`). Silver keeps it as a flag.
 
-**Reserve.** The market prices and clears reserve as well as energy. The brief lists reserve prices as something the site should explain. See FIR and SIR for the two classes.
+**Reserve.** The market prices and clears reserve as well as energy. The brief lists reserve prices as something the site should explain. See FIR and SIR for the two classes. The site explains it as spare generating capacity held ready in case a power station trips.
+
+**Reserve price.** What the market paid to keep reserve ready. The site shows the day's lowest, average and highest price for each island and class (`ReservesClassDay`). It is a price, not a security measure: a high reserve price means backup was dear, not that the grid was at risk. See [ADR-0013](adr/0013-gold-reserve-prices.md).
 
 **Spread.** The price at one reference node minus the price at another, in a trading period. A positive spread means the first node costs more. See [ADR-0012](adr/0012-gold-prices.md).
 
