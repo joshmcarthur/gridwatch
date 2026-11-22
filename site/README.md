@@ -30,7 +30,7 @@ The `site` service serves `site-out/current` with Caddy at http://localhost:8080
 
 ## Data contract
 
-The publisher writes one JSON file per trading day to `gold/site/days/YYYY-MM-DD.json`, and an index to `gold/site/index.json`. The site imports types only, from `@gridwatch/publisher/site-contract`. `site/fixtures/` holds four complete sample days so a checkout without gold still shows a real mix, real reference-node prices, and the energy-balance Sankey: 2026-07-27 (the 27 July evening, with the #42 Unreviewed event), 2026-09-26 (ordinary Saturday), 2026-09-27 (DST start, 46 periods), and 2026-10-29 (ordinary Thursday). See `site/fixtures/README.md`. The exporter's trimmed-silver lock lives separately in `publisher/src/site/fixtures/`; refresh that with `UPDATE_SITE_FIXTURES=1 npm test -- export.test.ts` from the repository root.
+The publisher writes one JSON file per trading day to `gold/site/days/YYYY-MM-DD.json`, and an index to `gold/site/index.json`. The site imports types only, from `@gridwatch/publisher/site-contract`. `site/fixtures/` holds four complete sample days so a checkout without gold still shows a real mix, real reference-node prices, and the energy-balance Sankey: 2026-07-27 (the 27 July evening, including the Unreviewed event), 2026-09-26 (ordinary Saturday), 2026-09-27 (DST start, 46 periods), and 2026-10-29 (ordinary Thursday). See `site/fixtures/README.md`. The exporter's trimmed-silver lock lives separately in `publisher/src/site/fixtures/`; refresh that with `UPDATE_SITE_FIXTURES=1 npm test -- export.test.ts` from the repository root.
 
 ## Design
 
