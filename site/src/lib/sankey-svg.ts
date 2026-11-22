@@ -57,7 +57,7 @@ export function renderSankeySvg(chart: EnergySankey): string {
   const desc = document.createElementNS(SVG_NS, "desc");
   desc.setAttribute("id", "energy-sankey-chart-summary");
   desc.textContent =
-    "Generation by fuel to each island, the inter-island cable, modelled load, losses, and residual.";
+    "Generation by fuel to each island, the inter-island cable, estimated load, losses, and residual.";
   svg.append(title, desc);
 
   for (const link of chart.links) {
@@ -133,7 +133,7 @@ export function renderSankeySvg(chart: EnergySankey): string {
 }
 
 const SHARED_LEGEND_LABEL: Partial<Record<SankeyNode["kind"], string>> = {
-  load: "Modelled load",
+  load: "Estimated load",
   residual: "Residual",
 };
 

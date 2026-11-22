@@ -80,7 +80,10 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain(
       'aria-labelledby="energy-sankey-chart-title energy-sankey-chart-summary"',
     );
-    expect(html).toMatch(/modelled load/i);
+    expect(html).toMatch(/estimated load/i);
+    expect(html).not.toMatch(
+      /gold formula|Generation_MD|sources notes|modelled/i,
+    );
     expect(html).not.toMatch(/not published yet/i);
     expect(html).not.toMatch(/not drawn yet/i);
     const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);

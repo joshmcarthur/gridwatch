@@ -129,7 +129,7 @@ export function energySankey(day: SiteDay): EnergySankey | null {
       ensureNode({
         id: loadId,
         kind: "load",
-        label: `${ISLAND_LABEL[island.island]} modelled load`,
+        label: `${ISLAND_LABEL[island.island]} estimated load`,
         megawattHours: island.load,
       });
       addLink(islandId, loadId, island.load);
@@ -212,14 +212,14 @@ export function sankeySummary(chart: EnergySankey): string {
   );
   const loadText =
     loadTotal > 0
-      ? `Modelled load was ${energyFormat.format(loadTotal)} megawatt-hours.`
-      : "Modelled load is missing.";
+      ? `Estimated load was ${energyFormat.format(loadTotal)} megawatt-hours.`
+      : "Estimated load is missing.";
   if (residuals.length === 0) {
-    return `${loadText} Generation, the inter-island cable and modelled load balanced for the day.`;
+    return `${loadText} Generation, the inter-island cable and estimated load balanced for the day.`;
   }
   const share =
     loadTotal > 0
-      ? ` ${percentFormat.format((Math.abs(residualTotal) / loadTotal) * 100)} percent of modelled load.`
+      ? ` ${percentFormat.format((Math.abs(residualTotal) / loadTotal) * 100)} percent of estimated load.`
       : "";
   return `${loadText} A residual of ${energyFormat.format(residualTotal)} megawatt-hours is shown as its own band.${share}`;
 }
@@ -232,7 +232,7 @@ export function sankeyTable(chart: EnergySankey): {
     "Place",
     "Generation",
     "Cable import",
-    "Modelled load",
+    "Estimated load",
     "Residual",
     "% of load",
   ];

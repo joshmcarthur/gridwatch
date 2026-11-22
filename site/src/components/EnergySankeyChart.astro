@@ -28,13 +28,13 @@ const legend = chart ? sankeyLegend(chart) : [];
     <ChartFigure
       plots={[svg]}
       tableCaptionId="energy-sankey-table-caption"
-      tableCaption="Daily energy balance by island, in megawatt-hours. Load is modelled. Residual keeps its sign."
+      tableCaption="Daily energy balance by island, in megawatt-hours. Load is an estimate, not a meter reading. The residual is the leftover, and it can be negative."
       headers={table.headers}
       rows={table.rows}
       legendLabel="Bands in the energy balance"
       notice={
         chart.state === "incomplete"
-          ? "Some numbers behind this balance are incomplete. The residual still uses the gold formula, and missing terms stay blank rather than zero."
+          ? "Some numbers behind this balance are incomplete. Missing terms stay blank, not zero, so the leftover band may be wrong."
           : undefined
       }
     >
@@ -53,7 +53,7 @@ const legend = chart ? sankeyLegend(chart) : [];
       <Fragment slot="caption">
         <p>
           Energy for the whole day, from fuel to each island, across the cable,
-          then to modelled load.
+          then to estimated load.
         </p>
       </Fragment>
       <Fragment slot="method">
@@ -64,10 +64,11 @@ const legend = chart ? sankeyLegend(chart) : [];
           not generator-to-consumer flows.
         </p>
         <p>
-          Load is modelled from the system operator's real-time dispatch. A
-          household meter is a different number. The residual is its own band
-          whenever it is not zero. It includes generation that the Generation_MD
-          files omit; that list is in the sources notes, section 3.5.
+          Load is an estimate from Transpower's real-time dispatch. Transpower is
+          the system operator, the company that runs the grid. The estimate is
+          not read from household meters, so it will not match a bill. The
+          residual is generation plus transfer minus load. It gets its own band
+          whenever it is not zero.
         </p>
         <p>{sankeySummary(chart)}</p>
       </Fragment>
