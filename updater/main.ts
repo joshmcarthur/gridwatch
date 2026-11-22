@@ -26,7 +26,7 @@ export const SEED_DAYS = 7;
 export const FILL_DAYS = 30;
 const INTERVAL_MS = 6 * 60 * 60 * 1000;
 const RETRY_MS = 10 * 60 * 1000;
-/** The dataset whose earliest date says how far back the fill has reached. */
+/** The dataset whose held dates say how far back the fill has reached. */
 const PRIMARY_DATASET = "dispatch_energy_prices";
 
 export interface Range {
@@ -67,12 +67,28 @@ const log = (message: string) =>
 
 const nzToday = () => Temporal.Now.plainDateISO("Pacific/Auckland").toString();
 
-async function earliestHeld(bronzeDir: string): Promise<string | null> {
-  const dates = (await readManifest(bronzeDir))
-    .filter((record) => record.dataset === PRIMARY_DATASET)
-    .flatMap((record) => record.trading_dates)
-    .sort();
-  return dates[0] ?? null;
+/**
+ * The start of the unbroken run of dates that ends at the newest date, or null with no dates.
+ * A range that stopped part way has its oldest files held and its newest files missing. The
+ * earliest date would skip that hole. This date puts the hole in the next range.
+ */
+export function coveredFrom(dates: Iterable<string>): string | null {
+  const [newest, ...older] = [...new Set(dates)].sort().reverse();
+  if (newest === undefined) return null;
+  let start = Temporal.PlainDate.from(newest);
+  for (const date of older) {
+    if (date !== start.subtract({ days: 1 }).toString()) break;
+    start = start.subtract({ days: 1 });
+  }
+  return start.toString();
+}
+
+async function coveredFromBronze(bronzeDir: string): Promise<string | null> {
+  return coveredFrom(
+    (await readManifest(bronzeDir))
+      .filter((record) => record.dataset === PRIMARY_DATASET)
+      .flatMap((record) => record.trading_dates),
+  );
 }
 
 /**
@@ -118,7 +134,7 @@ async function main(): Promise<void> {
 
   for (;;) {
     try {
-      const held = await earliestHeld(bronze);
+      const held = await coveredFromBronze(bronze);
       const before = [held, cursor].filter((d) => d !== null).sort()[0] ?? null;
       const range = nextRange(nzToday(), before);
       log(

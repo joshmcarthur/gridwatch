@@ -1,29 +1,49 @@
 x-gridwatch: &gridwatch
   image: ghcr.io/joshmcarthur/gridwatch:${GRIDWATCH_IMAGE_TAG:-latest}
-  build: .
+
+# Volumes are named by default. Set GRIDWATCH_DATA=./data and GRIDWATCH_SITE_OUT=./site-out
+# in .env to use folders on the host instead.
+x-data: &data ${GRIDWATCH_DATA:-gridwatch-data}:/data
+x-site-out: &site-out ${GRIDWATCH_SITE_OUT:-gridwatch-site-out}:/app/site-out
 
 services:
+  updater:
+    <<: *gridwatch
+    restart: unless-stopped
+    entrypoint: ["node", "updater/main.ts"]
+    volumes:
+      - *data
+      - *site-out
+  site:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    command: ["caddy", "file-server", "--root", "/srv/current", "--listen", ":8080"]
+    volumes:
+      - ${GRIDWATCH_SITE_OUT:-gridwatch-site-out}:/srv:ro
+    ports:
+      - "${GRIDWATCH_PORT:-8080}:8080"
+
+  # One-off jobs for backfills: docker compose --profile jobs run --rm collector --from ...
   collector:
     <<: *gridwatch
+    profiles: ["jobs"]
     entrypoint: ["node", "collector/src/main.ts"]
     volumes:
-      - ./data:/data
+      - *data
   publisher:
     <<: *gridwatch
+    profiles: ["jobs"]
     entrypoint: ["node", "publisher/src/main.ts"]
     volumes:
-      - ./data:/data
+      - *data
   site-build:
     <<: *gridwatch
-    profiles: ["publish"]
+    profiles: ["jobs"]
     entrypoint: ["node", "site/publish.ts"]
     volumes:
-      - ./data:/data:ro
-      - ./site-out:/app/site-out
-  site:
-    image: nginx:alpine
-    volumes:
-      - ./site-out:/usr/share/nginx/html:ro
-      - ./site/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    ports:
-      - "8080:80"
+      - ${GRIDWATCH_DATA:-gridwatch-data}:/data:ro
+      - *site-out
+
+volumes:
+  gridwatch-data:
+  gridwatch-site-out:
