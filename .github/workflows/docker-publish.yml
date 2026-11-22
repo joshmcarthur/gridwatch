@@ -1,13 +1,14 @@
 name: Publish Docker image
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       tag:
-        description: Image tag to publish (for manual runs)
-        required: true
+        description: Extra image tag to publish
+        required: false
         type: string
 
 permissions:
@@ -41,10 +42,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
             type=raw,value=${{ inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
 
       - name: Build and push Docker image

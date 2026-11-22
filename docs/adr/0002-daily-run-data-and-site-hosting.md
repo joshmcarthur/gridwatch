@@ -13,7 +13,7 @@ The owner said this is a "for fun" project. The data is not in git. The owner al
 
 Everything runs on the owner's home server.
 
-- **Runner:** cron (or a systemd timer) on the home server runs `docker compose run --rm collector`, then `docker compose run --rm publisher`, then `docker compose run --rm site-build`. The schedule does not use GitHub Actions. GitHub Actions is for CI, and for building and publishing the Docker image to GHCR on each release.
+- **Runner:** cron (or a systemd timer) on the home server runs `docker compose run --rm collector`, then `docker compose run --rm publisher`, then `docker compose run --rm site-build`. The schedule does not use GitHub Actions. GitHub Actions is for CI, and for building and publishing the Docker image to GHCR on every merge to `main`.
 - **Storage:** local disk on the home server, set as `DATA_ROOT`. The owner accepts a single copy of bronze. The risk is accepted.
 - **Site:** an nginx container on the home server serves the built site. Each run builds the site into the inactive slot (`releases/a` or `releases/b`) and swaps the `current` symlink to it atomically. The previous slot stays until the run after that overwrites it.
 - **Secrets:** files on the home server, readable only by the user that runs the jobs. This covers the LLM key later.
@@ -27,4 +27,4 @@ Everything runs on the owner's home server.
 - Scheduling and failure alerts are host configuration, outside this repository (owner decision, 2026-11-20; [#15](https://github.com/joshmcarthur/gridwatch/issues/15) is closed). The publisher exits with code 1 when a dataset fails, so the host can alert on the exit code.
 - The 12-month backfill (about 6.9 GB, about 1.2 hours) runs in place on the server. It has no disk or time limit.
 - The nginx service and the site publish step are in `compose.yml` and `site/publish.ts` ([#31](https://github.com/joshmcarthur/gridwatch/issues/31)). The dedicated `site-build` compose service stays (owner on [#110](https://github.com/joshmcarthur/gridwatch/issues/110), 2026-11-21).
-- Each GitHub release publishes the app image to `ghcr.io/joshmcarthur/gridwatch`. The home server can pull that image instead of building from source.
+- Each merge to `main` publishes the app image to `ghcr.io/joshmcarthur/gridwatch` (`latest` and a `sha-<7-char>` tag). The home server can pull that image instead of building from source.
