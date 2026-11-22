@@ -127,7 +127,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **`bronze_sha256`.** A column in every silver table. It holds the SHA-256 of the bronze file the row came from. The runner uses it to find silver that is out of date. See [ADR-0009](adr/0009-runner-default-mode.md).
 
-**Candidate.** An episode that ranks in the top 3 of its trading date and scores at least 0.35. It is a proposal for explanation, not a published event. See [ADR-0024](adr/0024-episode-ranking.md).
+**Candidate.** An episode that ranks first on its trading date and scores at least 0.5 (`is_candidate`). It is a public event, labelled Unreviewed. See [ADR-0024](adr/0024-episode-ranking.md) and [ADR-0022](adr/0022-editorial-review-and-publish-flow.md).
 
 **Canonical ID.** The one Gridwatch ID for an entity, such as a POC code or `<site>/<plant>`. Tables keep the source IDs next to it. See [ADR-0008](adr/0008-entity-model.md).
 
