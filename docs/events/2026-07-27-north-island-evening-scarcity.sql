@@ -12,7 +12,7 @@
 --   node collector/src/main.ts --from 2026-07-27 --to 2026-07-27
 --   node publisher/src/main.ts --dataset network_supply_points --dataset generation_fleet
 --   node publisher/src/main.ts --from 2026-07-27 --to 2026-07-27
--- Docker equivalent: docker compose run --rm collector --from 2026-07-27 --to 2026-07-27
+-- Docker equivalent: docker compose --profile jobs run --rm collector --from 2026-07-27 --to 2026-07-27
 -- then publisher for the mapping snapshots, then publisher --from 2026-07-27 --to 2026-07-27.
 -- Monthly Generation_MD and HVDC_Flows files for July 2026 come in with that one-day range.
 

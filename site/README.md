@@ -16,14 +16,17 @@ npm run dev -w site
 
 ## Publish with compose
 
+In the compose stack, the `updater` service builds the site, and the `site` service serves it. See the root README. To build by hand, stop the `updater` first, then run the `site-build` job:
+
 ```bash
-docker compose run --rm site-build
-docker compose up -d site
+docker compose stop updater
+docker compose --profile jobs run --rm site-build
+docker compose start updater
 ```
 
 `site-build` runs `site/publish.ts`. It builds the site into the inactive slot (`site-out/releases/a` or `site-out/releases/b`), checks that `index.html` exists, then points the `site-out/current` symlink at that slot with an atomic rename. The first run uses `a`. The next run writes the other slot and swaps; the previous slot stays until the run after that overwrites it. Before spawning Astro, the job fails if `DATA_ROOT/gold/site/index.json` is missing (default `DATA_ROOT` is `/data`). The Astro child also sets `SITE_REQUIRE_GOLD=1`, so it does not fall back to fixtures. If the build fails, `current` keeps the old slot.
 
-The `site` service serves `site-out/current` with nginx at http://localhost:8080. It serves nothing until `site-build` has run once.
+The `site` service serves `site-out/current` with Caddy at http://localhost:8080 (`GRIDWATCH_PORT` changes the port). Until the first build, the `updater` puts a "pages are on their way" page there.
 
 ## Data contract
 

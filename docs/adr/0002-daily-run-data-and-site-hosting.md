@@ -28,3 +28,5 @@ Everything runs on the owner's home server.
 - The 12-month backfill (about 6.9 GB, about 1.2 hours) runs in place on the server. It has no disk or time limit.
 - The nginx service and the site publish step are in `compose.yml` and `site/publish.ts` ([#31](https://github.com/joshmcarthur/gridwatch/issues/31)). The dedicated `site-build` compose service stays (owner on [#110](https://github.com/joshmcarthur/gridwatch/issues/110), 2026-11-21).
 - Each merge to `main` publishes the app image to `ghcr.io/joshmcarthur/gridwatch` (`latest` and a `sha-<7-char>` tag). The home server can pull that image instead of building from source.
+
+Amended 2026-11-23. [ADR-0026](0026-self-hosting-stack.md) replaces the Runner and Site bullets for a self-hosted stack. A long-running `updater` service now runs collect, publish and the site build, and a Caddy `site` service replaces nginx. Host cron is no longer needed. The `collector`, `publisher` and `site-build` services stay on the `jobs` profile. Storage, secrets and the invariant above are unchanged.
