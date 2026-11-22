@@ -56,18 +56,8 @@ const islandName = (island: Island): string => {
   }
 };
 
-const islandBare = (island: Island): string => {
-  switch (island) {
-    case "NI":
-      return "North Island";
-    case "SI":
-      return "South Island";
-    default: {
-      const unreachable: never = island;
-      return unreachable;
-    }
-  }
-};
+const islandBare = (island: Island): string =>
+  islandName(island).replace(/^the /, "");
 
 const joinAnd = (parts: string[]): string => {
   if (parts.length === 0) return "";
