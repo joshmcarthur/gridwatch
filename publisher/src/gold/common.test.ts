@@ -164,3 +164,23 @@ test("a missing earlier window day is omitted, and a changed window day changes 
   await writeGold("price_periods", d1, "sha-mid-b");
   expect(await fingerprintOf([WINDOWED], d2)).not.toBe(withEarly);
 });
+
+// Catches: an optional input that drops a date from the wanted list, or one whose late arrival
+// does not change the fingerprint (the date would never rebuild).
+test("an optional gold input does not decide which dates are wanted, and its arrival changes the fingerprint", async () => {
+  const date = "2026-11-10";
+  const optional: GoldInput = {
+    ...UPSTREAM,
+    table: "extra_gold",
+    optional: true,
+  };
+  await writeGold("upstream_gold", date, "aaa");
+  const without = (await wantedOf([UPSTREAM, optional])).get(date);
+  expect(without).toBeDefined();
+  expect(await fingerprintOf([UPSTREAM, optional], date)).toBe(without);
+
+  await writeGold("extra_gold", date, "bbb");
+  const withIt = (await wantedOf([UPSTREAM, optional])).get(date);
+  expect(withIt).not.toBe(without);
+  expect(await fingerprintOf([UPSTREAM, optional], date)).toBe(withIt);
+});
