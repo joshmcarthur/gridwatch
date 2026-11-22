@@ -593,7 +593,7 @@
       "unit": "$/MWh",
       "write_up_query": "Q7b",
       "status": "gap",
-      "gap_reason": "HEP0331 is not stored. The package stores the highest publish of the period, which is WEL0331 ($22,070.66) in the write-up."
+      "gap_reason": "Decided on #185: do not record a named node beside the highest publish. 39 nodes reach $20,000 in the period; HEP0331 is a write-up special case. The package stores WEL0331 ($22,070.66)."
     },
     {
       "fact_id": "dispatch.hep0331.seconds",
@@ -602,7 +602,7 @@
       "unit": "s",
       "write_up_query": "Q7b",
       "status": "gap",
-      "gap_reason": "The 85-second gap is that of HEP0331. The package stores the gap of the highest-publish node only."
+      "gap_reason": "The 85-second gap is that of HEP0331. The package stores the gap of the highest-publish node only (WEL0331, also 85 s in the write-up). Same decision as dispatch.hep0331.max_publish."
     },
     {
       "fact_id": "dispatch.scarcity_flag",
@@ -1292,7 +1292,7 @@
     {
       "fact_id": "episode.period_count",
       "claim_id_expected": "episode.period_count",
-      "value": 6,
+      "value": 7,
       "unit": "periods",
       "write_up_query": "ADR-0019",
       "status": "claim",
@@ -1305,9 +1305,34 @@
       "unit": "$/MWh",
       "write_up_query": "ADR-0019",
       "status": "series",
-      "series": "observations.0.measured_value",
-      "period": null,
+      "series": "measured_value",
+      "observation_type": "reserve_price_high",
+      "subject_id": "SIR|NI",
       "decimals": 2
+    },
+    {
+      "fact_id": "observation.start_trading_period",
+      "claim_id_expected": null,
+      "value": 35,
+      "unit": "period",
+      "write_up_query": "ADR-0019",
+      "status": "series",
+      "series": "start_trading_period",
+      "observation_type": "reserve_price_high",
+      "subject_id": "SIR|NI",
+      "decimals": 0
+    },
+    {
+      "fact_id": "observation.end_trading_period",
+      "claim_id_expected": null,
+      "value": 40,
+      "unit": "period",
+      "write_up_query": "ADR-0019",
+      "status": "series",
+      "series": "end_trading_period",
+      "observation_type": "reserve_price_high",
+      "subject_id": "SIR|NI",
+      "decimals": 0
     },
     {
       "fact_id": "report.outages",
