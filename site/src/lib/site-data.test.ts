@@ -110,7 +110,7 @@ test("loadSiteDayIfPresent loads 2026-07-27 from the fixture, not 2026-09-27", (
   expect(loadSiteDayIfPresent("2026-09-27")?.trading_date).toBe("2026-09-27");
 });
 
-test("fixture 2026-07-27 is a complete generation and prices day", () => {
+test("fixture 2026-07-27 is a complete day with the Unreviewed event", () => {
   process.env.DATA_ROOT = dataRoot;
   const day = loadSiteDay("2026-07-27");
   expect(day.complete).toBe(true);
@@ -121,6 +121,8 @@ test("fixture 2026-07-27 is a complete generation and prices day", () => {
     (node) => node.point_of_connection === "OTA2201",
   );
   expect(otahuhu?.price[35]).toBe(3296.04);
+  expect(day.events?.items).toHaveLength(1);
+  expect(day.events?.items[0]?.episode_id).toBe("394f75a3bfa948a3");
 });
 
 test("loadSiteDay reads a gold day when DATA_ROOT has a matching file", async () => {
