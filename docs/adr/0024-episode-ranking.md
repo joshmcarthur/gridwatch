@@ -7,7 +7,7 @@
 
 Detection finds unusual things. It does not decide which of them are worth explaining ([brief §6.3](../brief.md), [#37](https://github.com/joshmcarthur/gridwatch/issues/37)). Episodes ([ADR-0021](0021-episodes.md)) group observations into one situation each. This ADR scores each episode and proposes a short list of candidates for each day. The score has four components. Each is stored, so a reader can see why an episode ranked where it did.
 
-This ADR assumes that ranking **proposes** candidates. It does not publish anything and it does not change the site contract. Two open pull requests decide what happens to a candidate: [#125](https://github.com/joshmcarthur/gridwatch/pull/125) proposes an editorial review flow, and [#131](https://github.com/joshmcarthur/gridwatch/pull/131) (ADR-0022) proposes to publish events as Unreviewed with no editorial gate. If #131 merges, `is_candidate` could become the publish gate for events ([#42](https://github.com/joshmcarthur/gridwatch/issues/42)). That is an owner question below. This ADR does not settle it.
+Ranking writes `is_candidate` on `episode_scores` and does not write site JSON. Owner decision on [#182](https://github.com/joshmcarthur/gridwatch/issues/182) (2026-11-23): `is_candidate` feeds site events directly, so event pages ([#42](https://github.com/joshmcarthur/gridwatch/issues/42)) emit an event for each candidate, labelled Unreviewed ([ADR-0022](0022-editorial-review-and-publish-flow.md)). The site contract stays unchanged until #42 amends [ADR-0014](0014-site-json-contract.md).
 
 Code: `publisher/src/gold/episode-ranking.ts`. Dataset id `gold_episode_ranking`. It runs after `gold_episodes`.
 
@@ -130,7 +130,7 @@ Defaults in brackets. Nothing here is implemented as final.
 6. Should `price_low` rank like `price_high`? **[yes, rescale the cap to the backfill peak; #181]**
 7. Do candidates with incomplete inputs stay candidates, flagged? **[yes]**
 8. Do midnight-split evenings stay two episodes, so each part is ranked alone? **[yes, as in ADR-0021]**
-9. Does `is_candidate` feed [#42](https://github.com/joshmcarthur/gridwatch/issues/42) events directly, if #131 merges? **[no decision; ranking only proposes]**
+9. Does `is_candidate` feed [#42](https://github.com/joshmcarthur/gridwatch/issues/42) events directly, if #131 merges? **[yes; no step between ranking and events. #182, 2026-11-23. ADR-0022 is accepted.]**
 10. Post the backfill top list as one comment on #37 after review? **[yes, only after owner approval]**
 
 ## Alternatives considered
@@ -151,5 +151,5 @@ Defaults in brackets. Nothing here is implemented as final.
 
 Version 1 over 367 days: 310 episodes, 127 candidates. Version 2: 310 episodes, 150 candidates. Corroboration count 0 / 1 / 2 covers 170 / 129 / 11 episodes. 8 episodes predate the fuel data. 27 July 2026 stays first (0.814 to 0.789). Two days enter the top 12 (2026-05-27, 2026-07-26) and two leave (2025-12-08, which falls from 0.650 to 0.593 but is still its day's first rank, and 2026-08-06).
 - Rarity is cold for the first 20 days of history.
-- Rankings are proposals. Editorial review, or the lack of it, is decided in [#41](https://github.com/joshmcarthur/gridwatch/issues/41).
+- `is_candidate` is the event list for [#42](https://github.com/joshmcarthur/gridwatch/issues/42). Ranking does not wait for a human; after emit, events are Unreviewed until a later mark-as-reviewed flow ([ADR-0022](0022-editorial-review-and-publish-flow.md), [#41](https://github.com/joshmcarthur/gridwatch/issues/41)).
 - Evidence packages ([#38](https://github.com/joshmcarthur/gridwatch/issues/38)) can read `episode_scores` to pick what to build.
