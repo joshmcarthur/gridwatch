@@ -181,6 +181,11 @@ test("dispatch publishes of the peak period: highest publish and scarcity counts
   expect(claimOf(pkg, "dispatch.energy.max_publish.p36")?.source.kind).toBe(
     "silver",
   );
+  expect(value("dispatch.hep0331.max_publish")).toBe(21000);
+  expect(value("dispatch.hep0331.seconds")).toBe(85);
+  expect(claimOf(pkg, "dispatch.hep0331.max_publish")?.source.kind).toBe(
+    "silver",
+  );
 });
 
 // Catches: a derived claim that is not tied to the values it came from.
@@ -255,6 +260,9 @@ test("a silver table takes its status from the completeness view", async () => {
   expect(pkg.claims.some((c) => c.id.startsWith("dispatch.energy."))).toBe(
     false,
   );
+  expect(pkg.claims.some((c) => c.id.startsWith("dispatch.hep0331."))).toBe(
+    false,
+  );
   expect(pkg.links.source_datasets).not.toContain("dispatch_energy_prices");
   expect(pkg.links.source_datasets).toContain("dispatch_reserve_prices");
   expect(claimOf(pkg, "dispatch.sir.max_publish.p36")?.note).toContain(
@@ -277,6 +285,9 @@ test("an invalid silver table gives no claim", async () => {
   ).toBe("invalid");
   expect(pkg.context.dispatch_peak.energy).toBeNull();
   expect(pkg.claims.some((c) => c.id.startsWith("dispatch.energy."))).toBe(
+    false,
+  );
+  expect(pkg.claims.some((c) => c.id.startsWith("dispatch.hep0331."))).toBe(
     false,
   );
 });
