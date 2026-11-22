@@ -49,5 +49,6 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(/backup generation/);
     expect(html).toMatch(/Recently detected/);
     expect(html).not.toMatch(/recent events/i);
+    expect(html).not.toMatch(/overlapped|grid load|regional price gap/i);
   },
 );

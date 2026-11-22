@@ -29,7 +29,7 @@ const cards = marketConditionCards(index, loadDay);
 const recent = recentDays(index, undefined, loadDay);
 const week = recent.slice(0, 7);
 const earlier = recent.slice(7);
-const episodes = recentEpisodes(index);
+const episodes = recentEpisodes(index, loadDay);
 ---
 
 <Layout
@@ -170,7 +170,7 @@ const episodes = recentEpisodes(index);
           {episodes.map(({ date, episode }) => (
             <li>
               <a href={`${dailyPath(date)}#episode-${episode.episode_id}`}>
-                {formatTradingDate(date)}: {episodeHeadline(episode)}
+                {formatTradingDate(date)}: {episodeHeadline(episode, loadDay(date))}
               </a>
             </li>
           ))}

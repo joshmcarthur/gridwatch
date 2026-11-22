@@ -15,7 +15,6 @@ import {
   neighbouringDays,
 } from "../../../../lib/daily-page";
 import {
-  episodeClockRange,
   episodeEvidenceLinks,
   episodeHeadline,
 } from "../../../../lib/episode-copy";
@@ -111,13 +110,12 @@ const months = monthGroups(index);
         day.episodes === undefined || day.episodes.state === "missing" ? (
           <p>The list of unusual stretches is not ready for this day yet.</p>
         ) : day.episodes.items.length === 0 ? (
-          <p>No unusual stretches overlapped on this day.</p>
+          <p>No unusual stretches were detected on this day.</p>
         ) : (
           <ol class="episodes">
             {day.episodes.items.map((episode) => (
               <li id={`episode-${episode.episode_id}`}>
-                <p>{episodeHeadline(episode)}</p>
-                <p>{episodeClockRange(episode, day)}</p>
+                <p>{episodeHeadline(episode, day)}</p>
                 {episodeEvidenceLinks(episode).map((link) => (
                   <p>
                     <a href={link.href}>{link.label}</a>
