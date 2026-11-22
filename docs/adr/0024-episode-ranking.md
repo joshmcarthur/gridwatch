@@ -26,7 +26,7 @@ Output is Parquet at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`, with a
 
 `episode_ranking_days` columns: `trading_date`, `episode_count`, `candidate_count`, `history_days`, then `analysis_version`, `inputs_sha256`, `inputs_complete`.
 
-`episode_scores` columns: `episode_id`, `trading_date`, `severity`, `period_count`, `island_count`, `type_count`, `severity_component`, `duration_component`, `breadth_component`, `rarity_component`, `score`, `day_rank`, `is_candidate`, `candidate_reason`, `history_sample_size`, `parameters` (canonical JSON of the config), `input_tables`, `analysis_version`, `inputs_sha256`, `inputs_complete`.
+`episode_scores` columns: `episode_id`, `trading_date`, `severity`, `period_count`, `island_count`, `type_count`, `severity_component`, `duration_component`, `breadth_component`, `corroboration_count`, `corroboration_component`, `rarity_component`, `score`, `day_rank`, `is_candidate`, `candidate_reason`, `history_sample_size`, `parameters` (canonical JSON of the config), `input_tables`, `analysis_version`, `inputs_sha256`, `inputs_complete`.
 
 `day_rank` is 1 for the highest score of the day. A tie goes to the smaller `episode_id`. `candidate_reason` is `top_n`, `below_min_score` or `beyond_top_n`.
 
@@ -38,9 +38,10 @@ Each component is in [0, 1].
 
 | Component | Definition | Weight |
 | --- | --- | --- |
-| `severity_component` | `clamp(log10(severity) / log10(cap), 0, 1)`. `cap` is the largest `severityCapByType` entry among the episode's observation types (the default for an unknown type). | 0.35 |
+| `severity_component` | `clamp(log10(severity) / log10(cap), 0, 1)`. `cap` is the largest `severityCapByType` entry among the episode's observation types (the default for an unknown type). | 0.30 |
 | `duration_component` | `clamp(period_count / 12, 0, 1)` | 0.20 |
-| `breadth_component` | `clamp((max(type_count - 1, 0) + max(island_count - 1, 0)) / 4, 0, 1)` | 0.20 |
+| `breadth_component` | `clamp((max(type_count - 1, 0) + max(island_count - 1, 0)) / 4, 0, 1)` | 0.15 |
+| `corroboration_component` | `clamp(corroboration_count / 2, 0, 1)`. `corroboration_count` is the number of `CORROBORATION_RULES` that match the episode: a fuel-level `generation_low`, or an NI/SI `demand_high`, on the same trading date that overlaps the episode span on one of its islands ([ADR-0021](0021-episodes.md), [#180](https://github.com/joshmcarthur/gridwatch/issues/180)). Each rule counts once. These observations are not episode members. | 0.10 |
 | `rarity_component` | `1 - share`, where `share` is the fraction of prior days in the window that had an episode with the same observation-type set and the same island set. | 0.25 |
 
 `score` is the weighted sum. The weights add up to 1. A test asserts it.
@@ -71,7 +72,9 @@ An episode is a candidate when `day_rank <= candidatesPerDay` (3) and `score >= 
 
 | Key | Value |
 | --- | --- |
-| `weights` | severity 0.35, duration 0.20, breadth 0.20, rarity 0.25 |
+| `weights` | severity 0.30, duration 0.20, breadth 0.15, corroboration 0.10, rarity 0.25 |
+| `corroborationCap` | 2 |
+| `corroborationRules` | `CORROBORATION_RULES` of `episodes.ts` |
 | `severityCapByType` | as in the table above |
 | `defaultSeverityCap` | 10 |
 | `durationCapPeriods` | 12 |
@@ -117,7 +120,7 @@ This environment has no gold lake, so the ranking has not run over the backfill.
 
 Defaults in brackets. Nothing here is implemented as final.
 
-1. Do the weights 0.35 / 0.20 / 0.20 / 0.25 and the caps suit the site? **[yes, provisional]**
+1. Do the weights 0.30 / 0.20 / 0.15 / 0.10 / 0.25 (severity, duration, breadth, corroboration, rarity) and the caps suit the site? **[yes, provisional]**
 2. Is rarity the frequency of the same type-set and island-set over 90 days, not a severity percentile? **[yes, frequency]**
 3. Is a window with fewer than 20 prior days neutral (0.5)? **[yes]**
 4. Top 3 per day with a floor of 0.35, and the weekly list as a query? **[yes]**
@@ -138,7 +141,13 @@ Defaults in brackets. Nothing here is implemented as final.
 
 ## Consequences
 
-- A later detector ([#33](https://github.com/joshmcarthur/gridwatch/issues/33), [#35](https://github.com/joshmcarthur/gridwatch/issues/35)) changes episodes. The episode day fingerprints change, and the rankings of every date within 90 days rebuild.
+- A later detector that becomes an episode input changes episodes. The episode day fingerprints change, and the rankings of every date within 90 days rebuild.
+- `ANALYSIS_VERSION` is 2 since [#180](https://github.com/joshmcarthur/gridwatch/issues/180). The fuel generation-change and demand-deviation sentinels are ranking inputs for the episode's own date. They are `optional`: the baselines need history, so a day without a sentinel still ranks, with a corroboration count of 0. A sentinel that arrives later changes the fingerprint.
+- An episode with no corroboration scores a little lower than under version 1, because weight moved to the new component. Early days with no sentinel cannot corroborate.
+
+### Measured on the 2026-11-22 lake (#180)
+
+Version 1 over 367 days: 310 episodes, 127 candidates. Version 2: 310 episodes, 150 candidates. Corroboration count 0 / 1 / 2 covers 170 / 129 / 11 episodes. 8 episodes predate the fuel data. 27 July 2026 stays first (0.814 to 0.789). Two days enter the top 12 (2026-05-27, 2026-07-26) and two leave (2025-12-08, which falls from 0.650 to 0.593 but is still its day's first rank, and 2026-08-06).
 - Rarity is cold for the first 20 days of history.
 - Rankings are proposals. Editorial review, or the lack of it, is decided in [#41](https://github.com/joshmcarthur/gridwatch/issues/41).
 - Evidence packages ([#38](https://github.com/joshmcarthur/gridwatch/issues/38)) can read `episode_scores` to pick what to build.

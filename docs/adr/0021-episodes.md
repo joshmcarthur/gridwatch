@@ -9,7 +9,7 @@ An episode groups related observations into one underlying market situation ([br
 
 This ADR is the gold table and the v1 grouping rules. Code lives in `publisher/src/gold/episodes.ts` and `publisher/src/gold/episodes-group.ts`. Dataset id `gold_episodes`.
 
-Detectors in play: `price_high` / `price_low` ([#22](https://github.com/joshmcarthur/gridwatch/issues/22)), `separation_high` / `separation_low` ([#32](https://github.com/joshmcarthur/gridwatch/issues/32)), `reserve_price_high` / `reserve_price_low` ([#34](https://github.com/joshmcarthur/gridwatch/issues/34)). Not yet built: generation change ([#33](https://github.com/joshmcarthur/gridwatch/issues/33)), demand deviation ([#35](https://github.com/joshmcarthur/gridwatch/issues/35)). Hydro and constraint observations have no detector. Rules that name those types are no-ops until the detector writes rows.
+Detectors in play: `price_high` / `price_low` ([#22](https://github.com/joshmcarthur/gridwatch/issues/22)), `separation_high` / `separation_low` ([#32](https://github.com/joshmcarthur/gridwatch/issues/32)), `reserve_price_high` / `reserve_price_low` ([#34](https://github.com/joshmcarthur/gridwatch/issues/34)). Built, but not episode inputs: generation change ([#33](https://github.com/joshmcarthur/gridwatch/issues/33)) and demand deviation ([#35](https://github.com/joshmcarthur/gridwatch/issues/35)). The builder reads only the three sentinels above, so no generation or demand observation is a member (see "Generation and demand observations" below). Hydro and constraint observations have no detector. Rules that name types with no input are no-ops.
 
 [#21](https://github.com/joshmcarthur/gridwatch/issues/21) is still waiting for the owner to choose among three candidates. A prior agent recommended Mon 27 July 2026, North Island scarcity. This ADR does not reconstruct that day. It states how the proposed rules would group that *kind* of day.
 
@@ -102,6 +102,21 @@ Config values, provisional:
 | `sameDateOnly` | true | Fits `goldDataset` with no forward window. Matches the observation midnight split. |
 | `singletonEpisodes` | true | Every observation is in exactly one episode. |
 | `episodeSeverity` | `max` | The episode is as severe as its worst fact. Members keep their own severity. |
+
+### Generation and demand observations ([#180](https://github.com/joshmcarthur/gridwatch/issues/180))
+
+The generation-change and demand-deviation detectors are not episode inputs in v1. Join rules that name them stay in the config and do nothing while the builder omits those sentinels. `ANALYSIS_VERSION` stays 1: grouping and the input list do not change.
+
+Why they are not members. Plant `generation_low` and fuel `generation_low` are island-wide in the join rules. Taking them as members would glue unrelated plants and fuels into one blob, and into any overlapping `price_high` episode. That would change seeds, member arrays and episode ids. `generation_high` has no partner. `demand_low` has no partner. National `NZ` demand has a null island and cannot join on island.
+
+What they do instead. They corroborate an episode without belonging to it. A fuel-level `generation_low` or an NI/SI `demand_high` corroborates an episode when it is on the same trading date, overlaps the episode span and has one of the episode's islands. The list is `CORROBORATION_RULES` in `episodes.ts`. Two readers use it:
+
+- The evidence package lists matches as `related_observations`, beside the members ([ADR-0025](0025-evidence-packages.md)).
+- The ranking scores them as `corroboration_component` ([ADR-0024](0024-episode-ranking.md)).
+
+Plant-level generation change stays out of both until its noise is cut ([#179](https://github.com/joshmcarthur/gridwatch/issues/179)). Whether any of these types should later become members is a separate decision, and it needs the grouping effect measured on the lake.
+
+Counts on the 2026-11-22 lake (136 days; 310 episodes before and after, because membership is unchanged): plant `generation_high` / `generation_low` 2,796 / 2,651, fuel 579 / 417, `demand_high` / `demand_low` 676 / 521.
 
 ### Stable `episode_id`
 
