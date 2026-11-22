@@ -219,8 +219,12 @@ test("a proxy period gets a proxy marker in the hover text and the table", () =>
   const chart = chartOf(day);
   expect(chart.nodes[0]?.proxy[4]).toBe(true);
   expect(chart.nodes[0]?.proxy[3]).toBe(false);
-  expect(chart.periods[4]?.title).toContain("OTA2201 $0.08/MWh (proxy price)");
-  expect(priceChartTable(chart).rows[4]?.[1]).toBe("$0.08 (proxy price)");
+  expect(chart.periods[4]?.title).toContain(
+    "OTA2201 $0.08/MWh (copied from a nearby place)",
+  );
+  expect(priceChartTable(chart).rows[4]?.[1]).toBe(
+    "$0.08 (copied from a nearby place)",
+  );
 });
 
 test("a negative spread shows a minus sign and the spread axis includes zero", () => {

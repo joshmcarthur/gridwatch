@@ -9,7 +9,7 @@ export const PRICE_MISSING =
   "Wholesale prices for this day are missing, so there is no chart.";
 
 export const PRICE_NOTICE =
-  "Some wholesale price numbers are missing. A node with no price has a gap in its line, and the table says No data.";
+  "Some wholesale price numbers are missing. A place with no price has a gap in its line, and the table says No data.";
 
 export type PriceIsland = "NI" | "SI";
 
@@ -282,7 +282,7 @@ function hoverText(
       parts.push(`${node.poc} no data`);
       continue;
     }
-    const proxy = node.proxy[index] ? " (proxy price)" : "";
+    const proxy = node.proxy[index] ? " (copied from a nearby place)" : "";
     parts.push(`${node.poc} ${signedMoney(value)}/MWh${proxy}`);
   }
   for (const spread of spreads) {
@@ -298,7 +298,7 @@ function hoverText(
 
 function priceCell(value: number | null, proxy: boolean): string {
   if (value === null) return "No data";
-  return `${signedMoney(value)}${proxy ? " (proxy price)" : ""}`;
+  return `${signedMoney(value)}${proxy ? " (copied from a nearby place)" : ""}`;
 }
 
 /** Money with a sign before the dollar sign, for example `-$5.00`. */

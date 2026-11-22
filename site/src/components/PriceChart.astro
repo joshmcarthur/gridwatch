@@ -72,7 +72,7 @@ function spreadLine(spread: PlottedSpreadLine): PlotLine {
 function pricePlot(data: PriceChart): LinePlot {
   return {
     id: "price-chart",
-    title: "Wholesale price at three reference nodes",
+    title: "Wholesale price at three places",
     yLabel: "Wholesale price ($ per megawatt-hour, $/MWh)",
     domain: data.priceDomain,
     lines: data.nodes.map(nodeLine),
@@ -82,8 +82,8 @@ function pricePlot(data: PriceChart): LinePlot {
 function spreadPlot(data: PriceChart): LinePlot {
   return {
     id: "price-spread-chart",
-    title: "Spread between reference nodes",
-    yLabel: "Spread ($/MWh), first node minus second",
+    title: "Price gap between places",
+    yLabel: "Spread ($/MWh), first place minus second",
     domain: data.spreadDomain,
     lines: data.plottedSpreads.map(spreadLine),
     zeroLine: true,
@@ -108,7 +108,7 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
     <ChartFigure
       plots={plots}
       tableCaptionId="wholesale-prices-table-caption"
-      tableCaption="Wholesale prices in $/MWh for each 30-minute period. Spreads are the first node minus the second, so a positive spread means the first node is dearer."
+      tableCaption="Wholesale prices in $/MWh for each 30-minute period. A spread is the first place minus the second, so a positive spread means the first place is dearer."
       headers={table.headers}
       rows={table.rows}
       legendLabel="Lines in the price and spread charts"
@@ -139,7 +139,8 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
       <Fragment slot="caption">
         <p>
           Average wholesale price over each 30-minute period at three places:
-          Otahuhu, Haywards and Benmore.
+          Otahuhu, Haywards and Benmore. A spread is the price at one place
+          minus the price at another, so it shows how far apart they are.
         </p>
       </Fragment>
       <Fragment slot="method">
@@ -152,13 +153,14 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
           Where two spread lines have the same values, one sits on top of the
           other.
         </p>
-        {anyProxy && <p>An open circle marks a proxy price.</p>}
+        {anyProxy && <p>An open circle marks a price copied from a nearby place after an outage.</p>}
         {daily.map((line) => (
           <p>{line}</p>
         ))}
         <p>
-          Source: Electricity Authority dispatch energy prices at Otahuhu,
-          Haywards and Benmore. Prices are interim and may be revised.
+          Source: Electricity Authority wholesale energy prices at Otahuhu,
+          Haywards and Benmore. These are first-published prices. The Authority
+          confirms them by 2pm on the next business day, so they can change.
         </p>
       </Fragment>
     </ChartFigure>

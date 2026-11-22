@@ -26,6 +26,10 @@ test.skipIf(!existsSync(builtPage))(
       /Prices here come from three places: Otahuhu in Auckland, Haywards near\s+Wellington, and Benmore in the South Island/,
     );
     expect(html).not.toMatch(/sample points?/i);
+    expect(html).not.toMatch(
+      /reference nodes?|proxy price|interim|dispatch energy/i,
+    );
+    expect(html).toMatch(/A spread is the price at one place/);
     expect(html).not.toMatch(/trading day|grouped readings|dataset/i);
     expect(html).toContain("Words on this page");
     expect(html).toContain('id="word-wholesale-price"');
@@ -74,7 +78,7 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain("Otahuhu");
     expect(html).toContain("Haywards");
     expect(html).toContain("Benmore");
-    expect(html).toContain("Electricity Authority dispatch energy prices");
+    expect(html).toContain("Electricity Authority wholesale energy prices");
     expect(html.match(/role="img"/g)?.length).toBe(5);
     expect(html).toContain('aria-labelledby="energy-flow"');
     expect(html).toContain(
