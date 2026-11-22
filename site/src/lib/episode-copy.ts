@@ -178,7 +178,12 @@ const fromTo = (
 export function episodeHeadline(
   episode: Pick<
     SiteEpisode,
-    "observation_types" | "islands" | "start_utc" | "end_utc" | "highlights"
+    | "observation_types"
+    | "islands"
+    | "member_count"
+    | "start_utc"
+    | "end_utc"
+    | "highlights"
   >,
   day: Pick<SiteDay, "periods">,
 ): string {
