@@ -71,7 +71,7 @@ One object, `DEMAND_DEVIATION_CONFIG`, in `publisher/src/gold/demand-deviation.t
 
 - **Tables.** `demand_deviation_baselines` (sentinel, one row for each subject and trading period of the date) and `observations_demand_deviation`.
 - **Fingerprint.** `goldDataset` with `{ layer: "gold", table: "grid_load_period", windowDays: 56 }`. `inputs_sha256` is the same `dateFingerprint` that `wantedFingerprints` uses. A revised load day, a day that enters or leaves the window, and a version bump each change the fingerprint.
-- **Registry.** After the existing detectors, before `gold_episodes`. The detector reads `grid_load_period`. It does not rewrite ADR-0021 episode grouping. Wiring `demand_deviation_baselines` into `gold_episodes` is a follow-up.
+- **Registry.** After the existing detectors, before `gold_episodes`. The detector reads `grid_load_period`. It does not rewrite ADR-0021 episode grouping. `demand_deviation_baselines` is not an episode input in v1 ([ADR-0021](0021-episodes.md), [#180](https://github.com/joshmcarthur/gridwatch/issues/180)).
 
 ## Alternatives considered
 
@@ -89,5 +89,5 @@ One object, `DEMAND_DEVIATION_CONFIG`, in `publisher/src/gold/demand-deviation.t
 - Public holidays will flag. That is accepted in v1.
 - A load regime that lasts more than about four weeks of that weekday becomes the baseline and stops being flagged, as with prices.
 - Periods 47–50 on a DST-end day usually have `sample_count = 0` and cannot fire. They do not mark the day `partial`.
-- Episode grouping does not yet read this sentinel. Demand observations exist as gold rows; they are not members of `gold_episodes` until a follow-up.
-- Demand-deviation backfill counts are pending. This environment has no gold lake, so the run over the full backfill has not happened. Counts, examples and false positives seen will be added here after that run.
+- Episode grouping does not read this sentinel. Demand observations exist as gold rows; they are not members of `gold_episodes` in v1 ([ADR-0021](0021-episodes.md), [#180](https://github.com/joshmcarthur/gridwatch/issues/180)). Evidence packages already hold modelled load as a context series.
+- Backfill on 2026-11-22 over the 12-month lake: 676 `demand_high` and 521 `demand_low` observations (4.6 per day, maximum 11). Examples: `demand_high` NZ 2026-04-23 periods 1–21, 3,028.9 MW, severity 8.6; `demand_high` NI 2026-06-11 periods 1–48, 2,184.7 MW, severity 6.35.

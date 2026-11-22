@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-21
+- Amended: 2026-11-23 ([#180](https://github.com/joshmcarthur/gridwatch/issues/180))
 
 ## Context
 
@@ -9,7 +10,7 @@ An episode groups related observations into one underlying market situation ([br
 
 This ADR is the gold table and the v1 grouping rules. Code lives in `publisher/src/gold/episodes.ts` and `publisher/src/gold/episodes-group.ts`. Dataset id `gold_episodes`.
 
-Detectors in play: `price_high` / `price_low` ([#22](https://github.com/joshmcarthur/gridwatch/issues/22)), `separation_high` / `separation_low` ([#32](https://github.com/joshmcarthur/gridwatch/issues/32)), `reserve_price_high` / `reserve_price_low` ([#34](https://github.com/joshmcarthur/gridwatch/issues/34)). Not yet built: generation change ([#33](https://github.com/joshmcarthur/gridwatch/issues/33)), demand deviation ([#35](https://github.com/joshmcarthur/gridwatch/issues/35)). Hydro and constraint observations have no detector. Rules that name those types are no-ops until the detector writes rows.
+Detectors in play as episode members: `price_high` / `price_low` ([#22](https://github.com/joshmcarthur/gridwatch/issues/22)), `separation_high` / `separation_low` ([#32](https://github.com/joshmcarthur/gridwatch/issues/32)), `reserve_price_high` / `reserve_price_low` ([#34](https://github.com/joshmcarthur/gridwatch/issues/34)). Generation-change ([#33](https://github.com/joshmcarthur/gridwatch/issues/33)) and demand-deviation ([#35](https://github.com/joshmcarthur/gridwatch/issues/35)) write gold observations, but they are not episode members in v1 ([#180](https://github.com/joshmcarthur/gridwatch/issues/180), see below). Hydro and constraint observations have no detector. Join rules for generation and demand stay in the config so a later wiring does not need a new grouping design; they are no-ops while the episode builder omits those sentinels.
 
 [#21](https://github.com/joshmcarthur/gridwatch/issues/21) is still waiting for the owner to choose among three candidates. A prior agent recommended Mon 27 July 2026, North Island scarcity. This ADR does not reconstruct that day. It states how the proposed rules would group that *kind* of day.
 
@@ -73,7 +74,7 @@ Duration and severity do not gate joins in v1. Each detector already applied its
 
 ### Typed join rules (v1)
 
-There is no universal window. Each pair of observation types has its own time predicate and its own subject predicate. Types that have no rows yet are no-ops until their detector writes observations; the rule is still in the config so a later detector does not need a new grouping design.
+There is no universal window. Each pair of observation types has its own time predicate and its own subject predicate. Types whose detector is not an episode input, or that have no rows yet, are no-ops. The rule is still in the config so a later detector does not need a new grouping design.
 
 Related conditions in v1 are the scarcity family: high energy price, high reserve price, low generation, high separation, high demand. Opposite polarity (`*_high` with `*_low`) does not join. `generation_high` (a thermal ramp) does not join `price_high`; that dispatch response belongs in the evidence package ([#38](https://github.com/joshmcarthur/gridwatch/issues/38)), not in the grouping key.
 
@@ -90,6 +91,22 @@ Related conditions in v1 are the scarcity family: high energy price, high reserv
 | `price_low_price_low_adjacent_island` | `price_low` — `price_low` | overlap or adjacent ≤ 2 periods | same island |
 
 `price_low` does not join `generation_low`. `separation_low` has no v1 partner.
+
+### Generation-change and demand-deviation are not episode members (v1)
+
+[#180](https://github.com/joshmcarthur/gridwatch/issues/180) asked which of the new detectors should become episode inputs: plant-level generation-change, fuel-level generation-change, demand NZ, demand NI/SI. The 2026-11-22 lake had 310 episodes. None of them contained a generation-change or demand-deviation observation, because the builder only reads the price, separation and reserve sentinels.
+
+**Decision: none of them become episode members in v1.** They stay gold observations. Evidence packages already hold generation and modelled load as context series ([ADR-0025](0025-evidence-packages.md)). `ANALYSIS_VERSION` stays 1: the grouping rules and the input list do not change.
+
+| Detector | Observations (12-month lake, 2026-11-22) | Episode member? | Why |
+| --- | --- | --- | --- |
+| Plant generation-change | 2,796 `generation_high` + 2,651 `generation_low` (19.1 per day, max 53; 86% have severity below 1.5; median 1.09) | No | Too noisy. The largest hits are Manapouri and Clyde hydro, which look like normal scheduling ([#33](https://github.com/joshmcarthur/gridwatch/issues/33)). `generation_low_generation_low_adjacent_subject` joins on the same island, so plant dips on one island would glue into one blob and then into any overlapping `price_high`. Tuning is [#179](https://github.com/joshmcarthur/gridwatch/issues/179). |
+| Fuel generation-change | 579 `generation_high` + 417 `generation_low` (~2.7 per day) | No for v1 | Closer to the scarcity grain ADR-0021 wanted, but `generation_high` has no partner and would add 579 singletons, and island-wide `generation_low` would still blob fuels. Revisit after [#179](https://github.com/joshmcarthur/gridwatch/issues/179), likely as `generation_low` only with a type filter. |
+| Demand deviation | 676 `demand_high` + 521 `demand_low` (4.6 per day, max 11) | No for v1 | `demand_high` joining `price_high` on overlap is the intended scarcity rule. `demand_low` has no partner. National `NZ` has a null island, so it cannot join on island and would be a singleton. Revisit after a lake ranking check, likely as `demand_high` NI/SI only. |
+
+If every observation above had become a member, the episode table would grow by thousands of rows (about 3,375 `generation_high` singletons alone, plus island-wide `generation_low` blobs and demand singletons). Ranking's `minScore` of 0.35 would keep most of those singletons off the candidate list, but existing episode seeds, member arrays, breadth and site headlines would change. This environment has no gold lake, so the top-12 from [#37](https://github.com/joshmcarthur/gridwatch/issues/37) was not re-ranked. The before list is the 2026-11-22 ranking (27 July 2026 still first, score 0.814). The after list is not measured.
+
+Wiring a detector later means listing its **sentinel** as a gold input and bumping `ANALYSIS_VERSION`. Ranking then rebuilds 90 days ([ADR-0024](0024-episode-ranking.md)).
 
 Hydro-style observations do not exist yet. When they do, they will use a much longer window (for example 14 days, same island or same catchment) and will not join dispatch-scale types in v1. A hydro month and an evening price spike stay different episodes until a later ADR says otherwise.
 
@@ -124,7 +141,7 @@ Max is biased toward a single extreme spike. A long moderate cluster can look qu
 
 The owner has not chosen a candidate on [#21](https://github.com/joshmcarthur/gridwatch/issues/21). Reconstruction is blocked on that choice. The leading recommendation (comment on #21, 2026-11-20) is Mon 27 July 2026, North Island scarcity: Otāhuhu $3,296 against Benmore $571.5, North Island SIR $2,154, coal/gas ramped, wind low, HVDC north, low residual.
 
-v1 would treat that *kind* of day as follows, once `price_high`, `reserve_price_high` and `generation_low` exist for it:
+v1 would treat that *kind* of day as follows, once `price_high`, `reserve_price_high` and (if later wired) `generation_low` exist for it. Live grouping does not read generation observations in v1 ([#180](https://github.com/joshmcarthur/gridwatch/issues/180)), so a reconstructed evening is energy + reserve + separation only until that changes:
 
 - `price_high` at an NI node overlapping `reserve_price_high` on NI joins (`price_high_reserve_price_high_adjacent_island`). Period 36 is an overlap, not merely adjacent.
 - `generation_low` on NI that overlaps those runs joins (`generation_low_price_high_overlap_island` and `generation_low_reserve_price_high_overlap_island`). The join is island-wide, not the plant's own POC, because island scarcity shows up at Otāhuhu, not only at the wind farm's node.
@@ -143,6 +160,7 @@ It would *not* be one episode if `generation_low` never fires (plant-size cutoff
 - Hydro observations and any window longer than 60 minutes.
 - Joining across trading dates.
 - Opposite-polarity joins and `generation_high` as a partner of `price_high`.
+- Generation-change and demand-deviation observations as episode members ([#180](https://github.com/joshmcarthur/gridwatch/issues/180)). They stay gold rows and evidence context series until [#179](https://github.com/joshmcarthur/gridwatch/issues/179) cuts plant-level noise and a ranking re-run can show the top-12 is stable.
 - Severity bands, and any rank that decides newsworthiness.
 
 ### Tests
@@ -157,6 +175,7 @@ Synthetic observation sets, not live gold. They live in `episodes-group.test.ts`
 - A DST day uses UTC gaps, not period arithmetic.
 - A `#21`-shaped set (`price_high` + `reserve_price_high` + `generation_low` overlapping on NI, plus `separation_high` dearer-NI) forms one episode; an extra SI-only `price_high` stays out.
 - Byte-identical second run; fingerprint changes on an `ANALYSIS_VERSION` bump.
+- The builder's inputs are only the price, separation and reserve sentinels. A `generation_low` parquet on disk does not join a `price_high` episode ([#180](https://github.com/joshmcarthur/gridwatch/issues/180)).
 
 ### Owner questions
 
@@ -172,6 +191,7 @@ Implemented with the bracketed defaults on 2026-11-21 after the owner asked to w
 8. `generation_high` does not join `price_high` in v1? **[yes, leave the ramp for #38]**
 9. Hydro-style rules wait for a hydro detector, with a window of days or weeks and no join to dispatch types in v1? **[yes]**
 10. Leave LLM, editorial [#41](https://github.com/joshmcarthur/gridwatch/issues/41), and constraint cases [#44](https://github.com/joshmcarthur/gridwatch/issues/44) out of this table? **[yes]**
+11. Do generation-change (plant, fuel) and demand-deviation (NZ, NI/SI) observations become episode members in v1? **[no; context series only, [#180](https://github.com/joshmcarthur/gridwatch/issues/180)]**
 
 ## Alternatives considered
 
@@ -187,7 +207,7 @@ Implemented with the bracketed defaults on 2026-11-21 after the owner asked to w
 
 ## Consequences
 
-- [#36](https://github.com/joshmcarthur/gridwatch/issues/36) is implemented as one gold module using the documented defaults. Adding a detector means listing its **sentinel** as a gold input. The fingerprint then rebuilds episode dates. Join rules for its types should already be in the config; a new related-condition pair needs a version bump.
+- [#36](https://github.com/joshmcarthur/gridwatch/issues/36) is implemented as one gold module using the documented defaults. Adding a detector means listing its **sentinel** as a gold input. The fingerprint then rebuilds episode dates. Join rules for its types should already be in the config; a new related-condition pair needs a version bump. [#33](https://github.com/joshmcarthur/gridwatch/issues/33) and [#35](https://github.com/joshmcarthur/gridwatch/issues/35) are not listed in v1 ([#180](https://github.com/joshmcarthur/gridwatch/issues/180)).
 - The "#21 event forms one episode" criterion cannot be executed until the owner chooses a candidate. The rules above say how a 27-July-shaped day would group, and why a March-shaped month would not. A synthetic #21-shaped set is in the grouping tests.
 - Midnight-split evenings are two episodes. That is the same loss ADR-0019 accepted for runs that cross the trading date.
 - A quiet day still has an `episode_days` row, so the runner can skip an up-to-date date.

@@ -32,6 +32,14 @@ export { EPISODE_GROUPING_CONFIG, type EpisodeGroupingConfig };
 /**
  * Detector sentinels, not observation tables: an empty observations partition has no
  * `inputs_sha256` rows, so fingerprinting it would drop quiet days (ADR-0021).
+ *
+ * Generation-change and demand-deviation write observations, but they are not episode
+ * members in v1 (#180). Plant-level generation-change is too noisy (19.1 observations
+ * per day; island-wide `generation_low` joins would glue unrelated plants). Fuel-level
+ * and demand stay out until that noise is cut (#179) and a ranking re-run can show the
+ * top-12 is stable. Join rules for those types stay in the config; they are no-ops
+ * while this list omits their sentinels. Evidence packages already hold generation and
+ * load as context series (ADR-0025).
  */
 const DETECTORS = [
   {

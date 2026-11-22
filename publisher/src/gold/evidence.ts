@@ -247,6 +247,7 @@ export const EVIDENCE_LIMITS: EvidencePackage["limits"] = [
   { issue: 47, text: "No hydro storage or inflow series." },
 ];
 
+/** Member detectors only. Generation-change and demand-deviation stay context series (#180). */
 const GOLD_DETECTOR_TABLES = [
   PRICE_ANOMALY_TABLES[1],
   PRICE_SEPARATION_TABLES[1],

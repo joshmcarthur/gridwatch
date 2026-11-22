@@ -7,9 +7,11 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import { lit } from "../silver/common.ts";
 import { periodToUtc } from "../trading-time.ts";
 import { goldPartitionPath } from "./common.ts";
+import { TABLES as DEMAND_DEVIATION_TABLES } from "./demand-deviation.ts";
 import { INPUTS, publishEpisodes, TABLES } from "./episodes.ts";
 import { episodeIdOf } from "./episodes-group.ts";
 import { completenessView } from "./fixtures/completeness.ts";
+import { FUEL_TABLES, PLANT_TABLES } from "./generation-change.ts";
 import { TABLES as PRICE_ANOMALY_TABLES } from "./price-anomaly.ts";
 import { TABLES as PRICE_SEPARATION_TABLES } from "./price-separation.ts";
 import { TABLES as RESERVE_PRICE_ANOMALY_TABLES } from "./reserve-price-anomaly.ts";
@@ -207,6 +209,59 @@ test("overlapping NI price_high and reserve_price_high write one episode", async
 
 test("INPUTS are the three detector sentinels", () => {
   expect(INPUTS.map((input) => input.table)).toEqual([...SENTINELS]);
+});
+
+test("generation-change and demand-deviation sentinels are not episode inputs (#180)", () => {
+  const tables = INPUTS.map((input) => input.table);
+  expect(tables).not.toContain(PLANT_TABLES[0]);
+  expect(tables).not.toContain(FUEL_TABLES[0]);
+  expect(tables).not.toContain(DEMAND_DEVIATION_TABLES[0]);
+});
+
+test("overlapping generation_low on disk does not join a price episode (#180)", async () => {
+  await writeSentinels(DAY);
+  await writeObservations(DAY, [
+    {
+      table: PRICE_ANOMALY_TABLES[1],
+      observation_id: "price1",
+      observation_type: "price_high",
+      start: 35,
+      end: 40,
+    },
+  ]);
+  const start = periodToUtc(DAY, 36);
+  const end = periodToUtc(DAY, 38);
+  await copySql(
+    `SELECT 'gen1' AS observation_id, 'generation_low' AS observation_type,
+       DATE ${lit(DAY)} AS trading_date, 36::INTEGER AS start_trading_period,
+       38::INTEGER AS end_trading_period,
+       ${lit(start.eventStartUtc.toString())}::TIMESTAMPTZ AS event_start_utc,
+       ${lit(end.eventEndUtc.toString())}::TIMESTAMPTZ AS event_end_utc,
+       'plant' AS subject_type, 'MAN/manapouri' AS subject_id,
+       'SI' AS island, 'MAN/manapouri' AS plant_id,
+       0::DOUBLE AS measured_value, 7.33::DOUBLE AS severity, true AS inputs_complete`,
+    goldPartitionPath(goldDir, PLANT_TABLES[1], DAY),
+  );
+  expect(await publish(DAY)).toMatchObject({ status: "complete" });
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    const rows = (
+      await connection.runAndReadAll(
+        `SELECT member_count, member_observation_ids, observation_types
+         FROM read_parquet(${lit(goldPartitionPath(goldDir, TABLES[1], DAY))})`,
+      )
+    ).getRowObjectsJson() as Array<{
+      member_count: number;
+      member_observation_ids: string[];
+      observation_types: string[];
+    }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.member_count).toBe(1);
+    expect(rows[0]?.member_observation_ids).toEqual(["price1"]);
+    expect(rows[0]?.observation_types).toEqual(["price_high"]);
+  } finally {
+    connection.closeSync();
+  }
 });
 
 test("the same inputs give identical bytes on a second run", async () => {

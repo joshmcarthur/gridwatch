@@ -69,6 +69,7 @@ This stores the node with the highest publish, not any node that a reader names.
 
 - One new module, one script, no new dependency, no change to the registry, the contract, `export.ts` or `datasets.ts`.
 - A package is only as good as the lake. A day without hydro, load or HVDC gold gives `missing` entries and no claims for them.
+- Generation-change and demand-deviation observations are not episode members in v1 ([ADR-0021](0021-episodes.md), [#180](https://github.com/joshmcarthur/gridwatch/issues/180)). The package still holds generation by fuel and plant, and modelled grid load, as context series. It does not list those detectors' observation rows.
 - A real lake has no episode for 27 July 2026 until the detectors run on a backfill. The package is proven on a synthetic lake until then. A run on real data needs a hand-written `episodes` row.
 - Changing a claim, a rule or a config value needs a `BUILDER_VERSION` bump. Changing the shape needs an `EVIDENCE_SCHEMA_VERSION` bump.
 

@@ -53,7 +53,7 @@ Each component is in [0, 1].
 | `reserve_price_high` | up to about 170 (2026-07-27) | 170 | Same. Reserve prices sit near $0, so the denominator is tiny and severity is large. |
 | `price_low` | peaks at 1.49 | 10 (the default) | See polarity below. |
 | `separation_high`, `separation_low`, `reserve_price_low` | no figures in ADR-0019 | 10 (the default) | No evidence yet. Revisit after the first ranking over the backfill. |
-| `generation_high`, `generation_low` | backfill counts pending | 10 (the default) | As above. |
+| `generation_high`, `generation_low` | plant median 1.09; largest hits ~8 ([#33](https://github.com/joshmcarthur/gridwatch/issues/33)) | 10 (the default) | Not episode members in v1 ([#180](https://github.com/joshmcarthur/gridwatch/issues/180)). |
 
 **Polarity.** `price_low` severity is bounded near 1.5, because a price cannot fall far below a median of $0 to $170. With the default cap it scores about 0.17 at most on severity, so a `price_low` episode ranks low by construction. This is deliberate for v1. It is an owner question.
 
@@ -138,7 +138,7 @@ Defaults in brackets. Nothing here is implemented as final.
 
 ## Consequences
 
-- A later detector ([#33](https://github.com/joshmcarthur/gridwatch/issues/33), [#35](https://github.com/joshmcarthur/gridwatch/issues/35)) changes episodes. The episode day fingerprints change, and the rankings of every date within 90 days rebuild.
+- A later detector that becomes an episode input ([#33](https://github.com/joshmcarthur/gridwatch/issues/33), [#35](https://github.com/joshmcarthur/gridwatch/issues/35) are not inputs in v1, [#180](https://github.com/joshmcarthur/gridwatch/issues/180)) changes episodes. The episode day fingerprints change, and the rankings of every date within 90 days rebuild.
 - Rarity is cold for the first 20 days of history.
 - Rankings are proposals. Editorial review, or the lack of it, is decided in [#41](https://github.com/joshmcarthur/gridwatch/issues/41).
 - Evidence packages ([#38](https://github.com/joshmcarthur/gridwatch/issues/38)) can read `episode_scores` to pick what to build.
