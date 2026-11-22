@@ -56,24 +56,17 @@ test.skipIf(!existsSync(explainerPage))(
 );
 
 test.skipIf(!existsSync(explainerPage))(
-  "built nodal-pricing visual reuses PriceChart when the day exists, else quotes the gap",
+  "built nodal-pricing visual reuses PriceChart for 27 July",
   () => {
     const html = readFileSync(explainerPage, "utf8");
-    const hasChart = html.includes('id="price-chart-title"');
-    if (hasChart) {
-      expect(html).toContain(
-        'aria-labelledby="price-chart-title price-chart-summary"',
-      );
-      expect(html).toContain(
-        'aria-labelledby="price-spread-chart-title price-spread-chart-summary"',
-      );
-      expect(html).toContain("OTA2201");
-      expect(html).toContain("HAY2201");
-      expect(html).toContain("BEN2201");
-      expect(html).toContain("Show the numbers as a table");
-    } else {
-      expect(html).toMatch(/when that day is published here/);
-      expect(html).toContain('href="/2026/07/27/"');
-    }
+    expect(html).toContain('id="price-chart-title"');
+    expect(html).toContain(
+      'aria-labelledby="price-chart-title price-chart-summary"',
+    );
+    expect(html).toContain(
+      'aria-labelledby="price-spread-chart-title price-spread-chart-summary"',
+    );
+    expect(html).toContain("OTA2201");
+    expect(html).not.toMatch(/when that day is published here/);
   },
 );

@@ -8,6 +8,9 @@ const builtPage = fileURLToPath(
 const builtMix = fileURLToPath(
   new URL("../../dist/2026/09/26/mix.json", import.meta.url),
 );
+const julyPage = fileURLToPath(
+  new URL("../../dist/2026/07/27/index.html", import.meta.url),
+);
 
 test.skipIf(!existsSync(builtPage))(
   "built daily page has landmarks and no unlabeled jargon",
@@ -141,5 +144,16 @@ test.skipIf(!existsSync(builtPage))(
     for (const target of targets) {
       expect(html).toContain(`id="${target}"`);
     }
+  },
+);
+
+test.skipIf(!existsSync(julyPage))(
+  "built 27 July daily page shows generation and wholesale-price charts",
+  () => {
+    const html = readFileSync(julyPage, "utf8");
+    expect(html).toContain('aria-labelledby="generation-mix"');
+    expect(html).toContain('id="price-chart-title"');
+    expect(html).toContain('id="price-spread-chart-title"');
+    expect(html).not.toMatch(/Wholesale prices for this day are missing/);
   },
 );

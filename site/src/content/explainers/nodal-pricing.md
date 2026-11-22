@@ -44,7 +44,7 @@ Haywards sat with Ōtāhuhu, not with Benmore: the Haywards–Benmore spread was
 
 Those four evening half-hours from 17:30 to 19:30 were the spike, then the prices dropped. Across the whole day the averages were much lower: Ōtāhuhu $248.67, Haywards $214.72, Benmore $70.60.
 
-The daily page for [Monday 27 July 2026](/2026/07/27/) has that day's generation, prices, and charts when the day's files are on this site.
+The daily page for [Monday 27 July 2026](/2026/07/27/) has that day's generation, prices, and charts.
 
 ## Links to Gridwatch data and events
 

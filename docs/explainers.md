@@ -42,15 +42,14 @@ Frontmatter, at minimum: `title`, `description`, `example_date` (`YYYY-MM-DD`).
 
 Later topics from brief §10 (marginal generator, hydro scarcity, transmission constraints, reserves, frequency keeping, the HVDC link, wind, wholesale vs the bill) use the same collection. One topic per file. Same five headings. Each points at a real day.
 
-## Fixture-day gap
+## Fixture-day sample
 
-Committed site fixtures may not include 2026-07-27. The only committed daily file is [`site/fixtures/days/2026-09-27.json`](../site/fixtures/days/2026-09-27.json): the DST-start day, with synthetic reference-node prices. That is not this example, and must not be substituted on the explainer.
+[`site/fixtures/`](../site/fixtures/) includes Monday 27 July 2026 as a copy of a real publish. The nodal-pricing explainer injects `PriceChart` for that date. Do not substitute 2026-09-27 (DST start, synthetic reference-node prices) for this example.
 
 - Do **not** commit a 12-month lake so the explainer can chart.
-- Do **not** invent site JSON for 2026-07-27.
-- Do **not** fail the fixture build when `example_date` is absent from the index.
-- Still link `/2026/07/27/` for production. Quote the few example figures in the Markdown so the page reads without that daily page.
-- When `gold/site` holds 2026-07-27 with prices, the template injects `PriceChart`. Until then the visual section says the charts sit on the daily page when that day is published.
+- Do **not** invent a 27 July day file. Refresh it by copying a gold export, the same way as the other sample days.
+- Do **not** fail the fixture build when some other `example_date` is absent from the index.
+- Quote the evening figures in the Markdown so the page still reads if that day's file is missing.
 
 ## First explainer: nodal pricing
 
@@ -81,5 +80,5 @@ When #42 later publishes an event that covers the same day, add that URL in sect
 - No CMS, no new chart library, no client JavaScript.
 - No nodal map (#49).
 - No event pages (#42).
-- No reconstruction of #21, and no invented 2026-07-27 site JSON.
+- No reconstruction of #21, and no invented 2026-07-27 site JSON (the visual sample is a copy of a real publish).
 - No homepage rewrite (#29).
