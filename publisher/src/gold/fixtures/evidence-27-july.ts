@@ -500,7 +500,7 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
       "island",
       "NI",
       "NI",
-      [41, 44],
+      [42, 44],
     ),
     related("obs-demand-nz", "demand_high", "island", "NZ", null, [35, 40]),
   ]);

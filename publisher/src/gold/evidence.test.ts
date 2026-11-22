@@ -354,6 +354,7 @@ test("related observations overlap the episode on its island and are not members
     "obs-fuel-wind-ni",
   ]);
   expect(pkg.observations.map((o) => o.observation_id)).toEqual([
+    "obs-price-high-ota-0727",
     "obs-reserve-sir-ni-0727",
   ]);
 });
