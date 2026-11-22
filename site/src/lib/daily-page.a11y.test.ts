@@ -27,6 +27,7 @@ test.skipIf(!existsSync(builtPage))(
     );
     expect(html).not.toMatch(/sample points?/i);
     expect(html).not.toMatch(/Otahuhu/);
+    expect(html).toContain("Not enough earlier days yet to compare.");
     expect(html).not.toMatch(
       /reference nodes?|proxy price|interim|dispatch energy/i,
     );

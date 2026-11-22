@@ -14,9 +14,11 @@ import {
   neighbouringDays,
 } from "../../../../lib/daily-page";
 import { episodeClockRange, episodeHeadline } from "../../../../lib/episode-copy";
+import { dayContext } from "../../../../lib/market-conditions";
 import {
   formatTradingDate,
   loadSiteDay,
+  loadSiteDayCached,
   loadSiteIndex,
 } from "../../../../lib/site-data";
 
@@ -31,6 +33,9 @@ const index = loadSiteIndex();
 const day = loadSiteDay(date, index);
 const titleDate = formatTradingDate(date);
 const headline = dayHeadline(day);
+const context = dayContext(index, date, (earlier) =>
+  loadSiteDayCached(earlier, index),
+);
 const notice = completenessNotice(day);
 const neighbours = neighbouringDays(index, date);
 const months = monthGroups(index);
@@ -60,6 +65,16 @@ const months = monthGroups(index);
                 <a href={stat.href}>{stat.label}</a>
               </dt>
               <dd>{stat.value}</dd>
+              {context
+                .filter((entry) => entry.id === stat.id)
+                .map((entry) => (
+                  <>
+                    {entry.line ? <dd class="context">{entry.line}</dd> : null}
+                    {entry.change ? (
+                      <dd class="context">{entry.change}</dd>
+                    ) : null}
+                  </>
+                ))}
             </div>
           ))
         }
@@ -263,6 +278,12 @@ const months = monthGroups(index);
     font-size: var(--text-heading);
     font-variant-numeric: tabular-nums;
     color: var(--color-ink);
+  }
+
+  .stats dd.context {
+    font-size: var(--text-label);
+    font-weight: 400;
+    color: var(--color-ink-muted);
   }
 
   @media (min-width: 40rem) {
