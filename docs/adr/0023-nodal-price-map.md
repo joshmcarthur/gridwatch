@@ -51,7 +51,7 @@ Three options were on the table. The smallest path that respects the contracts:
 
 One row per POC per trading period: `point_of_connection`, `trading_period`, period price, min/max, `rows_present`, `has_proxy_price`, the gold stamp columns. No `price_region`. Null price when silver has no row for that POC in that period.
 
-This is the `gold_nodal_prices` option under the gold table naming rule (no `gold_` prefix, [ADR-0011](0011-gold-table-pattern.md)).
+The table name has no `gold_` prefix, like the four existing price tables (`TABLES` in `publisher/src/gold/prices.ts`). The new table joins that list after the sentinel `price_periods` ([ADR-0011](0011-gold-table-pattern.md)).
 
 ### 4. Basemap: LINZ coastline, CC BY 4.0, committed GeoJSON
 
