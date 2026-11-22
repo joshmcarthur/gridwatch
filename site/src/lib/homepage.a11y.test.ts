@@ -30,6 +30,8 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(/no single market score/);
     expect(html).toMatch(/wholesale prices/i);
     expect(html).toMatch(/household bill/);
+    expect(html).toContain('role="img"');
+    expect(html).toContain("latest-price-spark-title");
     expect(html).not.toMatch(/observatory/i);
     expect(html).not.toMatch(/placeholder homepage/i);
     expect(html).not.toMatch(/\bEMI\b/);

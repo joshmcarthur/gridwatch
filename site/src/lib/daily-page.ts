@@ -109,8 +109,19 @@ export function monthGroups(
   return groups;
 }
 
+export function headlineCopy(day: HeadlineSource): {
+  generation: string;
+  prices: string;
+} {
+  return {
+    generation: generationHeadline(day),
+    prices: pricesHeadline(day),
+  };
+}
+
 export function headlineParagraphs(day: HeadlineSource): string[] {
-  return [generationHeadline(day), pricesHeadline(day)];
+  const { generation, prices } = headlineCopy(day);
+  return [generation, prices];
 }
 
 export function completenessNotice(day: CompletenessSource): {

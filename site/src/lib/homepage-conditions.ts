@@ -4,7 +4,7 @@ import type {
   SiteIndex,
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
-import { headlineParagraphs } from "./daily-page.ts";
+import { headlineCopy } from "./daily-page.ts";
 import {
   gasCoalShare,
   hayBenAbsSpread,
@@ -13,8 +13,8 @@ import {
 } from "./market-conditions.ts";
 import {
   bandPhrase,
+  MAX_HISTORY_DAYS,
   type Rank,
-  type RankBand,
   rankAgainstHistory,
 } from "./rank.ts";
 
@@ -35,15 +35,16 @@ export type ConditionCard = {
   title: string;
   date: string | null;
   value: string | null;
-  band: RankBand | null;
   headline: string;
-  detail: string;
+  spark: number[];
+  percentile: number | null;
+  share: number | null;
 };
 
 export type LatestUpdate = {
   date: string;
-  generationLagging: boolean;
   paragraphs: string[];
+  spark: number[];
 };
 
 export type RecentDay = {
@@ -53,19 +54,91 @@ export type RecentDay = {
 
 type SectionName = "generation" | "prices" | "reserves";
 
-const sectionState = (
-  day: SiteIndexDay,
-  name: SectionName,
-): SectionState | undefined => {
-  if (name === "reserves") return day.sections.reserves;
-  return day.sections[name];
+type CardSpec = {
+  id: ConditionId;
+  title: string;
+  section: SectionName;
+  metric: (day: SiteDay) => number | null;
+  format: (value: number) => string;
+  unpublished: string;
+  subject: string;
+  verb: "was" | "were";
+  gloss: string;
+  share: boolean;
 };
 
+const CARD_SPECS: readonly CardSpec[] = [
+  {
+    id: "prices",
+    title: "Wholesale prices",
+    section: "prices",
+    metric: meanWholesalePrice,
+    format: (value) => money.format(value),
+    unpublished: "Wholesale prices have not been published on this site yet.",
+    subject: "Wholesale prices",
+    verb: "were",
+    gloss: "averaged across Otahuhu, Haywards and Benmore",
+    share: false,
+  },
+  {
+    id: "supply",
+    title: "Supply",
+    section: "generation",
+    metric: gasCoalShare,
+    format: (value) => percent.format(value),
+    unpublished: "Generation numbers have not been published on this site yet.",
+    subject: "Gas and coal's share of generation",
+    verb: "was",
+    gloss: "not counting batteries",
+    share: true,
+  },
+  {
+    id: "reserves",
+    title: "Reserves",
+    section: "reserves",
+    metric: peakReservePrice,
+    format: (value) => money.format(value),
+    unpublished: "Reserve prices have not been published on this site yet.",
+    subject: "Reserve prices",
+    verb: "were",
+    gloss:
+      "taking the highest island cost of standing ready to lift or drop generation in seconds or minutes",
+    share: false,
+  },
+  {
+    id: "regional",
+    title: "Regional prices",
+    section: "prices",
+    metric: hayBenAbsSpread,
+    format: (value) => money.format(value),
+    unpublished:
+      "The island price gap has not been published on this site yet.",
+    subject: "The island price gap",
+    verb: "was",
+    gloss: "between Haywards near Wellington and Benmore in the Waitaki",
+    share: false,
+  },
+];
+
 const LAG_NOTE =
-  "Generation numbers for this day are not in yet. They usually arrive later than prices.";
+  "Generation numbers for this day are not in yet; they usually arrive later than prices.";
 
 const UNKNOWN =
   "There are not yet enough complete days on this site to say whether that was usual.";
+
+const memoLoad = (loadDay: (date: string) => SiteDay) => {
+  const cache = new Map<string, SiteDay>();
+  return (date: string) => {
+    const held = cache.get(date);
+    if (held) return held;
+    const day = loadDay(date);
+    cache.set(date, day);
+    return day;
+  };
+};
+
+const sectionComplete = (day: SiteIndexDay, name: SectionName): boolean =>
+  day.sections[name] === "complete";
 
 function earlierValues(
   index: SiteIndex,
@@ -75,24 +148,35 @@ function earlierValues(
   metric: (day: SiteDay) => number | null,
 ): number[] {
   const earlier = index.days.filter(
-    (day) => day.date < before && sectionState(day, section) === "complete",
+    (day) => day.date < before && sectionComplete(day, section),
   );
-  return earlier.slice(-365).flatMap((entry) => {
+  return earlier.slice(-MAX_HISTORY_DAYS).flatMap((entry) => {
     const value = metric(loadDay(entry.date));
     return value === null ? [] : [value];
   });
 }
 
-function cardHeadline(
-  date: string | null,
-  unpublished: string,
-  subject: string,
-  verb: "was" | "were",
-  rank: Rank,
-): string {
-  if (!date) return unpublished;
+function cardHeadline(spec: CardSpec, date: string | null, rank: Rank): string {
+  if (!date) return spec.unpublished;
   if (rank.kind === "unknown") return UNKNOWN;
-  return `${subject} ${verb} ${bandPhrase(rank.band)}.`;
+  return `${spec.subject} ${spec.verb} ${bandPhrase(rank.band)}, ${spec.gloss}.`;
+}
+
+function generationParagraphs(
+  state: SectionState,
+  copy: { generation: string; prices: string },
+): string[] {
+  switch (state) {
+    case "complete":
+    case "incomplete":
+      return [copy.generation, copy.prices];
+    case "missing":
+      return [copy.prices, LAG_NOTE];
+    default: {
+      const unreachable: never = state;
+      return unreachable;
+    }
+  }
 }
 
 export function latestUpdate(
@@ -101,13 +185,15 @@ export function latestUpdate(
 ): LatestUpdate | null {
   const date = index.latest_complete_sections.prices;
   if (!date) return null;
-  const day = loadDay(date);
-  const generationLagging = day.generation.state !== "complete";
-  const [generationParagraph, pricesParagraph] = headlineParagraphs(day);
-  const paragraphs = generationLagging
-    ? [pricesParagraph ?? "", LAG_NOTE]
-    : [generationParagraph ?? "", pricesParagraph ?? ""];
-  return { date, generationLagging, paragraphs };
+  const load = memoLoad(loadDay);
+  const day = load(date);
+  const spark = earlierValues(index, "prices", date, load, meanWholesalePrice);
+  const current = meanWholesalePrice(day);
+  return {
+    date,
+    paragraphs: generationParagraphs(day.generation.state, headlineCopy(day)),
+    spark: current === null ? spark : [...spark, current],
+  };
 }
 
 export function recentDays(index: SiteIndex, limit = 14): RecentDay[] {
@@ -121,112 +207,28 @@ export function conditionCards(
   index: SiteIndex,
   loadDay: (date: string) => SiteDay,
 ): ConditionCard[] {
-  const priceDate = index.latest_complete_sections.prices;
-  const generationDate = index.latest_complete_sections.generation;
-  const reservesDate = index.latest_complete_sections.reserves ?? null;
-  const priceDay = priceDate ? loadDay(priceDate) : null;
-  const generationDay = generationDate ? loadDay(generationDate) : null;
-  const reservesDay = reservesDate ? loadDay(reservesDate) : null;
-
-  const rankOf = (
-    section: SectionName,
-    date: string | null,
-    day: SiteDay | null,
-    metric: (day: SiteDay) => number | null,
-  ): Rank => {
-    if (!date || !day) return { kind: "unknown", reason: "not_enough_days" };
-    const value = metric(day);
-    if (value === null) return { kind: "unknown", reason: "not_enough_days" };
-    return rankAgainstHistory(
-      value,
-      earlierValues(index, section, date, loadDay, metric),
-    );
-  };
-
-  const priceRank = rankOf("prices", priceDate, priceDay, meanWholesalePrice);
-  const supplyRank = rankOf(
-    "generation",
-    generationDate,
-    generationDay,
-    gasCoalShare,
-  );
-  const reserveRank = rankOf(
-    "reserves",
-    reservesDate,
-    reservesDay,
-    peakReservePrice,
-  );
-  const regionalRank = rankOf("prices", priceDate, priceDay, hayBenAbsSpread);
-
-  const priceValue = priceDay ? meanWholesalePrice(priceDay) : null;
-  const supplyValue = generationDay ? gasCoalShare(generationDay) : null;
-  const reserveValue = reservesDay ? peakReservePrice(reservesDay) : null;
-  const regionalValue = priceDay ? hayBenAbsSpread(priceDay) : null;
-
-  return [
-    {
-      id: "prices",
-      title: "Wholesale prices",
-      date: priceDate,
-      value: priceValue === null ? null : money.format(priceValue),
-      band: priceRank.kind === "ranked" ? priceRank.band : null,
-      headline: cardHeadline(
-        priceDate,
-        "Wholesale prices have not been published on this site yet.",
-        "Wholesale prices",
-        "were",
-        priceRank,
-      ),
-      detail:
-        "That is the average of the three sample substations. Wholesale prices are what generators and retailers paid each other, not a household bill.",
-    },
-    {
-      id: "supply",
-      title: "Supply",
-      date: generationDate,
-      value: supplyValue === null ? null : percent.format(supplyValue),
-      band: supplyRank.kind === "ranked" ? supplyRank.band : null,
-      headline: cardHeadline(
-        generationDate,
-        "Generation numbers have not been published on this site yet.",
-        "Gas and coal's share of generation",
-        "was",
-        supplyRank,
-      ),
-      detail:
-        "Gas and coal as a share of what power stations made, not counting batteries.",
-    },
-    {
-      id: "reserves",
-      title: "Reserves",
-      date: reservesDate,
-      value: reserveValue === null ? null : money.format(reserveValue),
-      band: reserveRank.kind === "ranked" ? reserveRank.band : null,
-      headline: cardHeadline(
-        reservesDate,
-        "Reserve prices have not been published on this site yet.",
-        "Reserve prices",
-        "were",
-        reserveRank,
-      ),
-      detail:
-        "The highest of the island prices for standing ready to lift or drop generation in seconds or minutes, not a household bill.",
-    },
-    {
-      id: "regional",
-      title: "Regional prices",
-      date: priceDate,
-      value: regionalValue === null ? null : money.format(regionalValue),
-      band: regionalRank.kind === "ranked" ? regionalRank.band : null,
-      headline: cardHeadline(
-        priceDate,
-        "The island price gap has not been published on this site yet.",
-        "The island price gap",
-        "was",
-        regionalRank,
-      ),
-      detail:
-        "The average gap between wholesale prices at Haywards, near Wellington, and Benmore, in the Waitaki. The two islands can have different prices.",
-    },
-  ];
+  const load = memoLoad(loadDay);
+  return CARD_SPECS.map((spec) => {
+    const date = index.latest_complete_sections[spec.section] ?? null;
+    const day = date ? load(date) : null;
+    const value = day ? spec.metric(day) : null;
+    const history =
+      date === null
+        ? []
+        : earlierValues(index, spec.section, date, load, spec.metric);
+    const rank =
+      date === null || value === null
+        ? ({ kind: "unknown", reason: "not_enough_days" } as const)
+        : rankAgainstHistory(value, history);
+    return {
+      id: spec.id,
+      title: spec.title,
+      date,
+      value: value === null ? null : spec.format(value),
+      headline: cardHeadline(spec, date, rank),
+      spark: value === null ? history : [...history, value],
+      percentile: rank.kind === "ranked" ? rank.percentile : null,
+      share: spec.share ? value : null,
+    };
+  });
 }

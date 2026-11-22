@@ -184,7 +184,7 @@ test("latest update is the newest prices-complete day, not the newest generation
     return day;
   });
   expect(update?.date).toBe("2026-11-20");
-  expect(update?.generationLagging).toBe(true);
+  expect(update?.spark.length).toBeGreaterThan(0);
   expect(update?.paragraphs.join(" ")).toMatch(/not in yet/i);
   expect(update?.paragraphs.join(" ")).not.toMatch(/\bobservatory\b/i);
 });
@@ -194,7 +194,21 @@ test("latest update omits the generation-lag note when that day has generation",
     indexDay("2026-10-31", { generation: "complete", prices: "complete" }),
   ]);
   const update = latestUpdate(index, () => emptyDay("2026-10-31"));
-  expect(update?.generationLagging).toBe(false);
+  expect(update?.paragraphs.join(" ")).not.toMatch(/not in yet/i);
+});
+
+test("latest update keeps incomplete generation copy from the daily headline", () => {
+  const index = indexOf([
+    indexDay("2026-10-31", { generation: "incomplete", prices: "complete" }),
+  ]);
+  const day = emptyDay("2026-10-31");
+  const update = latestUpdate(index, () => ({
+    ...day,
+    generation: { ...day.generation, state: "incomplete" },
+  }));
+  expect(update?.paragraphs.join(" ")).toMatch(
+    /incomplete generation numbers/i,
+  );
   expect(update?.paragraphs.join(" ")).not.toMatch(/not in yet/i);
 });
 
@@ -280,11 +294,12 @@ test("each condition card uses its own complete day and past-tense band copy", (
   expect(cards.find((c) => c.id === "reserves")?.date).toBe("2026-11-20");
   expect(cards.find((c) => c.id === "regional")?.date).toBe("2026-11-20");
   const supply = cards.find((c) => c.id === "supply");
-  expect(supply?.band).toBe("highest");
+  expect(supply?.percentile).toBeGreaterThanOrEqual(0.95);
   expect(supply?.headline).toMatch(
     /was one of the highest days in the past year/,
   );
-  const joined = cards.map((c) => `${c.headline} ${c.detail}`).join(" ");
+  expect(supply?.share).toBeCloseTo(0.9);
+  const joined = cards.map((c) => c.headline).join(" ");
   expect(joined).not.toMatch(/\bNI\b/);
   expect(joined).not.toMatch(/\bSI\b/);
   expect(joined).not.toMatch(/\bobservatory\b/i);
@@ -301,7 +316,7 @@ test("a card with fewer than 30 earlier complete days does not claim a band", ()
     }),
   ]);
   const cards = conditionCards(index, () => emptyDay("2026-11-20"));
-  expect(cards.every((card) => card.band === null)).toBe(true);
+  expect(cards.every((card) => card.percentile === null)).toBe(true);
   expect(cards[0]?.headline).toMatch(/not yet enough complete days/i);
 });
 

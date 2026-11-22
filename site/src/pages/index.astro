@@ -13,6 +13,7 @@ import {
   loadSiteIndex,
   recentEpisodes,
 } from "../lib/site-data";
+import { rankTrackSvg, shareBarSvg, sparklineSvg } from "../lib/spark";
 
 const index = loadSiteIndex();
 const loadDay = (date: string) => loadSiteDay(date, index);
@@ -20,6 +21,14 @@ const update = latestUpdate(index, loadDay);
 const cards = conditionCards(index, loadDay);
 const recent = recentDays(index);
 const episodes = recentEpisodes(index);
+
+const updateSpark = update
+  ? sparklineSvg(update.spark, {
+      id: "latest-price-spark",
+      title: "Recent wholesale prices",
+      summary: `Daily average wholesale prices leading up to ${update.date}.`,
+    })
+  : "";
 ---
 
 <Layout
@@ -48,9 +57,8 @@ const episodes = recentEpisodes(index);
                 {formatTradingDate(update.date)}
               </a>
             </p>
-            {update.paragraphs
-              .filter((paragraph) => paragraph.length > 0)
-              .map((paragraph) => <p>{paragraph}</p>)}
+            {updateSpark ? <div class="graphic" set:html={updateSpark} /> : null}
+            {update.paragraphs.map((paragraph) => <p>{paragraph}</p>)}
             <p>
               <a href={dailyPath(update.date)}>Open that day</a>
             </p>
@@ -64,34 +72,59 @@ const episodes = recentEpisodes(index);
     <section class="conditions" aria-labelledby="conditions-heading">
       <h2 id="conditions-heading">Market conditions</h2>
       <p>
-        Each card uses its own latest complete day. There is no single market
-        score.
+        Each card uses its own latest complete day, and there is no single
+        market score.
       </p>
       <ul class="condition-grid">
         {
-          cards.map((card) => (
-            <li>
-              <article
-                class="card condition-card"
-                aria-labelledby={`${card.id}-heading`}
-              >
-                <h3 id={`${card.id}-heading`}>{card.title}</h3>
-                {card.date ? (
-                  <p class="when">
-                    Figures for{" "}
-                    <a href={dailyPath(card.date)}>
-                      {formatTradingDate(card.date)}
-                    </a>
-                  </p>
-                ) : (
-                  <p class="when">No complete day yet</p>
-                )}
-                {card.value ? <p class="figure">{card.value}</p> : null}
-                <p>{card.headline}</p>
-                <p>{card.detail}</p>
-              </article>
-            </li>
-          ))
+          cards.map((card) => {
+            const spark = sparklineSvg(card.spark, {
+              id: `${card.id}-spark`,
+              title: `${card.title} over recent complete days`,
+              summary: card.headline,
+            });
+            const track =
+              card.percentile === null
+                ? ""
+                : rankTrackSvg(card.percentile, {
+                    id: `${card.id}-rank`,
+                    title: `${card.title} against the past year`,
+                    summary: card.headline,
+                  });
+            const share =
+              card.share === null
+                ? ""
+                : shareBarSvg(card.share, {
+                    id: `${card.id}-share`,
+                    title: "Gas and coal share of generation",
+                    summary: card.headline,
+                  });
+            return (
+              <li>
+                <article
+                  class="card condition-card"
+                  aria-labelledby={`${card.id}-heading`}
+                >
+                  <h3 id={`${card.id}-heading`}>{card.title}</h3>
+                  {card.date ? (
+                    <p class="when">
+                      Figures for{" "}
+                      <a href={dailyPath(card.date)}>
+                        {formatTradingDate(card.date)}
+                      </a>
+                    </p>
+                  ) : (
+                    <p class="when">No complete day yet</p>
+                  )}
+                  {card.value ? <p class="figure">{card.value}</p> : null}
+                  {share ? <div class="graphic" set:html={share} /> : null}
+                  {spark ? <div class="graphic" set:html={spark} /> : null}
+                  {track ? <div class="graphic" set:html={track} /> : null}
+                  <p>{card.headline}</p>
+                </article>
+              </li>
+            );
+          })
         }
       </ul>
     </section>
@@ -117,8 +150,8 @@ const episodes = recentEpisodes(index);
     <section class="card lede-card" aria-labelledby="recent-episodes-heading">
       <h2 id="recent-episodes-heading">Recently detected</h2>
       <p>
-        Unusual stretches grouped from the public files. Not a written-up
-        public event yet.
+        Unusual stretches grouped from the public files, not a written-up public
+        event yet.
       </p>
       {
         episodes.length === 0 ? (
@@ -210,5 +243,18 @@ const episodes = recentEpisodes(index);
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+  }
+
+  .graphic :global(svg) {
+    display: block;
+    width: 100%;
+    max-width: 16rem;
+    color: var(--color-ink);
+  }
+
+  .graphic :global(.rank-track),
+  .graphic :global(.share-bar) {
+    max-width: 12rem;
+    height: 0.75rem;
   }
 </style>
