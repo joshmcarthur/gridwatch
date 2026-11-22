@@ -15,7 +15,7 @@ An **observation** is a deterministic fact a detector found ([ADR-0019](0019-obs
 
 The site already reads prepared JSON and does not query the lake ([ADR-0014](0014-site-json-contract.md)). `data/` is gitignored ([ADR-0001](0001-typescript-monorepo-and-data-layers.md)). GitHub Actions is CI only; the daily job on the home server runs collector, publisher, then site-build ([ADR-0002](0002-daily-run-data-and-site-hosting.md)).
 
-This flow must work before episodes exist. It does not depend on [#36](https://github.com/joshmcarthur/gridwatch/issues/36) being built. A hand-written event from [#21](https://github.com/joshmcarthur/gridwatch/issues/21) is a valid first candidate.
+The episode gold table exists ([ADR-0021](0021-episodes.md)). Every episode in it is already a candidate, so this flow adds no candidate store. A hand-written event from [#21](https://github.com/joshmcarthur/gridwatch/issues/21) is a valid first candidate and does not need an episode row.
 
 ## Decision (proposed)
 
@@ -25,7 +25,7 @@ Use the smallest git-native gate. Ranking may propose. Only a merged allow-list 
 
 | Role | Path | In git? | Who writes it |
 | --- | --- | --- | --- |
-| Candidate (machine) | `gold/episode_candidates/` under `DATA_ROOT`, not under `gold/site/` | No | Publisher, later. Not required to start. |
+| Candidate (machine) | The `episodes` gold table ([ADR-0021](0021-episodes.md)). No new path. | No | The publisher, already. |
 | Candidate or narrative (hand-written) | `docs/events/<id>.md` | Yes | A person or an agent, as [#21](https://github.com/joshmcarthur/gridwatch/issues/21) already plans. |
 | Allow-list | `site/events/approved.json` | Yes | A PR that adds or removes an event id. |
 | Published events | `data/gold/site/events/` | No | The site exporter, and only for ids on the allow-list. |
@@ -40,11 +40,11 @@ Use the smallest git-native gate. Ranking may propose. Only a merged allow-list 
 { "approved": ["2026-07-27-ni-scarcity"] }
 ```
 
-An event id is a stable string. A hand-written event uses a slug. A later `episode_id` from [#36](https://github.com/joshmcarthur/gridwatch/issues/36) can be the same string. The file is the publish gate, not the narrative store.
+An event id is a stable string. A hand-written event uses a slug. An `episode_id` from [ADR-0021](0021-episodes.md) can be the same string. The file is the publish gate, not the narrative store.
 
 ### Approval
 
-1. Detectors, and later episodes, write candidates outside `gold/site/`. Until that pipeline exists, a candidate is a file in `docs/events/`.
+1. Episodes are written to gold, outside `gold/site/`. A hand-written candidate is a file in `docs/events/`.
 2. Someone opens a PR that adds the event id to `site/events/approved.json`. The same PR may add or edit the narrative.
 3. The owner merges the PR. That merge is approval. There is no CMS, no webhook, and no GitHub API on the daily path.
 4. The next publisher run reads the committed allow-list and writes site JSON only for those ids, under `data/gold/site/events/`.
@@ -75,7 +75,7 @@ The first id through the flow can be the [#21](https://github.com/joshmcarthur/g
 ## Consequences
 
 - No new service. Approval is an ordinary PR. The daily job already runs the publisher after a git pull on the home server, so a merge is enough.
-- Unpublished candidates can pile up in `gold/episode_candidates/` without affecting the site.
+- Unpublished episodes stay in the `episodes` gold table without affecting the site.
 - The owner is on the path of every public event. That is the point of this default. If that becomes too slow, a later amendment can auto-publish above a rank, still using the same allow-list as an override.
 - The event JSON shape, event pages, and the homepage feed stay on [#42](https://github.com/joshmcarthur/gridwatch/issues/42). This ADR does not change [ADR-0014](0014-site-json-contract.md).
 - Agents must not add ids to the allow-list, and must not implement the exporter gate, until the owner accepts this ADR.
@@ -87,9 +87,7 @@ Defaults are in brackets. Reply on this pull request. Do not treat silence on th
 1. How much editorial review is necessary? [Gate every public event on a merged allow-list PR. Do not auto-publish ranked candidates.]
 2. Allow-list path? [`site/events/approved.json`]
 3. What counts as approval? [Merge of a PR that adds the event id.]
-4. Where do machine-written candidates live, once episodes exist? [`gold/episode_candidates/` under `DATA_ROOT`, never under `gold/site/`]
-5. May a ranked-but-unapproved candidate appear anywhere on the public site? [No]
-6. How do we un-publish? [Remove the id from the allow-list in a follow-up PR.]
-7. Who may merge the allow-list PR? [The owner]
-8. Does the first event need [#36](https://github.com/joshmcarthur/gridwatch/issues/36)? [No. The #21 write-up is enough.]
-9. Build the exporter gate and an empty allow-list now? [No. Wait until you accept this ADR.]
+4. May a ranked-but-unapproved candidate appear anywhere on the public site? [No]
+5. How do we un-publish? [Remove the id from the allow-list in a follow-up PR.]
+6. Who may merge the allow-list PR? [The owner]
+7. Build the exporter gate and an empty allow-list now? [No. Wait until you accept this ADR.]
