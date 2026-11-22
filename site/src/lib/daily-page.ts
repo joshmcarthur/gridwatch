@@ -280,11 +280,11 @@ function islandAgreement(means: number[]): IslandAgreement | null {
 function agreementPhrase(agreement: IslandAgreement | null): string | null {
   switch (agreement) {
     case "close":
-      return "wholesale prices stayed close across Otahuhu, Haywards and Benmore";
+      return "wholesale prices stayed close across Ōtāhuhu, Haywards and Benmore";
     case "differed":
-      return "wholesale prices differed across Otahuhu, Haywards and Benmore";
+      return "wholesale prices differed across Ōtāhuhu, Haywards and Benmore";
     case "apart":
-      return "wholesale prices were far apart across Otahuhu, Haywards and Benmore";
+      return "wholesale prices were far apart across Ōtāhuhu, Haywards and Benmore";
     default:
       return null;
   }

@@ -1,6 +1,6 @@
 /** Plain-language labels for the three reference-node price regions. */
 export const PRICE_REGIONS: Record<string, string> = {
-  upper_north_island: "the Upper North Island (Otahuhu, Auckland)",
+  upper_north_island: "the Upper North Island (Ōtāhuhu, Auckland)",
   lower_north_island: "the Lower North Island (Haywards, near Wellington)",
   south_island: "the South Island (Benmore, in the Waitaki)",
 };
@@ -14,10 +14,10 @@ export const PRICE_REGION_SHORT: Record<string, string> = {
 
 /** Place names for the three sample points. Body copy uses these, not POC codes. */
 export const PRICE_PLACE: Record<string, string> = {
-  OTA2201: "Otahuhu",
+  OTA2201: "Ōtāhuhu",
   HAY2201: "Haywards",
   BEN2201: "Benmore",
-  upper_north_island: "Otahuhu",
+  upper_north_island: "Ōtāhuhu",
   lower_north_island: "Haywards",
   south_island: "Benmore",
 };
@@ -30,7 +30,7 @@ export function regionShort(regionId: string): string {
   return PRICE_REGION_SHORT[regionId] ?? regionId.replaceAll("_", " ");
 }
 
-/** Legend and caption label: "Otahuhu (Upper North Island)". */
+/** Legend and caption label: "Ōtāhuhu (Upper North Island)". */
 export function placeLegend(poc: string, regionId: string): string {
   return `${placeName(poc)} (${regionShort(regionId)})`;
 }

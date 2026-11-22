@@ -123,7 +123,7 @@ test("fixture days build a path for each committed sample", () => {
 test("headline names the kind of day without a unit lecture", () => {
   const headline = dayHeadline(loadSiteDay("2026-09-27"));
   expect(headline.sentence).toBe(
-    "Hydro made most of the power, and wholesale prices were far apart across Otahuhu, Haywards and Benmore.",
+    "Hydro made most of the power, and wholesale prices were far apart across Ōtāhuhu, Haywards and Benmore.",
   );
   expect(headline.sentence).not.toMatch(/kilowatt/);
   expect(headline.sentence).not.toMatch(/household bill/);
@@ -233,7 +233,7 @@ test("close sample prices use one typical figure", () => {
   };
   const headline = dayHeadline(day);
   expect(headline.sentence).toBe(
-    "Hydro made most of the power, and wholesale prices stayed close across Otahuhu, Haywards and Benmore.",
+    "Hydro made most of the power, and wholesale prices stayed close across Ōtāhuhu, Haywards and Benmore.",
   );
   expect(headline.stats[1]?.value).toBe("$50 / MWh");
   expect(headline.stats[2]?.value).toBe("Stayed close");

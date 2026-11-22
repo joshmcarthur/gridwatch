@@ -34,7 +34,7 @@ Link the short labels (wholesale price, megawatt-hour, the two islands) to that 
 
 Method caveats about **this day's numbers** stay with the chart: incomplete files, residual, proxy prices, batteries as storage. Put the long method in a "How to read this" disclosure. The visible caption is one line.
 
-Clock times in public sentences, not trading period numbers. Place names in body copy (Otahuhu, Haywards, Benmore). Point-of-connection codes belong in the numbers table and in hover text.
+Clock times in public sentences, not trading period numbers. Place names in body copy (Ōtāhuhu, Haywards, Benmore). Point-of-connection codes belong in the numbers table and in hover text.
 
 Completeness is a warning when a day is incomplete. A complete day does not lead with a pipeline status.
 
@@ -68,7 +68,7 @@ Diagrams are allowed, and they should carry some of the explanation when they ca
 
 ## Prefer
 
-this site, Gridwatch, files, pages, retailer, wholesale price, bill, Electricity Authority, EMI (after spelling it out), Transpower, system operator, slice of the day, the industry, Otahuhu, Haywards, Benmore, megawatt-hour, three places, electricity generated
+this site, Gridwatch, files, pages, retailer, wholesale price, bill, Electricity Authority, EMI (after spelling it out), Transpower, system operator, slice of the day, the industry, Ōtāhuhu, Haywards, Benmore, megawatt-hour, three places, electricity generated
 
 ## Don't
 

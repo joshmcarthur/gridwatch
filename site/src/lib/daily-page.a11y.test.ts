@@ -23,9 +23,10 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).not.toMatch(/\bSI\b/);
     expect(html).not.toMatch(/Trading periods/);
     expect(html).toMatch(
-      /Prices here come from three places: Otahuhu in Auckland, Haywards near\s+Wellington, and Benmore in the South Island/,
+      /Prices here come from three places: Ōtāhuhu in Auckland, Haywards near\s+Wellington, and Benmore in the South Island/,
     );
     expect(html).not.toMatch(/sample points?/i);
+    expect(html).not.toMatch(/Otahuhu/);
     expect(html).not.toMatch(
       /reference nodes?|proxy price|interim|dispatch energy/i,
     );
@@ -75,7 +76,7 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain("OTA2201");
     expect(html).toContain("HAY2201");
     expect(html).toContain("BEN2201");
-    expect(html).toContain("Otahuhu");
+    expect(html).toContain("Ōtāhuhu");
     expect(html).toContain("Haywards");
     expect(html).toContain("Benmore");
     expect(html).toContain("Electricity Authority wholesale energy prices");

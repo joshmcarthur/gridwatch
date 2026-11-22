@@ -27,7 +27,7 @@ const money = new Intl.NumberFormat("en-NZ", {
 
 export interface PriceNodeLine {
   poc: string;
-  /** Place and region, for example `Otahuhu (Upper North Island)`. */
+  /** Place and region, for example `Ōtāhuhu (Upper North Island)`. */
   label: string;
   island: PriceIsland;
   dashed: boolean;
@@ -225,7 +225,7 @@ export function priceSpreadSummary(chart: PriceChart): string {
     if (plotted.length === 0) return `${label} has no data`;
     return `${label} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
   });
-  return `Spreads in $/MWh, first place minus second: ${parts.join(", ")}. Otahuhu–Benmore is in the table.`;
+  return `Spreads in $/MWh, first place minus second: ${parts.join(", ")}. Ōtāhuhu–Benmore is in the table.`;
 }
 
 /** Three sentences for the daily figures. Highest and lowest are raw row prices, not period averages. */
