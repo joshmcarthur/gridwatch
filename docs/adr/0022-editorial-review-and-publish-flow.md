@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-22
 
-Owner decided in chat, 2026-11-22, Pacific/Auckland. This ADR supersedes the Proposed allow-list in [#125](https://github.com/joshmcarthur/gridwatch/pull/125). Do not merge #125.
+Owner decided in chat, 2026-11-22, Pacific/Auckland. This ADR replaces the allow-list proposed in [#125](https://github.com/joshmcarthur/gridwatch/pull/125), which was never accepted.
 
 ## Context
 
@@ -62,4 +62,3 @@ This is not "publish every observation" and not "publish every episode". Brief Â
 - The first public events can ship as soon as ranking, narratives, and event pages write them. They will say Unreviewed. That is the point.
 - The owner is not on the path of every public event. Wrong or noisy events can appear until the later flag exists. The Unreviewed label is the v1 mitigation.
 - Agents must not implement `site/events/approved.json` or any other publish allow-list.
-- [#125](https://github.com/joshmcarthur/gridwatch/pull/125) stays open only until it is closed unmerged. Its Proposed ADR must not land on `main`.

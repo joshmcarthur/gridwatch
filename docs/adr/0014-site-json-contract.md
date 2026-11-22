@@ -21,7 +21,7 @@ The site must read prepared data and must not query the lake ([brief 4.2 and 9.3
 - **No run timestamps.** A day has no `generated_at` or `processed_at`. A repeat export writes the same bytes.
 - **Rebuild.** `export_sha256` in each index entry is the held version. It hashes the export version, the contract version, the gold fingerprint of each section and the full `_completeness` status of each input dataset. A day is rebuilt when its held version differs from the wanted one. `EXPORT_VERSION` in `export.ts` is bumped by hand when the export logic changes, like `ANALYSIS_VERSION`. `--from` and `--to` limit only which days rebuild. The manual rebuild is `publisher --force --dataset site_days`.
 - **The index.** It lists every gold trading date, even outside a `--from` and `--to` range. It is written last, through a temporary file and a rename. A day that leaves gold drops out of the index. Its file stays on disk. `latest_complete` gives, for each silver dataset in the registry (partition root not set), the latest trading date whose `_completeness` status is `complete`, or null. Gold datasets are not in it. `latest_complete_sections` gives, for `generation`, `prices`, `sankey` and `episodes`, the latest index day whose section state is `complete`, or null. `sankey` and `episodes` on the index are optional so older files still validate.
-- **Extension points.** `reserves`, `sankey`, `observations`, `episodes` and `events` are optional. A consumer treats absence as "not built". Adding an optional field is not a breaking change. A breaking change bumps `SITE_CONTRACT_VERSION`, and that rebuilds every day. `events` is not built yet; see the #41 amendment below.
+- **Extension points.** `reserves`, `sankey`, `observations`, `episodes` and `events` are optional. A consumer treats absence as "not built". Adding an optional field is not a breaking change. A breaking change bumps `SITE_CONTRACT_VERSION`, and that rebuilds every day. `events` is not built yet. Each event will carry `review_status` ([ADR-0022](0022-editorial-review-and-publish-flow.md)).
 
 ### Amendment (#36): detected episodes
 
@@ -40,10 +40,6 @@ Amended 2026-11-21. The exporter writes a `sankey` section on every day. The con
 - **No invented transfer.** HVDC gold without an energy-balance row does not fill the section. The site shows "not published yet".
 - **`complete` on the day.** Still generation and prices only. Sankey follows the HVDC month lag, so a recent day can be complete for generation and prices while sankey is `missing`.
 - **Provenance.** Each section records `analysis_version`, `inputs_sha256`, `silver_tables` and `gold_tables`. Each dataset records its `bronze_sha256s`.
-
-### Amendment (#41): events section, later
-
-Amended 2026-11-22. `events` is an optional extension. It is not built yet ([#38](https://github.com/joshmcarthur/gridwatch/issues/38), [#42](https://github.com/joshmcarthur/gridwatch/issues/42)). When the exporter writes it, each published event carries `review_status`: `unreviewed` | `reviewed`, default `unreviewed` ([ADR-0022](0022-editorial-review-and-publish-flow.md)). Adding the optional section is not a breaking change. There is no allow-list file in the contract.
 
 ## Consequences
 
