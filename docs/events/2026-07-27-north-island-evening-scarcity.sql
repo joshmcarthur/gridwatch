@@ -107,7 +107,8 @@ SELECT 'Q1 completeness' AS figure;
 SELECT dataset, trading_date::VARCHAR AS trading_date, status,
        expected_period_count, actual_period_count
 FROM completeness
-WHERE dataset IN (
+WHERE trading_date = DATE '2026-07-27'
+  AND dataset IN (
   'dispatch_energy_prices', 'dispatch_reserve_prices', 'nodal_prices_and_volumes',
   'cleared_offers', 'generation_md', 'hvdc_flows', 'entity_mappings'
 )
