@@ -1,6 +1,7 @@
 import {
   assertSiteDay,
   type SiteDay,
+  type SiteEpisode,
 } from "@gridwatch/publisher/site-contract";
 import { expect, test } from "vitest";
 import fixtureJson from "../../fixtures/days/2026-09-27.json";
@@ -32,6 +33,16 @@ function chartOf(day: SiteDay): PriceChart {
   const chart = priceChart(day);
   if (!chart) throw new Error("expected a price chart");
   return chart;
+}
+
+const sample = fixture.episodes?.items[0];
+if (!sample) throw new Error("expected a fixture episode");
+
+function withEpisodes(day: SiteDay, items: SiteEpisode[]): SiteDay {
+  const episodes = day.episodes;
+  if (episodes === undefined) throw new Error("expected episodes");
+  day.episodes = { ...episodes, items };
+  return day;
 }
 
 /** A day with `count` periods and every node at `price`. Spreads are zero. */
@@ -116,13 +127,13 @@ test("daily figures come from the contract summary", () => {
 
 test("the price summary is one exact sentence", () => {
   expect(priceChartSummary(chartOf(fixture))).toBe(
-    "Period prices per megawatt-hour: Ōtāhuhu from $0.01 to $284.43, Haywards from $0.01 to $245.11, Benmore from $0.01 to $50.13.",
+    "Period prices per megawatt-hour: Ōtāhuhu from $0.01 to $284.43, Haywards from $0.01 to $245.11, Benmore from $0.01 to $50.13. A shaded band marks an unusual stretch.",
   );
 });
 
 test("the spread summary names the drawn spreads and points to the table for Ōtāhuhu–Benmore", () => {
   expect(priceSpreadSummary(chartOf(fixture))).toBe(
-    "Spreads in $/MWh, first place minus second: Ōtāhuhu–Haywards from $0.00 to $39.42, Haywards–Benmore from $0.00 to $224.98. Ōtāhuhu–Benmore is in the table.",
+    "Spreads in $/MWh, first place minus second: Ōtāhuhu–Haywards from $0.00 to $39.42, Haywards–Benmore from $0.00 to $224.98. Ōtāhuhu–Benmore is in the table. A shaded band marks an unusual stretch.",
   );
 });
 
@@ -290,6 +301,55 @@ test("a day with no period prices says so in the summary", () => {
     node.price = node.price.map(() => null);
   }
   expect(priceChartSummary(chartOf(day))).toBe(
-    "Period prices for this day are missing.",
+    "Period prices for this day are missing. A shaded band marks an unusual stretch.",
   );
+});
+
+test("a 3:00pm–7:30pm episode is a band on that window", () => {
+  const day = withEpisodes(copy(), [
+    {
+      ...sample,
+      episode_id: "ep-afternoon",
+      start_utc: "2026-09-27T02:00:00Z",
+      end_utc: "2026-09-27T06:30:00Z",
+      observation_types: ["price_high"],
+    },
+  ]);
+  const [band] = chartOf(day).bands;
+  expect(band?.x1.getTime()).toBe(Date.parse("2026-09-27T02:00:00Z"));
+  expect(band?.x2.getTime()).toBe(Date.parse("2026-09-27T06:30:00Z"));
+  expect(band?.title).toBe("Unusual stretch 3:00pm–7:30pm");
+});
+
+test("each wholesale episode on the day gets a band", () => {
+  const day = withEpisodes(copy(), [
+    {
+      ...sample,
+      episode_id: "ep-price",
+      observation_types: ["price_high"],
+    },
+    {
+      ...sample,
+      episode_id: "ep-spread",
+      observation_types: ["separation_low"],
+    },
+  ]);
+  expect(chartOf(day).bands).toHaveLength(2);
+});
+
+test("a reserve-only episode is not a wholesale band", () => {
+  const day = withEpisodes(copy(), [
+    {
+      ...sample,
+      observation_types: ["reserve_price_high"],
+    },
+  ]);
+  expect(chartOf(day).bands).toHaveLength(0);
+  expect(priceChartSummary(chartOf(day))).not.toMatch(/shaded band/);
+});
+
+test("a day with no episodes section has no bands", () => {
+  const day = copy();
+  day.episodes = undefined;
+  expect(chartOf(day).bands).toHaveLength(0);
 });

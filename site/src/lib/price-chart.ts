@@ -2,7 +2,12 @@ import type {
   PricesSection,
   SiteDay,
 } from "@gridwatch/publisher/site-contract";
-import { clockLabeller, timeTicks, zonedAt } from "./period-clock.ts";
+import {
+  clockLabeller,
+  clockLabeller12,
+  timeTicks,
+  zonedAt,
+} from "./period-clock.ts";
 import { placeLegend, placeName } from "./price-regions.ts";
 
 export const PRICE_MISSING =
@@ -66,6 +71,12 @@ export interface PricePeriod {
   title: string;
 }
 
+export interface PriceChartBand {
+  x1: Date;
+  x2: Date;
+  title: string;
+}
+
 export interface PriceChart {
   /** The prices section is `incomplete`. */
   incomplete: boolean;
@@ -80,6 +91,8 @@ export interface PriceChart {
   /** Y domain of the spread chart, over the plotted spreads, with zero included. */
   spreadDomain: [number, number];
   ticks: Array<{ at: Date; label: string }>;
+  /** Clock windows of wholesale-price or spread episodes. */
+  bands: PriceChartBand[];
 }
 
 type SpreadPlacement = { kind: "plotted"; dashed: boolean } | { kind: "table" };
@@ -165,6 +178,7 @@ export function priceChart(day: SiteDay): PriceChart | null {
     priceDomain: domain(plotted),
     spreadDomain: domain(plottedSpreadValues),
     ticks: timeTicks(day),
+    bands: priceChartBands(day),
   };
 }
 
@@ -209,8 +223,10 @@ export function priceChartSummary(chart: PriceChart): string {
       return `${placeName(node.poc)} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
     })
     .filter((part): part is string => part !== null);
-  if (parts.length === 0) return "Period prices for this day are missing.";
-  return `Period prices per megawatt-hour: ${parts.join(", ")}.`;
+  if (parts.length === 0) {
+    return `Period prices for this day are missing.${bandSummary(chart.bands)}`;
+  }
+  return `Period prices per megawatt-hour: ${parts.join(", ")}.${bandSummary(chart.bands)}`;
 }
 
 function spreadPlaces(spread: { from: string; to: string }): string {
@@ -225,7 +241,7 @@ export function priceSpreadSummary(chart: PriceChart): string {
     if (plotted.length === 0) return `${label} has no data`;
     return `${label} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
   });
-  return `Spreads in $/MWh, first place minus second: ${parts.join(", ")}. Ōtāhuhu–Benmore is in the table.`;
+  return `Spreads in $/MWh, first place minus second: ${parts.join(", ")}. Ōtāhuhu–Benmore is in the table.${bandSummary(chart.bands)}`;
 }
 
 /** Three sentences for the daily figures. Highest and lowest are raw row prices, not period averages. */
@@ -253,6 +269,38 @@ export function priceChartDaily(chart: PriceChart): string[] {
       .join(", ");
     return [`${heading}: ${list}, per megawatt-hour.`];
   });
+}
+
+const WHOLESALE_BAND_TYPES = new Set([
+  "price_high",
+  "price_low",
+  "separation_high",
+  "separation_low",
+]);
+
+function isWholesaleBandType(type: string): boolean {
+  return WHOLESALE_BAND_TYPES.has(type);
+}
+
+function priceChartBands(day: SiteDay): PriceChartBand[] {
+  const items = day.episodes?.items ?? [];
+  const label = clockLabeller12(day);
+  const bands: PriceChartBand[] = [];
+  for (const episode of items) {
+    if (!episode.observation_types.some(isWholesaleBandType)) continue;
+    const x1 = new Date(episode.start_utc);
+    const x2 = new Date(episode.end_utc);
+    if (!(x2.getTime() > x1.getTime())) continue;
+    const clock = `${label(zonedAt(episode.start_utc))}–${label(zonedAt(episode.end_utc))}`;
+    bands.push({ x1, x2, title: `Unusual stretch ${clock}` });
+  }
+  return bands;
+}
+
+function bandSummary(bands: PriceChartBand[]): string {
+  if (bands.length === 0) return "";
+  if (bands.length === 1) return " A shaded band marks an unusual stretch.";
+  return " Shaded bands mark unusual stretches.";
 }
 
 function spreadPlacement(from: string, to: string): SpreadPlacement {
