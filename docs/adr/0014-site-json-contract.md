@@ -72,3 +72,11 @@ Amended 2026-11-22. The exporter writes a `nodal_map` section on every day. The 
 ### Amendment (#170): episode highlights
 
 Amended 2026-11-23. Each episode item may carry `highlights`: one row per observation type, the member with the highest severity. The row has the observation type, the place (`point_of_connection`, or `pair_from` / `pair_to` for a spread), the island, the measured value, and the baseline. Older JSON omits the field. The contract version stays 1. `EXPORT_VERSION` is 6 so published days rebuild.
+
+### Amendment (#202): per-period reserve prices
+
+Amended 2026-11-23. Each `ReservesClassDay` may carry `price`, an array of $/MWh aligned to `SiteDay.periods`, null where silver has no row. The contract version stays 1. `EXPORT_VERSION` is 7.
+
+- **Optional.** Older files omit `price` and still validate. New exports always write it.
+- **Supersedes** the #29 note that the site file carries the daily row only. Daily min/mean/max stay. Period prices are now on the class as well as in gold.
+- **Missing.** A day with no gold partition is still `missing` with empty `classes`. It is never zeros.
