@@ -73,3 +73,20 @@ export function episodeClockRange(
   const end = label(zonedAt(episode.end_utc));
   return `${start}–${end}`;
 }
+
+/** Links from an episode line to the evidence on the same page. Reserve episodes link to the reserve chart. */
+export function episodeEvidenceLinks(
+  episode: Pick<SiteEpisode, "observation_types">,
+): Array<{ label: string; href: string }> {
+  const reserve = episode.observation_types.some((type) =>
+    type.startsWith("reserve_price_"),
+  );
+  return reserve
+    ? [
+        {
+          label: "See the reserve prices for this day.",
+          href: "#reserve-prices",
+        },
+      ]
+    : [];
+}

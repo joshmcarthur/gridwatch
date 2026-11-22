@@ -27,6 +27,15 @@ test.skipIf(!existsSync(builtPage))(
     );
     expect(html).not.toMatch(/sample points?/i);
     expect(html).not.toMatch(/Otahuhu/);
+    expect(html).toMatch(/<h2 id="reserve-prices"[^>]*>What backup cost<\/h2>/);
+    if (html.includes('href="#reserve-prices"')) {
+      expect(html).toContain('id="reserve-prices"');
+    }
+    // Fixture data has no reserve prices. Real data does, so accept the chart or the missing line.
+    expect(
+      html.includes('id="reserve-chart-title"') ||
+        html.includes("Reserve prices are not ready for this day yet."),
+    ).toBe(true);
     expect(html).toContain("Not enough earlier days yet to compare.");
     expect(html.indexOf('id="detected-episodes"')).toBeGreaterThan(-1);
     expect(html.indexOf('id="detected-episodes"')).toBeLessThan(
@@ -85,7 +94,8 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain("Haywards");
     expect(html).toContain("Benmore");
     expect(html).toContain("Electricity Authority wholesale energy prices");
-    expect(html.match(/role="img"/g)?.length).toBe(5);
+    const reserveCharts = html.includes('id="reserve-chart-title"') ? 1 : 0;
+    expect(html.match(/role="img"/g)?.length).toBe(5 + reserveCharts);
     expect(html).toContain('aria-labelledby="energy-flow"');
     expect(html).toContain(
       'aria-labelledby="energy-sankey-chart-title energy-sankey-chart-summary"',

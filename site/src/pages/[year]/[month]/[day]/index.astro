@@ -2,6 +2,7 @@
 import EnergySankeyChart from "../../../../components/EnergySankeyChart.astro";
 import GenerationMixChart from "../../../../components/GenerationMixChart.astro";
 import PriceChart from "../../../../components/PriceChart.astro";
+import ReserveChart from "../../../../components/ReserveChart.astro";
 import Layout from "../../../../layouts/Layout.astro";
 import {
   completenessNotice,
@@ -13,7 +14,11 @@ import {
   monthGroups,
   neighbouringDays,
 } from "../../../../lib/daily-page";
-import { episodeClockRange, episodeHeadline } from "../../../../lib/episode-copy";
+import {
+  episodeClockRange,
+  episodeEvidenceLinks,
+  episodeHeadline,
+} from "../../../../lib/episode-copy";
 import { dayContext, leadFact } from "../../../../lib/market-conditions";
 import {
   formatTradingDate,
@@ -113,6 +118,11 @@ const months = monthGroups(index);
               <li id={`episode-${episode.episode_id}`}>
                 <p>{episodeHeadline(episode)}</p>
                 <p>{episodeClockRange(episode, day)}</p>
+                {episodeEvidenceLinks(episode).map((link) => (
+                  <p>
+                    <a href={link.href}>{link.label}</a>
+                  </p>
+                ))}
               </li>
             ))}
           </ol>
@@ -133,6 +143,11 @@ const months = monthGroups(index);
           Map of wholesale prices at each named place on the grid
         </a>
       </p>
+    </section>
+
+    <section class="slot" aria-labelledby="reserve-prices">
+      <h2 id="reserve-prices">What backup cost</h2>
+      <ReserveChart day={day} />
     </section>
 
     <section class="slot" aria-labelledby="energy-flow">
@@ -218,7 +233,8 @@ const months = monthGroups(index);
         <div id="word-reserve-price">
           <dt>Reserve price</dt>
           <dd>
-            The cost of backup generation kept ready if something trips.
+            The cost of backup generation kept ready if something trips. Fast
+            reserve acts within 6 seconds and slow reserve within 60 seconds.
           </dd>
         </div>
       </dl>

@@ -76,6 +76,11 @@ test.skipIf(!existsSync(howPage))(
     expect(html).toMatch(/A node is a named place on the grid/);
     expect(html).toMatch(/Cleared means the market took/);
     expect(html).toMatch(/Reserve is spare generating capacity/);
+    expect(html.indexOf("Dispatch reserve prices")).toBeGreaterThan(-1);
+    expect(html.indexOf("Dispatch reserve prices")).toBeLessThan(
+      html.indexOf("Downloaded, not on the pages yet"),
+    );
+    expect(html).not.toMatch(/reserve[^.]*not on the daily\s+pages yet/i);
     expect(html).toMatch(/One megawatt-hour is\s+1,000\s+kilowatt-hours/);
     expect(
       count(html.toLowerCase(), "tomorrow's prices aren't in these files"),
