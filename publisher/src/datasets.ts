@@ -1,5 +1,6 @@
 import { demandDeviation } from "./gold/demand-deviation.ts";
 import { energyBalance } from "./gold/energy-balance.ts";
+import { episodeRanking } from "./gold/episode-ranking.ts";
 import { episodes } from "./gold/episodes.ts";
 import { generation } from "./gold/generation.ts";
 import {
@@ -158,4 +159,6 @@ export const datasets: PublisherDataset[] = [
   demandDeviation,
   // After the detectors it reads: grouping of observations (ADR-0021).
   episodes,
+  // After gold_episodes: scores and ranks episodes against 90 days of history (ADR-0024).
+  episodeRanking,
 ];
