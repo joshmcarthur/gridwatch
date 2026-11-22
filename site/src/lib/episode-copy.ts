@@ -10,8 +10,8 @@ import { placeName } from "./price-regions.ts";
 const TYPE_LABELS: Record<string, string> = {
   price_high: "high wholesale prices",
   price_low: "low wholesale prices",
-  reserve_price_high: "high backup-power prices",
-  reserve_price_low: "low backup-power prices",
+  reserve_price_high: "high backup prices",
+  reserve_price_low: "low backup prices",
   separation_high: "wholesale prices far apart",
   separation_low: "wholesale prices unusually close",
   generation_low: "a drop in generation",
@@ -90,7 +90,7 @@ const priceReached = (
 ): string | null => {
   const place = pricePlace(highlight);
   if (place === null) return null;
-  return `wholesale prices at ${place} ${verb} ${dollars(highlight.measured_value)} per megawatt-hour, ${side} the recent typical level of ${dollars(highlight.baseline_value)}`;
+  return `wholesale prices at ${place} ${verb} ${dollars(highlight.measured_value)} per megawatt-hour, ${side} the recent typical level of about ${dollars(highlight.baseline_value)}`;
 };
 
 const backupReached = (
@@ -100,7 +100,7 @@ const backupReached = (
 ): string => {
   const where =
     highlight.island === null ? "" : `${islandBare(highlight.island)} `;
-  return `${where}backup power ${verb} ${dollars(highlight.measured_value)} per megawatt-hour, ${side} the recent typical level of ${dollars(highlight.baseline_value)}`;
+  return `${where}backup prices ${verb} ${dollars(highlight.measured_value)} per megawatt-hour, ${side} the recent typical level of about ${dollars(highlight.baseline_value)}`;
 };
 
 const spreadReached = (
@@ -111,9 +111,9 @@ const spreadReached = (
   if (pair === null) return null;
   const [from, to] = pair;
   if (kind === "high") {
-    return `wholesale prices at ${from} and ${to} were ${dollars(highlight.measured_value)} apart, above the recent typical gap of ${dollars(highlight.baseline_value)}`;
+    return `wholesale prices at ${from} and ${to} were ${dollars(highlight.measured_value)} apart, above the recent typical gap of about ${dollars(highlight.baseline_value)}`;
   }
-  return `wholesale prices at ${from} and ${to} were only ${dollars(highlight.measured_value)} apart, below the recent typical gap of ${dollars(highlight.baseline_value)}`;
+  return `wholesale prices at ${from} and ${to} were only ${dollars(highlight.measured_value)} apart, below the recent typical gap of about ${dollars(highlight.baseline_value)}`;
 };
 
 const factFromHighlight = (highlight: SiteEpisodeHighlight): string | null => {
@@ -219,7 +219,7 @@ export function episodeEvidenceLinks(
   }
   if (types.some((type) => type.startsWith("reserve_price_"))) {
     links.push({
-      label: "See backup power prices for this stretch.",
+      label: "See backup prices for this stretch.",
       href: "#reserve-prices",
     });
   }

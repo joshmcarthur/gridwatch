@@ -1,3 +1,4 @@
+import type { SiteEpisodeHighlight } from "@gridwatch/publisher/site-contract";
 import { expect, test } from "vitest";
 import {
   episodeClockRange,
@@ -26,7 +27,7 @@ const highlight = (
   ...rest,
 });
 
-test("a scarcity episode names the peak, the place, the time and backup power", () => {
+test("a scarcity episode names the peak, the place, the time and backup prices", () => {
   expect(
     episodeHeadline(
       {
@@ -54,7 +55,7 @@ test("a scarcity episode names the peak, the place, the time and backup power", 
       day,
     ),
   ).toBe(
-    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu reached $3,296 per megawatt-hour, above the recent typical level of $150, at the same time as North Island backup power reached $2,154 per megawatt-hour, above the recent typical level of $12.",
+    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu reached $3,296 per megawatt-hour, above the recent typical level of about $150, at the same time as North Island backup prices reached $2,154 per megawatt-hour, above the recent typical level of about $12.",
   );
 });
 
@@ -80,7 +81,7 @@ test("a singleton price high does not say at the same time", () => {
       day,
     ),
   ).toBe(
-    "From 4:00pm to 6:30pm, wholesale prices at Benmore reached $80 per megawatt-hour, above the recent typical level of $40.",
+    "From 4:00pm to 6:30pm, wholesale prices at Benmore reached $80 per megawatt-hour, above the recent typical level of about $40.",
   );
 });
 
@@ -106,7 +107,7 @@ test("a price-gap episode names both places", () => {
       day,
     ),
   ).toBe(
-    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu and Benmore were $2,725 apart, above the recent typical gap of $80.",
+    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu and Benmore were $2,725 apart, above the recent typical gap of about $80.",
   );
 });
 
@@ -176,7 +177,7 @@ test("price and reserve episodes each link to their chart; price-only does not l
       href: "#wholesale-prices",
     },
     {
-      label: "See backup power prices for this stretch.",
+      label: "See backup prices for this stretch.",
       href: "#reserve-prices",
     },
   ]);
