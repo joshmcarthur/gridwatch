@@ -297,11 +297,12 @@ test("a complete day is not flagged as incomplete", () => {
 
 test("a day with no period prices says so in the summary", () => {
   const day = copy();
+  day.episodes = undefined;
   for (const node of day.prices.nodes) {
     node.price = node.price.map(() => null);
   }
   expect(priceChartSummary(chartOf(day))).toBe(
-    "Period prices for this day are missing. A shaded band marks an unusual stretch.",
+    "Period prices for this day are missing.",
   );
 });
 
@@ -351,5 +352,13 @@ test("a reserve-only episode is not a wholesale band", () => {
 test("a day with no episodes section has no bands", () => {
   const day = copy();
   day.episodes = undefined;
+  expect(chartOf(day).bands).toHaveLength(0);
+});
+
+test("a missing episodes section has no bands", () => {
+  const day = copy();
+  const episodes = day.episodes;
+  if (episodes === undefined) throw new Error("expected episodes");
+  day.episodes = { ...episodes, state: "missing" };
   expect(chartOf(day).bands).toHaveLength(0);
 });

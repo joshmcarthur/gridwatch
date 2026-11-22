@@ -2,12 +2,8 @@ import type {
   PricesSection,
   SiteDay,
 } from "@gridwatch/publisher/site-contract";
-import {
-  clockLabeller,
-  clockLabeller12,
-  timeTicks,
-  zonedAt,
-} from "./period-clock.ts";
+import { episodeClockRange } from "./episode-copy.ts";
+import { clockLabeller, timeTicks, zonedAt } from "./period-clock.ts";
 import { placeLegend, placeName } from "./price-regions.ts";
 
 export const PRICE_MISSING =
@@ -283,16 +279,19 @@ function isWholesaleBandType(type: string): boolean {
 }
 
 function priceChartBands(day: SiteDay): PriceChartBand[] {
-  const items = day.episodes?.items ?? [];
-  const label = clockLabeller12(day);
+  const section = day.episodes;
+  if (section === undefined || section.state === "missing") return [];
   const bands: PriceChartBand[] = [];
-  for (const episode of items) {
+  for (const episode of section.items) {
     if (!episode.observation_types.some(isWholesaleBandType)) continue;
     const x1 = new Date(episode.start_utc);
     const x2 = new Date(episode.end_utc);
     if (!(x2.getTime() > x1.getTime())) continue;
-    const clock = `${label(zonedAt(episode.start_utc))}–${label(zonedAt(episode.end_utc))}`;
-    bands.push({ x1, x2, title: `Unusual stretch ${clock}` });
+    bands.push({
+      x1,
+      x2,
+      title: `Unusual stretch ${episodeClockRange(episode, day)}`,
+    });
   }
   return bands;
 }
