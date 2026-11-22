@@ -175,6 +175,7 @@ export async function runPublish(
       summaries.push(
         await exportSite({
           goldDir,
+          silverDir,
           completeness,
           registry: options.registry ?? datasets,
           range,

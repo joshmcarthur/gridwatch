@@ -4,7 +4,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { type DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 import type { PublisherDataset } from "../datasets.ts";
-import { type GoldInput, goldPartitionPath, ISLANDS } from "../gold/common.ts";
+import { goldPartitionPath, ISLANDS } from "../gold/common.ts";
 import {
   INPUTS as ENERGY_BALANCE_INPUTS,
   TABLES as ENERGY_BALANCE_TABLES,
@@ -20,6 +20,7 @@ import {
 import { TABLES as HVDC_TABLES } from "../gold/hvdc.ts";
 import {
   INPUTS as PRICE_INPUTS,
+  PRICE_SECTION_TABLES,
   TABLES as PRICE_TABLES,
   REFERENCE_NODES,
   SPREAD_PAIRS,
@@ -32,7 +33,6 @@ import type { DatasetSummary } from "../runner.ts";
 import { partitionVersions } from "../silver/common.ts";
 import {
   type CompletenessView,
-  completenessKey,
   latestCompleteDates,
 } from "../silver/completeness.ts";
 import { periodsInTradingDate, periodToUtc } from "../trading-time.ts";
@@ -47,36 +47,35 @@ import {
   type ReserveClass,
   type ReservesSection,
   type SankeySection,
-  type SectionState,
   SITE_CONTRACT_VERSION,
   SITE_EXPORT_ID,
-  type SiteDatasetStatus,
   type SiteDay,
   type SiteEpisode,
   type SiteIndex,
   type SiteIndexDay,
 } from "./contract.ts";
 import {
+  datasetStatus,
+  type Section,
+  sectionDatasets,
+  sectionState,
+} from "./export-common.ts";
+import { buildNodalMap, NODAL_MAP_SECTION } from "./export-nodal-map.ts";
+import {
   numberOrNull,
   readStamp,
   round,
   roundOrNull,
   rowsOf,
-  type Stamp,
 } from "./gold-read.ts";
+
+export { round };
 
 /**
  * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
  * rebuilt (ADR-0014).
  */
-export const EXPORT_VERSION = 4;
-
-interface Section {
-  name: "generation" | "prices" | "sankey" | "episodes" | "reserves";
-  /** The first gold table. Its partition holds the section's `inputs_sha256`. */
-  sentinel: string;
-  inputs: readonly GoldInput[];
-}
+export const EXPORT_VERSION = 5;
 
 const GENERATION_SECTION: Section = {
   name: "generation",
@@ -109,42 +108,12 @@ const SECTIONS: readonly Section[] = [
   SANKEY_SECTION,
   EPISODES_SECTION,
   RESERVES_SECTION,
+  NODAL_MAP_SECTION,
 ];
 const [, HVDC_DAY_TABLE] = HVDC_TABLES;
 
-/** The `_completeness` datasets that a section reads. */
-const sectionDatasets = (section: Section) =>
-  section.inputs.flatMap((input) =>
-    input.completenessDataset === null ? [] : [input.completenessDataset],
-  );
-
 /** Every silver dataset that a section reads, sorted. */
 const DATASET_IDS = [...new Set(SECTIONS.flatMap(sectionDatasets))].sort();
-
-const datasetStatus = (
-  completeness: CompletenessView,
-  dataset: string,
-  date: string,
-): SiteDatasetStatus => {
-  const row = completeness.get(completenessKey(dataset, date));
-  if (!row)
-    return {
-      status: "missing",
-      expected_period_count: null,
-      actual_period_count: null,
-      missing_periods: [],
-      bronze_sha256s: [],
-      errors: [],
-    };
-  return {
-    status: row.status,
-    expected_period_count: row.expectedPeriodCount,
-    actual_period_count: row.actualPeriodCount,
-    missing_periods: row.missingPeriods,
-    bronze_sha256s: row.bronzeSha256s,
-    errors: row.errors,
-  };
-};
 
 /** The period axis of a date. It exists even when gold has no rows. */
 function periodAxis(date: string) {
@@ -152,23 +121,6 @@ function periodAxis(date: string) {
     period: i + 1,
     start_utc: periodToUtc(date, i + 1).eventStartUtc.toString(),
   }));
-}
-
-/** The state of a section, from its stamp and its input statuses (ADR-0014). */
-function sectionState(
-  stamp: Stamp | null,
-  section: Section,
-  completeness: CompletenessView,
-  date: string,
-): SectionState {
-  if (!stamp) return "missing";
-  const inputs = section.inputs.every(
-    (input) =>
-      input.completenessDataset === null ||
-      datasetStatus(completeness, input.completenessDataset, date).status ===
-        "complete",
-  );
-  return stamp.inputs_complete && inputs ? "complete" : "incomplete";
 }
 
 async function buildGeneration(
@@ -289,7 +241,7 @@ async function buildPrices(
   const section = PRICES_SECTION;
   const base = {
     silver_tables: section.inputs.map((input) => input.table),
-    gold_tables: [...PRICE_TABLES],
+    gold_tables: [...PRICE_SECTION_TABLES],
     datasets: sectionDatasets(section),
   };
   const stamp = await readStamp(
@@ -739,8 +691,11 @@ export async function buildSiteDay(options: {
   goldDir: string;
   date: string;
   completeness: CompletenessView;
+  /** Silver root. Coordinates for the nodal map are joined from it (ADR-0023). */
+  silverDir?: string;
 }): Promise<SiteDay> {
   const { goldDir, date, completeness } = options;
+  const silverDir = options.silverDir ?? join(goldDir, "..", "silver");
   const periods = periodAxis(date);
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
@@ -772,6 +727,14 @@ export async function buildSiteDay(options: {
       date,
       completeness,
     );
+    const nodalMap = await buildNodalMap(
+      connection,
+      goldDir,
+      silverDir,
+      date,
+      completeness,
+      periods,
+    );
     const datasets = Object.fromEntries(
       DATASET_IDS.map((id) => [id, datasetStatus(completeness, id, date)]),
     );
@@ -788,6 +751,7 @@ export async function buildSiteDay(options: {
       reserves,
       sankey,
       episodes,
+      nodal_map: nodalMap,
     };
   } finally {
     connection.closeSync();
@@ -861,8 +825,10 @@ export async function exportSite(options: {
   registry: readonly PublisherDataset[];
   range?: { from: string; to: string };
   force?: boolean;
+  silverDir?: string;
 }): Promise<DatasetSummary> {
   const { goldDir, completeness, registry, range, force } = options;
+  const silverDir = options.silverDir ?? join(goldDir, "..", "silver");
   const summary: DatasetSummary = {
     id: SITE_EXPORT_ID,
     published: 0,
@@ -908,7 +874,12 @@ export async function exportSite(options: {
       continue;
     }
     try {
-      const day = await buildSiteDay({ goldDir, date, completeness });
+      const day = await buildSiteDay({
+        goldDir,
+        silverDir,
+        date,
+        completeness,
+      });
       assertSiteDay(day);
       await writeJson(dayFile, day);
       days.set(date, {
@@ -921,6 +892,7 @@ export async function exportSite(options: {
           sankey: day.sankey?.state ?? "missing",
           episodes: day.episodes?.state ?? "missing",
           reserves: day.reserves?.state ?? "missing",
+          nodal_map: day.nodal_map?.state ?? "missing",
         },
         export_sha256: wanted,
       });
@@ -934,7 +906,13 @@ export async function exportSite(options: {
   const entries = [...days.values()];
   const latest = latestCompleteDates(completeness);
   const latestSection = (
-    name: "generation" | "prices" | "sankey" | "episodes" | "reserves",
+    name:
+      | "generation"
+      | "prices"
+      | "sankey"
+      | "episodes"
+      | "reserves"
+      | "nodal_map",
   ) =>
     entries.filter((day) => day.sections[name] === "complete").at(-1)?.date ??
     null;
@@ -952,6 +930,7 @@ export async function exportSite(options: {
       sankey: latestSection("sankey"),
       episodes: latestSection("episodes"),
       reserves: latestSection("reserves"),
+      nodal_map: latestSection("nodal_map"),
     },
   };
   assertSiteIndex(index);

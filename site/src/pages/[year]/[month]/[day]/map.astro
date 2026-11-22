@@ -1,0 +1,110 @@
+---
+import NodalPriceMap from "../../../../components/NodalPriceMap.astro";
+import Layout from "../../../../layouts/Layout.astro";
+import {
+  dailyPath,
+  dailyStaticPaths,
+  dateFromParams,
+  mapPath,
+  neighbouringDays,
+} from "../../../../lib/daily-page";
+import {
+  formatTradingDate,
+  loadSiteDay,
+  loadSiteIndex,
+} from "../../../../lib/site-data";
+
+export function getStaticPaths() {
+  return dailyStaticPaths(loadSiteIndex());
+}
+
+const { year, month, day: dayParam } = Astro.params;
+if (!year || !month || !dayParam) throw new Error("Missing date params");
+const date = dateFromParams(year, month, dayParam);
+const index = loadSiteIndex();
+const day = loadSiteDay(date, index);
+const titleDate = formatTradingDate(date);
+const neighbours = neighbouringDays(index, date);
+---
+
+<Layout
+  title={`Price map · ${titleDate} · Gridwatch NZ`}
+  description={`Wholesale electricity prices at named places on the New Zealand grid on ${titleDate}.`}
+>
+  <p class="home">
+    <a href="/">Gridwatch NZ home</a>
+    {" · "}
+    <a href={dailyPath(date)}>{titleDate}</a>
+  </p>
+
+  <article class="prose">
+    <header class="lede">
+      <h1>Wholesale prices on the map</h1>
+      <p>
+        Wholesale prices are what generators and retailers paid each other in
+        each 30-minute slice of {titleDate}, not the rate on a household bill.
+        A named place on the grid is a point of connection: a substation or
+        similar code such as OTA2201.
+      </p>
+    </header>
+
+    <section class="slot" aria-labelledby="nodal-map">
+      <h2 id="nodal-map">Where prices sat</h2>
+      <NodalPriceMap day={day} />
+    </section>
+
+    <nav class="days" aria-label="Other days">
+      <div class="turn">
+        {
+          neighbours.previous ? (
+            <a href={mapPath(neighbours.previous.date)}>
+              Previous day: {formatTradingDate(neighbours.previous.date)}
+            </a>
+          ) : (
+            <p>No earlier day on this site yet.</p>
+          )
+        }
+        {
+          neighbours.next ? (
+            <a href={mapPath(neighbours.next.date)}>
+              Next day: {formatTradingDate(neighbours.next.date)}
+            </a>
+          ) : (
+            <p>No later day on this site yet.</p>
+          )
+        }
+      </div>
+      <p>
+        <a href={dailyPath(date)}>Back to the daily page for {titleDate}</a>
+      </p>
+    </nav>
+  </article>
+</Layout>
+
+<style>
+  .home {
+    margin: 0 0 var(--space-5);
+    font-size: var(--text-label);
+  }
+
+  .lede,
+  .slot,
+  .days {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .slot,
+  .days {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    padding: var(--space-5);
+  }
+
+  .turn {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+</style>
