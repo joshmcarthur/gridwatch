@@ -15,7 +15,7 @@ The site must read prepared data and must not query the lake ([brief 4.2 and 9.3
 - **Sections are always present.** `generation` and `prices` each have a `state`: `complete`, `incomplete` or `missing`. An input with no gold is written as `missing` with empty arrays. It is never left out. Section `state` is `incomplete` when gold says `inputs_complete` is false, or when any input dataset is not `complete` in `_completeness`. The second check does not depend on how gold sets its flag.
 - **Missing periods.** Generation lists the periods with no fuel row. Prices list the periods where any reference node has no price. A section can be `incomplete` with no missing periods, for example when the input status is `partial` but every period has data.
 - **Datasets.** `datasets` lists each silver dataset that a section reads, with its `_completeness` status, missing periods and provenance. A dataset with no row reads `missing`.
-- **Totals (provisional).** `generation.totals` sums the island rows. Battery is reported apart and is not in the primary total. `unmapped` is in the primary total. This follows [ADR-0011](0011-gold-table-pattern.md) while the national-total question is open. The per-island series stay, so a change to the rule edits only `publisher/src/site/export.ts`.
+- **Totals (provisional).** `generation.totals` sums the island rows. Battery is reported apart and is not in the primary total. `unmapped` is in the primary total. This follows [ADR-0011](0011-gold-table-pattern.md) while the national-total question is open. The per-island series stay, so a change to the rule edits only `publisher/src/site/export-generation.ts`.
 - **Order.** `prices.nodes` follow `REFERENCE_NODES` and `prices.spreads` follow `SPREAD_PAIRS`, north to south. The order does not depend on the order of the gold files.
 - **Rounding.** Megawatt-hours and megawatts keep 3 decimals. Prices and spreads keep 2 decimals. Silver holds kWh, so the 3 decimals lose nothing. Units are in the field names, and the price is $/MWh ([ADR-0012](0012-gold-prices.md)).
 - **No run timestamps.** A day has no `generated_at` or `processed_at`. A repeat export writes the same bytes.
@@ -55,7 +55,7 @@ Amended 2026-11-21. The exporter writes a `sankey` section on every day. The con
 - The site builds against one file shape, and a contract change shows in the diff of the committed sample days (`site/fixtures/`). The exporter lock on trimmed silver is a separate file in `publisher/src/site/fixtures/`.
 - A gold fix reaches the site only when `ANALYSIS_VERSION` changes, as for the other gold tables.
 - The index grows by about 0.2 KB for each day. It is one file, so a long backfill makes it large. If it reaches a few hundred KB, a later issue shards it by year.
-- `totals` may change when the national-total question is settled. That change is a rule change in `export.ts`, not a contract change.
+- `totals` may change when the national-total question is settled. That change is a rule change in `export-generation.ts`, not a contract change.
 - The validator is hand-written. A schema file is a separate decision if the site needs one.
 - A day in the last month of the HVDC lag has `sankey.state = missing`. The site must not treat that as zero transfer.
 
