@@ -82,3 +82,16 @@ test.skipIf(!existsSync(builtPage))(
     expect(new Set(ids).size).toBe(ids.length);
   },
 );
+
+test.skipIf(!existsSync(builtPage))(
+  "every stat link on the built daily page points at an id on the page",
+  () => {
+    const html = readFileSync(builtPage, "utf8");
+    const stats = html.match(/<dl class="stats[\s\S]*?<\/dl>/)?.[0] ?? "";
+    const targets = [...stats.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
+    expect(targets.length).toBeGreaterThan(0);
+    for (const target of targets) {
+      expect(html).toContain(`id="${target}"`);
+    }
+  },
+);
