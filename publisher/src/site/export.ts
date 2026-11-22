@@ -4,12 +4,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { type DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 import type { PublisherDataset } from "../datasets.ts";
-import {
-  type GoldInput,
-  goldPartitionPath,
-  ISLANDS,
-  silverPartitionPath,
-} from "../gold/common.ts";
+import { goldPartitionPath, ISLANDS } from "../gold/common.ts";
 import {
   INPUTS as ENERGY_BALANCE_INPUTS,
   TABLES as ENERGY_BALANCE_TABLES,
@@ -34,7 +29,6 @@ import type { DatasetSummary } from "../runner.ts";
 import { lit, partitionVersions } from "../silver/common.ts";
 import {
   type CompletenessView,
-  completenessKey,
   latestCompleteDates,
 } from "../silver/completeness.ts";
 import { periodsInTradingDate, periodToUtc } from "../trading-time.ts";
@@ -45,33 +39,34 @@ import {
   type FuelCategory,
   type GenerationSection,
   type Island,
-  type NodalMapPoc,
-  type NodalMapSection,
-  type NodalMapUnlocated,
   type PricesSection,
   type SankeySection,
-  type SectionState,
   SITE_CONTRACT_VERSION,
   SITE_EXPORT_ID,
-  type SiteDatasetStatus,
   type SiteDay,
   type SiteEpisode,
   type SiteIndex,
   type SiteIndexDay,
 } from "./contract.ts";
+import {
+  datasetStatus,
+  numberOrNull,
+  readStamp,
+  round,
+  roundOrNull,
+  type Section,
+  sectionDatasets,
+  sectionState,
+} from "./export-common.ts";
+import { buildNodalMap, NODAL_MAP_SECTION } from "./export-nodal-map.ts";
+
+export { round };
 
 /**
  * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
  * rebuilt (ADR-0014).
  */
 export const EXPORT_VERSION = 4;
-
-interface Section {
-  name: "generation" | "prices" | "sankey" | "episodes" | "nodal_map";
-  /** The first gold table. Its partition holds the section's `inputs_sha256`. */
-  sentinel: string;
-  inputs: readonly GoldInput[];
-}
 
 const GENERATION_SECTION: Section = {
   name: "generation",
@@ -93,17 +88,6 @@ const EPISODES_SECTION: Section = {
   sentinel: EPISODE_TABLES[0],
   inputs: EPISODE_INPUTS,
 };
-const ENTITY_POINTS: GoldInput = {
-  table: "entity_points_of_connection",
-  layer: "silver",
-  versionColumn: "inputs_sha256",
-  completenessDataset: "entity_mappings",
-};
-const NODAL_MAP_SECTION: Section = {
-  name: "nodal_map",
-  sentinel: "nodal_price_periods",
-  inputs: [...PRICE_INPUTS, ENTITY_POINTS],
-};
 const SECTIONS: readonly Section[] = [
   GENERATION_SECTION,
   PRICES_SECTION,
@@ -113,84 +97,8 @@ const SECTIONS: readonly Section[] = [
 ];
 const [, HVDC_DAY_TABLE] = HVDC_TABLES;
 
-/** The `_completeness` datasets that a section reads. */
-const sectionDatasets = (section: Section) =>
-  section.inputs.flatMap((input) =>
-    input.completenessDataset === null ? [] : [input.completenessDataset],
-  );
-
 /** Every silver dataset that a section reads, sorted. */
 const DATASET_IDS = [...new Set(SECTIONS.flatMap(sectionDatasets))].sort();
-
-/** Round half away from zero. The sign is kept, and -0 becomes 0. */
-export function round(value: number, places: number): number {
-  const factor = 10 ** places;
-  const rounded =
-    (Math.round(Math.abs(value) * factor) / factor) * Math.sign(value);
-  return rounded === 0 ? 0 : rounded;
-}
-
-const roundOrNull = (value: number | null, places: number) =>
-  value === null ? null : round(value, places);
-
-const numberOrNull = (value: unknown) =>
-  value === null || value === undefined ? null : Number(value);
-
-const datasetStatus = (
-  completeness: CompletenessView,
-  dataset: string,
-  date: string,
-): SiteDatasetStatus => {
-  const row = completeness.get(completenessKey(dataset, date));
-  if (!row)
-    return {
-      status: "missing",
-      expected_period_count: null,
-      actual_period_count: null,
-      missing_periods: [],
-      bronze_sha256s: [],
-      errors: [],
-    };
-  return {
-    status: row.status,
-    expected_period_count: row.expectedPeriodCount,
-    actual_period_count: row.actualPeriodCount,
-    missing_periods: row.missingPeriods,
-    bronze_sha256s: row.bronzeSha256s,
-    errors: row.errors,
-  };
-};
-
-/** The sentinel of a section on a date: its stamp, or null when gold has no partition. */
-interface Stamp {
-  analysis_version: number;
-  inputs_sha256: string;
-  inputs_complete: boolean;
-}
-
-async function readStamp(
-  connection: DuckDBConnection,
-  path: string,
-): Promise<Stamp | null> {
-  if (!existsSync(path)) return null;
-  const reader = await connection.runAndReadAll(
-    `SELECT any_value(analysis_version) AS analysis_version,
-       any_value(inputs_sha256) AS inputs_sha256,
-       bool_and(inputs_complete) AS inputs_complete
-     FROM read_parquet(${lit(path)})`,
-  );
-  const [row] = reader.getRowObjectsJson() as Array<{
-    analysis_version: unknown;
-    inputs_sha256: unknown;
-    inputs_complete: unknown;
-  }>;
-  if (!row || typeof row.inputs_sha256 !== "string") return null;
-  return {
-    analysis_version: Number(row.analysis_version),
-    inputs_sha256: row.inputs_sha256,
-    inputs_complete: row.inputs_complete === true,
-  };
-}
 
 /** Rows of one gold table on a date, read in the order of the query. */
 async function rowsOf(
@@ -214,23 +122,6 @@ function periodAxis(date: string) {
     period: i + 1,
     start_utc: periodToUtc(date, i + 1).eventStartUtc.toString(),
   }));
-}
-
-/** The state of a section, from its stamp and its input statuses (ADR-0014). */
-function sectionState(
-  stamp: Stamp | null,
-  section: Section,
-  completeness: CompletenessView,
-  date: string,
-): SectionState {
-  if (!stamp) return "missing";
-  const inputs = section.inputs.every(
-    (input) =>
-      input.completenessDataset === null ||
-      datasetStatus(completeness, input.completenessDataset, date).status ===
-        "complete",
-  );
-  return stamp.inputs_complete && inputs ? "complete" : "incomplete";
 }
 
 async function buildGeneration(
@@ -648,131 +539,6 @@ const islandList = (value: unknown): Island[] =>
     if (item === "NI" || item === "SI") return [item];
     return [];
   });
-
-const asIsland = (value: unknown): Island | null => {
-  const text = value === null || value === undefined ? "" : String(value);
-  if (text === "NI" || text === "SI") return text;
-  return null;
-};
-
-function missingNodalMap(
-  base: Pick<NodalMapSection, "silver_tables" | "gold_tables" | "datasets">,
-): NodalMapSection {
-  return {
-    ...base,
-    state: "missing",
-    missing_periods: [],
-    analysis_version: null,
-    inputs_sha256: null,
-    pocs: [],
-    unlocated: [],
-  };
-}
-
-async function buildNodalMap(
-  connection: DuckDBConnection,
-  goldDir: string,
-  silverDir: string,
-  date: string,
-  completeness: CompletenessView,
-  axis: SiteDay["periods"],
-): Promise<NodalMapSection> {
-  const section = NODAL_MAP_SECTION;
-  const base = {
-    silver_tables: ["dispatch_energy_prices", "entity_points_of_connection"],
-    gold_tables: ["nodal_price_periods"],
-    datasets: sectionDatasets(section),
-  };
-  const stamp = await readStamp(
-    connection,
-    goldPartitionPath(goldDir, section.sentinel, date),
-  );
-  if (!stamp) return missingNodalMap(base);
-
-  const entityPath = silverPartitionPath(
-    silverDir,
-    "entity_points_of_connection",
-    date,
-  );
-  const joinSql = existsSync(entityPath)
-    ? `LEFT JOIN read_parquet(${lit(entityPath)}) e ON e.poc_id = n.point_of_connection`
-    : "";
-  const coordSql = existsSync(entityPath)
-    ? "e.latitude, e.longitude, e.island"
-    : "NULL AS latitude, NULL AS longitude, NULL AS island";
-  const reader = await connection.runAndReadAll(
-    `SELECT n.point_of_connection, n.trading_period, n.price, n.has_proxy_price,
-       ${coordSql}
-     FROM read_parquet(${lit(goldPartitionPath(goldDir, section.sentinel, date))}) n
-     ${joinSql}
-     ORDER BY n.point_of_connection, n.trading_period`,
-  );
-  const rows = reader.getRowObjectsJson() as Array<Record<string, unknown>>;
-
-  const byPoc = new Map<
-    string,
-    {
-      island: Island | null;
-      latitude: number | null;
-      longitude: number | null;
-      price: Array<number | null>;
-      proxyPeriods: number[];
-    }
-  >();
-  for (const row of rows) {
-    const poc = String(row.point_of_connection);
-    let entry = byPoc.get(poc);
-    if (!entry) {
-      entry = {
-        island: asIsland(row.island),
-        latitude: numberOrNull(row.latitude),
-        longitude: numberOrNull(row.longitude),
-        price: axis.map(() => null),
-        proxyPeriods: [],
-      };
-      byPoc.set(poc, entry);
-    }
-    const period = Number(row.trading_period);
-    entry.price[period - 1] = roundOrNull(numberOrNull(row.price), 2);
-    if (row.has_proxy_price === true) entry.proxyPeriods.push(period);
-  }
-
-  const pocs: NodalMapPoc[] = [];
-  const unlocated: NodalMapUnlocated[] = [];
-  for (const [point_of_connection, entry] of byPoc) {
-    const shared = {
-      point_of_connection,
-      island: entry.island,
-      price: entry.price,
-      proxy_periods: entry.proxyPeriods.sort((a, b) => a - b),
-    };
-    if (entry.latitude !== null && entry.longitude !== null) {
-      pocs.push({
-        ...shared,
-        latitude: entry.latitude,
-        longitude: entry.longitude,
-      });
-    } else {
-      unlocated.push(shared);
-    }
-  }
-
-  const missingPeriods = axis
-    .map((p) => p.period)
-    .filter((period) =>
-      [...byPoc.values()].every((entry) => entry.price[period - 1] === null),
-    );
-
-  return {
-    ...base,
-    state: sectionState(stamp, section, completeness, date),
-    missing_periods: missingPeriods,
-    analysis_version: stamp.analysis_version,
-    inputs_sha256: stamp.inputs_sha256,
-    pocs,
-    unlocated,
-  };
-}
 
 function missingEpisodes(
   base: Pick<EpisodesSection, "silver_tables" | "gold_tables" | "datasets">,

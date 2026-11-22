@@ -9,7 +9,7 @@ import {
   formatPrice,
   islandLabel,
   isOutlier,
-  type NodalMapRow,
+  type NodalMapPayload,
   OUTLIER_RADIUS,
   priceFill,
 } from "./nodal-map-scale.ts";
@@ -23,7 +23,9 @@ export {
   MISSING_FILL,
   type NodalMapRow,
   OUTLIER_RADIUS,
+  periodSummary,
   priceFill,
+  rowsForPeriod,
   sortRows,
 } from "./nodal-map-scale.ts";
 
@@ -210,50 +212,6 @@ export function nodalMapView(
   };
 }
 
-export function rowsForPeriod(
-  view: NodalMapView,
-  period: number,
-): NodalMapRow[] {
-  const i = period - 1;
-  const p05 = view.p05[i] ?? null;
-  const p95 = view.p95[i] ?? null;
-  const rows: NodalMapRow[] = [];
-  for (const poc of view.pocs) {
-    const price = poc.price[i] ?? null;
-    rows.push({
-      point_of_connection: poc.point_of_connection,
-      location: "On the map",
-      island: islandLabel(poc.island),
-      price,
-      outlier: isOutlier(price, p05, p95),
-      proxy: poc.proxy_periods.includes(period),
-    });
-  }
-  for (const poc of view.unlocated) {
-    const price = poc.price[i] ?? null;
-    rows.push({
-      point_of_connection: poc.point_of_connection,
-      location: "",
-      island: islandLabel(poc.island),
-      price,
-      outlier: isOutlier(price, p05, p95),
-      proxy: poc.proxy_periods.includes(period),
-    });
-  }
-  return rows;
-}
-
-export function periodSummary(view: NodalMapView, period: number): string {
-  const clock = view.periods.find((p) => p.period === period)?.time ?? "";
-  const i = period - 1;
-  const min = view.min[i];
-  const max = view.max[i];
-  if (min === null || max === null) {
-    return `Trading period ${period} (${clock}). Wholesale prices for this slice are missing.`;
-  }
-  return `Trading period ${period} (${clock}). Wholesale prices range from ${formatPrice(min)} to ${formatPrice(max)} dollars per megawatt-hour.`;
-}
-
 export function renderMapSvg(
   view: NodalMapView,
   period: number,
@@ -287,26 +245,18 @@ export function renderMapSvg(
 </svg>`;
 }
 
-export function clientPayload(view: NodalMapView): {
-  defaultPeriod: number;
-  periods: MapPeriod[];
-  p05: Array<number | null>;
-  p95: Array<number | null>;
-  min: Array<number | null>;
-  max: Array<number | null>;
-  pocs: Array<{
+export function clientPayload(view: NodalMapView): NodalMapPayload {
+  const pocOf = (poc: {
     point_of_connection: string;
-    island: string;
-    prices: Array<number | null>;
+    island: Island | null;
+    price: Array<number | null>;
     proxy_periods: number[];
-  }>;
-  unlocated: Array<{
-    point_of_connection: string;
-    island: string;
-    prices: Array<number | null>;
-    proxy_periods: number[];
-  }>;
-} {
+  }) => ({
+    point_of_connection: poc.point_of_connection,
+    island: islandLabel(poc.island),
+    prices: poc.price,
+    proxy_periods: poc.proxy_periods,
+  });
   return {
     defaultPeriod: view.defaultPeriod,
     periods: view.periods,
@@ -314,18 +264,8 @@ export function clientPayload(view: NodalMapView): {
     p95: view.p95,
     min: view.min,
     max: view.max,
-    pocs: view.pocs.map((poc) => ({
-      point_of_connection: poc.point_of_connection,
-      island: islandLabel(poc.island),
-      prices: poc.price,
-      proxy_periods: poc.proxy_periods,
-    })),
-    unlocated: view.unlocated.map((poc) => ({
-      point_of_connection: poc.point_of_connection,
-      island: islandLabel(poc.island),
-      prices: poc.price,
-      proxy_periods: poc.proxy_periods,
-    })),
+    pocs: view.pocs.map(pocOf),
+    unlocated: view.unlocated.map(pocOf),
   };
 }
 
