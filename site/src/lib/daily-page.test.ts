@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SiteIndex } from "@gridwatch/publisher/site-contract";
+import type { SiteEpisode, SiteIndex } from "@gridwatch/publisher/site-contract";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
   completenessNotice,
@@ -13,6 +13,7 @@ import {
   mapPath,
   monthGroups,
   neighbouringDays,
+  pageLead,
 } from "./daily-page.ts";
 import { loadSiteDay, loadSiteIndex } from "./site-data.ts";
 
@@ -258,4 +259,136 @@ test("a wide gap between places is far apart, not differed", () => {
   expect(headline.sentence).toMatch(/far apart/);
   expect(headline.stats[2]?.value).toBe("Far apart");
   expect(headline.sentence).not.toMatch(/islands/);
+});
+
+const CLOCK_PERIODS = [
+  { period: 1, start_utc: "2026-05-31T12:00:00Z" },
+  { period: 2, start_utc: "2026-05-31T12:30:00Z" },
+  { period: 33, start_utc: "2026-06-01T04:00:00Z" },
+  { period: 38, start_utc: "2026-06-01T06:30:00Z" },
+  { period: 41, start_utc: "2026-06-02T20:00:00Z" },
+  { period: 45, start_utc: "2026-06-02T22:00:00Z" },
+];
+
+const hydroClose: HeadlineSource = {
+  generation: {
+    state: "complete",
+    totals: { primary_megawatt_hours: 1000, battery_megawatt_hours: 0 },
+    daily: [
+      { fuel: "hydro", megawatt_hours: 800 },
+      { fuel: "wind", megawatt_hours: 200 },
+    ],
+  },
+  prices: {
+    state: "complete",
+    nodes: [
+      { price_region: "upper_north_island", daily: { mean_price: 51 } },
+      { price_region: "lower_north_island", daily: { mean_price: 50 } },
+      { price_region: "south_island", daily: { mean_price: 49 } },
+    ],
+  },
+};
+
+const otahuhuHigh: SiteEpisode = {
+  episode_id: "e1",
+  seed_observation_id: "o1",
+  start_utc: "2026-06-01T04:00:00Z",
+  end_utc: "2026-06-01T06:30:00Z",
+  start_trading_period: 33,
+  end_trading_period: 38,
+  member_count: 1,
+  observation_types: ["price_high"],
+  islands: ["NI"],
+  severity: 1,
+  highlights: [
+    {
+      observation_type: "price_high",
+      point_of_connection: "OTA2201",
+      pair_from: null,
+      pair_to: null,
+      island: "NI",
+      measured_value: 410,
+      baseline_value: 80,
+    },
+  ],
+};
+
+test("pageLead uses the first episode line when the day has episodes", () => {
+  expect(
+    pageLead(
+      {
+        ...hydroClose,
+        periods: CLOCK_PERIODS,
+        episodes: { items: [otahuhuHigh] },
+      },
+      "Wholesale prices were one of the highest.",
+    ),
+  ).toBe(
+    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu reached $410 per megawatt-hour, above the recent typical level of about $80.",
+  );
+});
+
+test("two consecutive days with different episodes get different ledes", () => {
+  const saturday = pageLead(
+    {
+      ...hydroClose,
+      periods: CLOCK_PERIODS,
+      episodes: { items: [otahuhuHigh] },
+    },
+    null,
+  );
+  const sunday = pageLead(
+    {
+      ...hydroClose,
+      periods: CLOCK_PERIODS,
+      episodes: {
+        items: [
+          {
+            ...otahuhuHigh,
+            episode_id: "e2",
+            start_utc: "2026-06-02T20:00:00Z",
+            end_utc: "2026-06-02T22:00:00Z",
+            observation_types: ["price_low"],
+            islands: ["SI"],
+            highlights: [
+              {
+                observation_type: "price_low",
+                point_of_connection: "BEN2201",
+                pair_from: null,
+                pair_to: null,
+                island: "SI",
+                measured_value: 5,
+                baseline_value: 40,
+              },
+            ],
+          },
+        ],
+      },
+    },
+    null,
+  );
+  expect(saturday).not.toBe(sunday);
+  expect(saturday).toMatch(/Ōtāhuhu reached \$410/);
+  expect(sunday).toMatch(/Benmore fell to \$5/);
+});
+
+test("a quiet day uses the history lead, then the kind of day", () => {
+  const quiet = {
+    ...hydroClose,
+    periods: CLOCK_PERIODS,
+    episodes: { items: [] },
+  };
+  expect(pageLead(quiet, "Wholesale prices were one of the highest.")).toBe(
+    "Wholesale prices were one of the highest.",
+  );
+  expect(pageLead(quiet, null)).toBe(
+    "Hydro made most of the power, and wholesale prices stayed close across Ōtāhuhu, Haywards and Benmore.",
+  );
+});
+
+test("a missing episode list does not invent a stretch", () => {
+  const missing = { ...hydroClose, periods: CLOCK_PERIODS };
+  expect(
+    pageLead(missing, "None of the day's main figures was far from normal."),
+  ).toBe("None of the day's main figures was far from normal.");
 });
