@@ -4,7 +4,7 @@ import {
   type GoldInput,
   type GoldPublishOptions,
   ISLANDS,
-  type Island,
+  islandLiterals,
 } from "./common.ts";
 import { TABLES as GRID_LOAD_TABLES } from "./grid-load.ts";
 import type { RunDetectorConfig } from "./observation.ts";
@@ -47,24 +47,10 @@ export const TABLES = [
   `observations_${DETECTOR_ID}`,
 ] as const;
 
-const islandCode = (island: Island): Island => {
-  switch (island) {
-    case "NI":
-      return "NI";
-    case "SI":
-      return "SI";
-    default: {
-      const unreachable: never = island;
-      return unreachable;
-    }
-  }
-};
-
 const islandSubjectsSql = (): string => {
-  const islandRows = ISLANDS.map((island) => {
-    const code = islandCode(island);
-    return `(${lit(code)}, ${lit(code)})`;
-  });
+  const islandRows = ISLANDS.map(
+    (island) => `(${lit(island)}, ${lit(island)})`,
+  );
   return `SELECT * FROM (VALUES ${islandRows.join(", ")}, (${lit(NATIONAL)}, NULL::VARCHAR)) s(subject_id, island)`;
 };
 
@@ -79,7 +65,7 @@ const inputsFor = (config: DemandDeviationConfig): GoldInput[] => [
 ];
 
 const seriesSql = (): string => {
-  const niSi = ISLANDS.map((island) => lit(islandCode(island))).join(", ");
+  const niSi = islandLiterals().join(", ");
   return `WITH island_day AS (
      SELECT island, trading_date, bool_and(inputs_complete) AS day_complete
      FROM input
@@ -103,10 +89,10 @@ const seriesSql = (): string => {
      ni.inputs_complete AND si.inputs_complete AS inputs_complete
    FROM islands ni
    JOIN islands si
-     ON si.subject_id = ${lit(islandCode("SI"))}
+     ON si.subject_id = ${lit("SI")}
     AND si.trading_date = ni.trading_date
     AND si.trading_period = ni.trading_period
-   WHERE ni.subject_id = ${lit(islandCode("NI"))}`;
+   WHERE ni.subject_id = ${lit("NI")}`;
 };
 
 const specFor = (config: DemandDeviationConfig): RunDetectorSpec => ({
@@ -132,7 +118,7 @@ const specFor = (config: DemandDeviationConfig): RunDetectorSpec => ({
      WHERE generate_series NOT IN (
        SELECT trading_period FROM input
        WHERE trading_date = DATE ${lit(date)}
-         AND island IN (${ISLANDS.map((island) => lit(islandCode(island))).join(", ")})
+         AND island IN (${islandLiterals().join(", ")})
          AND load_mwh IS NOT NULL
        GROUP BY trading_period
        HAVING count(*) = ${ISLANDS.length}
