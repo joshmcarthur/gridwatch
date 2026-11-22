@@ -18,6 +18,25 @@ export interface NodalMapRow {
   proxy: boolean;
 }
 
+export interface NodalMapPayloadPoc {
+  point_of_connection: string;
+  island: string;
+  prices: Array<number | null>;
+  proxy_periods: number[];
+}
+
+/** What the page sends to the browser as JSON. Plain data, no coastline. */
+export interface NodalMapPayload {
+  defaultPeriod: number;
+  periods: Array<{ period: number; time: string }>;
+  p05: Array<number | null>;
+  p95: Array<number | null>;
+  min: Array<number | null>;
+  max: Array<number | null>;
+  pocs: NodalMapPayloadPoc[];
+  unlocated: NodalMapPayloadPoc[];
+}
+
 export function islandLabel(island: Island | null): string {
   switch (island) {
     case "NI":
@@ -92,4 +111,42 @@ export function sortRows(
     }
     return a[column].localeCompare(b[column]) * sign;
   });
+}
+
+export function periodSummary(
+  view: Pick<NodalMapPayload, "periods" | "min" | "max">,
+  period: number,
+): string {
+  const clock = view.periods.find((p) => p.period === period)?.time ?? "";
+  const i = period - 1;
+  const min = view.min[i];
+  const max = view.max[i];
+  if (min === null || max === null) {
+    return `Trading period ${period} (${clock}). Wholesale prices for this slice are missing.`;
+  }
+  return `Trading period ${period} (${clock}). Wholesale prices range from ${formatPrice(min)} to ${formatPrice(max)} dollars per megawatt-hour.`;
+}
+
+export function rowsForPeriod(
+  payload: NodalMapPayload,
+  period: number,
+): NodalMapRow[] {
+  const i = period - 1;
+  const p05 = payload.p05[i] ?? null;
+  const p95 = payload.p95[i] ?? null;
+  const rowOf = (poc: NodalMapPayloadPoc, location: string): NodalMapRow => {
+    const price = poc.prices[i] ?? null;
+    return {
+      point_of_connection: poc.point_of_connection,
+      location,
+      island: poc.island,
+      price,
+      outlier: isOutlier(price, p05, p95),
+      proxy: poc.proxy_periods.includes(period),
+    };
+  };
+  return [
+    ...payload.pocs.map((poc) => rowOf(poc, "On the map")),
+    ...payload.unlocated.map((poc) => rowOf(poc, "")),
+  ];
 }

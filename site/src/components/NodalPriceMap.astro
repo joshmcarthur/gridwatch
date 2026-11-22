@@ -17,7 +17,8 @@ interface Props {
 const { day } = Astro.props;
 const view = nodalMapView(day);
 const period = view?.defaultPeriod ?? 1;
-const rows = view ? rowsForPeriod(view, period) : [];
+const payload = view ? clientPayload(view) : null;
+const rows = payload ? rowsForPeriod(payload, period) : [];
 const svg = view
   ? renderMapSvg(view, period, {
       id: "nodal-map-chart",
@@ -25,7 +26,6 @@ const svg = view
       summary: periodSummary(view, period),
     })
   : null;
-const payload = view ? JSON.stringify(clientPayload(view)) : null;
 const clock =
   view?.periods.find((item) => item.period === period)?.time ?? "";
 ---
@@ -148,7 +148,7 @@ const clock =
           is:inline
           type="application/json"
           id="nodal-map-payload"
-          set:html={payload}
+          set:html={JSON.stringify(payload)}
         />
       )}
     </div>

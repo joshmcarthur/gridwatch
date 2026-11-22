@@ -2,32 +2,16 @@ import {
   DOT_RADIUS,
   formatPrice,
   isOutlier,
+  type NodalMapPayload,
   type NodalMapRow,
   OUTLIER_RADIUS,
+  periodSummary,
   priceFill,
+  rowsForPeriod,
   sortRows,
 } from "./nodal-map-scale.ts";
 
-export interface NodalMapPayload {
-  defaultPeriod: number;
-  periods: Array<{ period: number; time: string }>;
-  p05: Array<number | null>;
-  p95: Array<number | null>;
-  min: Array<number | null>;
-  max: Array<number | null>;
-  pocs: Array<{
-    point_of_connection: string;
-    island: string;
-    prices: Array<number | null>;
-    proxy_periods: number[];
-  }>;
-  unlocated: Array<{
-    point_of_connection: string;
-    island: string;
-    prices: Array<number | null>;
-    proxy_periods: number[];
-  }>;
-}
+export type { NodalMapPayload };
 
 type SortColumn =
   | "point_of_connection"
@@ -35,42 +19,6 @@ type SortColumn =
   | "island"
   | "price"
   | "outlier";
-
-function rowsOf(payload: NodalMapPayload, period: number): NodalMapRow[] {
-  const i = period - 1;
-  const p05 = payload.p05[i] ?? null;
-  const p95 = payload.p95[i] ?? null;
-  const from = (
-    poc: NodalMapPayload["pocs"][number],
-    location: string,
-  ): NodalMapRow => {
-    const price = poc.prices[i] ?? null;
-    return {
-      point_of_connection: poc.point_of_connection,
-      location,
-      island: poc.island,
-      price,
-      outlier: isOutlier(price, p05, p95),
-      proxy: poc.proxy_periods.includes(period),
-    };
-  };
-  return [
-    ...payload.pocs.map((poc) => from(poc, "On the map")),
-    ...payload.unlocated.map((poc) => from(poc, "")),
-  ];
-}
-
-function summaryOf(payload: NodalMapPayload, period: number): string {
-  const clock =
-    payload.periods.find((item) => item.period === period)?.time ?? "";
-  const i = period - 1;
-  const min = payload.min[i];
-  const max = payload.max[i];
-  if (min === null || max === null) {
-    return `Trading period ${period} (${clock}). Wholesale prices for this slice are missing.`;
-  }
-  return `Trading period ${period} (${clock}). Wholesale prices range from ${formatPrice(min)} to ${formatPrice(max)} dollars per megawatt-hour.`;
-}
 
 function paintMap(
   root: ParentNode,
@@ -182,10 +130,14 @@ export function bindNodalMap(root: ParentNode = document): void {
     if (output) {
       output.textContent = `Trading period ${period} of ${payload.periods.length}, starting ${clock}`;
     }
-    if (summary) summary.textContent = summaryOf(payload, period);
+    if (summary) summary.textContent = periodSummary(payload, period);
     const svgSummary = root.querySelector("#nodal-map-chart-summary");
-    if (svgSummary) svgSummary.textContent = summaryOf(payload, period);
-    renderTable(doc, tbody, sortRows(rowsOf(payload, period), column, dir));
+    if (svgSummary) svgSummary.textContent = periodSummary(payload, period);
+    renderTable(
+      doc,
+      tbody,
+      sortRows(rowsForPeriod(payload, period), column, dir),
+    );
     setSortButtons(root, column, dir);
   };
 

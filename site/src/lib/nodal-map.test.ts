@@ -5,6 +5,7 @@ import {
 import { expect, test } from "vitest";
 import fixtureJson from "../../fixtures/days/2026-09-27.json";
 import {
+  clientPayload,
   coverageSentence,
   defaultPeriod,
   MAP_HEIGHT,
@@ -152,7 +153,7 @@ test("a 48-period day keeps 48 slots on the slider axis and in each price array"
   expect(view.pocs[0]?.price).toHaveLength(48);
   expect(view.unlocated[0]?.price).toHaveLength(48);
   expect(view.min).toHaveLength(48);
-  expect(rowsForPeriod(view, 48)).toHaveLength(2);
+  expect(rowsForPeriod(clientPayload(view), 48)).toHaveLength(2);
 });
 
 test("a 50-period day keeps 50 slots", () => {
@@ -180,7 +181,7 @@ test("rowsForPeriod flags outliers and proxy prices, and blanks unlocated", () =
     }),
   );
   if (!view) throw new Error("expected a map view");
-  const rows = rowsForPeriod(view, 1);
+  const rows = rowsForPeriod(clientPayload(view), 1);
   expect(rows[0]).toMatchObject({
     point_of_connection: "ALB0331",
     location: "On the map",
