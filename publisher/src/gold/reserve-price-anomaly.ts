@@ -28,43 +28,17 @@ const MEASURED_UNIT = "$/MWh";
 const RESERVE_CLASSES = ["FIR", "SIR"] as const;
 export type ReserveClass = (typeof RESERVE_CLASSES)[number];
 
-const reserveClassCode = (reserveClass: ReserveClass): ReserveClass => {
-  switch (reserveClass) {
-    case "FIR":
-      return "FIR";
-    case "SIR":
-      return "SIR";
-    default: {
-      const unreachable: never = reserveClass;
-      return unreachable;
-    }
-  }
-};
-
-const islandCode = (island: Island): Island => {
-  switch (island) {
-    case "NI":
-      return "NI";
-    case "SI":
-      return "SI";
-    default: {
-      const unreachable: never = island;
-      return unreachable;
-    }
-  }
-};
-
 /** The four class-island series. `subject_id` is `FIR|NI`. */
 export const RESERVE_SUBJECTS: ReadonlyArray<{
   reserveClass: ReserveClass;
   island: Island;
   subjectId: string;
 }> = RESERVE_CLASSES.flatMap((reserveClass) =>
-  ISLANDS.map((island) => {
-    const cls = reserveClassCode(reserveClass);
-    const isl = islandCode(island);
-    return { reserveClass: cls, island: isl, subjectId: `${cls}|${isl}` };
-  }),
+  ISLANDS.map((island) => ({
+    reserveClass,
+    island,
+    subjectId: `${reserveClass}|${island}`,
+  })),
 );
 
 export type ReservePriceAnomalyConfig = RunDetectorConfig;
