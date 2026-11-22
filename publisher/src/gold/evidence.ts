@@ -1,18 +1,41 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { lit } from "../silver/common.ts";
-import type { CompletenessView } from "../silver/completeness.ts";
+import {
+  type CompletenessView,
+  completenessKey,
+} from "../silver/completeness.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
-import { goldPartitionPath, ISLANDS } from "./common.ts";
+import { goldPartitionPath, silverPartitionPath } from "./common.ts";
+import {
+  type ClaimContext,
+  type ClaimInput,
+  dayClaims,
+  derivedClaims,
+  dispatchClaims,
+  episodeClaims,
+  findPeak,
+  generationClaims,
+  hvdcClaims,
+  listSql,
+  loadClaims,
+  priceClaims,
+  type Row,
+  reserveClaims,
+  round,
+  spreadClaims,
+} from "./evidence-claims.ts";
 import { TABLES as PRICE_ANOMALY_TABLES } from "./price-anomaly.ts";
 import { TABLES as PRICE_SEPARATION_TABLES } from "./price-separation.ts";
-import { REFERENCE_NODES, SPREAD_PAIRS } from "./prices.ts";
+import { REFERENCE_NODES } from "./prices.ts";
 import { TABLES as RESERVE_PRICE_ANOMALY_TABLES } from "./reserve-price-anomaly.ts";
 
 /**
  * Evidence package for one episode (issue #38, ADR-0024). The builder reads gold (and, for
- * dispatch and reference data, silver), and returns one JSON-ready object. It writes no prose and
- * no file. The CLI (`evidence.cli.ts`) writes the file.
+ * dispatch publishes and reference data, silver) and returns one JSON-ready object. It writes no
+ * prose and no file. The CLI (`evidence.cli.ts`) writes the file. The claim catalogue is in
+ * `evidence-claims.ts`.
  *
  * Every claim is `confirmed`: its value is read straight from a gold or silver row, or it is a
  * plain sum, difference or join of confirmed claims, named in `depends_on`. The type keeps the
@@ -80,7 +103,7 @@ export interface CompletenessEntry {
   detail?: string;
 }
 
-type Series = Array<number | null>;
+export type Series = Array<number | null>;
 
 export interface EvidenceEpisode {
   episode_id: string;
@@ -116,6 +139,37 @@ export interface EvidenceObservation {
   measured_value: number;
   severity: number;
   inputs_complete: boolean;
+}
+
+/** The highest dispatch publish of the peak period. */
+export interface DispatchPeak {
+  node: string;
+  island: string | null;
+  time_utc: string;
+  price: number;
+  seconds_to_next_publish: number;
+  /** Nodes with a publish at or above each scarcity price, keyed by the price. */
+  nodes_at_or_above: Record<string, number>;
+}
+
+export interface EvidencePlantReference {
+  plant_id: string;
+  plant_name: string | null;
+  fuel_category: string | null;
+  island: string | null;
+  operator: string | null;
+  points_of_connection: string[];
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface EvidencePointReference {
+  point_of_connection: string;
+  description: string | null;
+  island: string | null;
+  region: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface EvidencePackage {
@@ -159,6 +213,16 @@ export interface EvidencePackage {
       note: string;
       megawatts: Record<string, Series>;
     };
+    dispatch_peak: {
+      trading_period: number;
+      energy: DispatchPeak | null;
+      sir: DispatchPeak | null;
+    };
+  };
+  /** A plant or node is null in a field when no source row matches it. */
+  reference: {
+    plants: EvidencePlantReference[];
+    points_of_connection: EvidencePointReference[];
   };
   completeness: CompletenessEntry[];
   claims: Claim[];
@@ -206,21 +270,18 @@ const GOLD_TABLES = [
   "energy_balance_period",
 ] as const;
 
-type Row = Record<string, unknown>;
+/** Silver tables for a trading date. `dataset` is the `_completeness` id. */
+const SILVER_DATE_TABLES = [
+  { table: "dispatch_energy_prices", dataset: "dispatch_energy_prices" },
+  { table: "dispatch_reserve_prices", dataset: "dispatch_reserve_prices" },
+  { table: "entity_units", dataset: "entity_mappings" },
+] as const;
 
-const num = (value: unknown): number | null =>
-  value === null || value === undefined ? null : Number(value);
-
-/** Local rounding. It removes floating-point noise and keeps four decimals. */
-const round = (value: number, places = 4): number => {
-  const factor = 10 ** places;
-  const rounded =
-    (Math.round(Math.abs(value) * factor) / factor) * Math.sign(value);
-  return rounded === 0 ? 0 : rounded;
-};
-
-const roundOrNull = (value: number | null) =>
-  value === null ? null : round(value);
+/** Silver tables with one snapshot for each collect day. They have no `_completeness` row. */
+const SILVER_SNAPSHOT_TABLES = [
+  "generation_fleet",
+  "network_supply_points",
+] as const;
 
 const asIso = (value: unknown): string => {
   const ms =
@@ -231,6 +292,24 @@ const asIso = (value: unknown): string => {
 
 const relativePath = (layer: "gold" | "silver", table: string, date: string) =>
   `${layer}/${table}/trading_date=${date}/data.parquet`;
+
+/**
+ * The snapshot of a table for a date: the newest on or before the date, or the oldest when none
+ * is that old (the rule of ADR-0008 for the fleet). Undefined when the table has no snapshot.
+ */
+const snapshotDate = (
+  silverDir: string,
+  table: string,
+  date: string,
+): string | undefined => {
+  const dir = join(silverDir, table);
+  if (!existsSync(dir)) return undefined;
+  const dates = readdirSync(dir)
+    .filter((name) => name.startsWith("snapshot_date="))
+    .map((name) => name.slice("snapshot_date=".length))
+    .sort();
+  return [...dates].reverse().find((day) => day <= date) ?? dates[0];
+};
 
 /** One table that the builder reads: where it is and how complete it is. */
 interface Use extends CompletenessEntry {
@@ -253,7 +332,7 @@ export interface BuildEvidenceOptions {
 export async function buildEvidencePackage(
   options: BuildEvidenceOptions,
 ): Promise<EvidencePackage> {
-  const { goldDir, episodeId, date } = options;
+  const { goldDir, silverDir, completeness, episodeId, date } = options;
   const periodsInDay = periodsInTradingDate(date);
 
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
@@ -267,7 +346,7 @@ export async function buildEvidencePackage(
     const uses = new Map<string, Use>();
     for (const table of GOLD_TABLES) {
       const abs = goldPartitionPath(goldDir, table, date);
-      const use: Use = {
+      const entry: Use = {
         layer: "gold",
         table,
         path: relativePath("gold", table, date),
@@ -279,11 +358,39 @@ export async function buildEvidencePackage(
           `SELECT count(*) FILTER (WHERE NOT inputs_complete) AS incomplete
            FROM read_parquet(${lit(abs)})`,
         );
-        use.status = Number(counts?.incomplete) === 0 ? "complete" : "partial";
-        if (use.status === "partial")
-          use.detail = `${counts?.incomplete} row(s) have inputs_complete = false`;
+        entry.status =
+          Number(counts?.incomplete) === 0 ? "complete" : "partial";
+        if (entry.status === "partial")
+          entry.detail = `${counts?.incomplete} row(s) have inputs_complete = false`;
       }
-      uses.set(table, use);
+      uses.set(table, entry);
+    }
+    for (const { table, dataset } of SILVER_DATE_TABLES) {
+      const abs = silverPartitionPath(silverDir, table, date);
+      uses.set(table, {
+        layer: "silver",
+        table,
+        path: relativePath("silver", table, date),
+        abs,
+        status: existsSync(abs)
+          ? (completeness.get(completenessKey(dataset, date))?.status ??
+            "missing")
+          : "missing",
+      });
+    }
+    for (const table of SILVER_SNAPSHOT_TABLES) {
+      const day = snapshotDate(silverDir, table, date);
+      uses.set(table, {
+        layer: "silver",
+        table,
+        path: `silver/${table}/snapshot_date=${day ?? date}/data.parquet`,
+        abs:
+          day === undefined
+            ? ""
+            : join(silverDir, table, `snapshot_date=${day}`, "data.parquet"),
+        status: day === undefined ? "missing" : "complete",
+        ...(day === undefined ? {} : { detail: `snapshot ${day}` }),
+      });
     }
     const use = (table: string): Use => {
       const found = uses.get(table);
@@ -328,7 +435,7 @@ export async function buildEvidencePackage(
       inputs_complete: Boolean(episodeRow.inputs_complete),
     };
 
-    // The window.
+    // The window, and the peak: the episode period with the highest reference-node price.
     const first = Math.max(
       1,
       episode.start_trading_period - EVIDENCE_CONFIG.periodsBefore,
@@ -341,13 +448,11 @@ export async function buildEvidencePackage(
       { length: last - first + 1 },
       (_, i) => first + i,
     );
-    const inWindow = `trading_period BETWEEN ${first} AND ${last}`;
-    const align = (rows: Row[], key: string): Series => {
-      const byPeriod = new Map(
-        rows.map((row) => [Number(row.trading_period), num(row[key])]),
-      );
-      return periods.map((period) => roundOrNull(byPeriod.get(period) ?? null));
-    };
+    const peak = await findPeak(
+      query,
+      present("price_periods") ? from("price_periods") : null,
+      episode,
+    );
 
     // Observations that are members of the episode.
     const observations: EvidenceObservation[] = [];
@@ -382,19 +487,7 @@ export async function buildEvidencePackage(
     );
 
     const claims: Claim[] = [];
-    const claim = (input: {
-      id: string;
-      label: string;
-      value: ClaimValue;
-      unit: string;
-      table: string;
-      queryId: string;
-      period?: number;
-      subject?: string;
-      dependsOn?: string[];
-      note?: string;
-      rowComplete?: boolean;
-    }) => {
+    const claim = (input: ClaimInput) => {
       if (claims.some((existing) => existing.id === input.id))
         throw new Error(`duplicate claim id ${input.id}`);
       const table = use(input.table);
@@ -425,602 +518,65 @@ export async function buildEvidencePackage(
         ...(notes.length === 0 ? {} : { note: notes.join(" ") }),
       });
     };
-
-    // Prices, and the peak period (highest reference-node price inside the episode).
-    const priceRows = present("price_periods")
-      ? await query(
-          `SELECT trading_period, point_of_connection, price, max_price, inputs_complete
-           FROM ${from("price_periods")} WHERE ${inWindow}
-           ORDER BY point_of_connection, trading_period`,
-        )
-      : [];
-    let peak = episode.start_trading_period;
-    let peakPrice = Number.NEGATIVE_INFINITY;
-    for (const row of priceRows) {
-      const period = Number(row.trading_period);
-      const price = num(row.price);
-      if (
-        price !== null &&
-        period >= episode.start_trading_period &&
-        period <= episode.end_trading_period &&
-        (price > peakPrice || (price === peakPrice && period < peak))
-      ) {
-        peak = period;
-        peakPrice = price;
-      }
-    }
-    const claimPeriods = [
-      ...new Set([episode.start_trading_period, peak]),
-    ].sort((a, b) => a - b);
-    const rowAt = (rows: Row[], period: number, test: (row: Row) => boolean) =>
-      rows.find((row) => Number(row.trading_period) === period && test(row));
-
-    const prices: EvidencePackage["context"]["prices"] = {};
-    for (const node of REFERENCE_NODES) {
-      const id = node.pointOfConnection;
-      const rows = priceRows.filter((row) => row.point_of_connection === id);
-      prices[id] = {
-        price: align(rows, "price"),
-        max_price: align(rows, "max_price"),
-      };
-      for (const period of claimPeriods) {
-        const row = rowAt(rows, period, () => true);
-        const price = num(row?.price);
-        const maxPrice = num(row?.max_price);
-        if (row === undefined || price === null || maxPrice === null) continue;
-        const common = {
-          table: "price_periods",
-          queryId: "priceClaims",
-          period,
-          subject: id,
-          rowComplete: Boolean(row.inputs_complete),
-        };
-        claim({
-          ...common,
-          id: `price.${id}.p${period}`,
-          label: `Period price at ${id}, period ${period} (time-weighted mean of dispatch publishes)`,
-          value: price,
-          unit: "$/MWh",
-        });
-        claim({
-          ...common,
-          id: `price_max.${id}.p${period}`,
-          label: `Highest dispatch publish at ${id} inside period ${period}`,
-          value: maxPrice,
-          unit: "$/MWh",
-          note: "The period price is a mean. This is the highest single publish.",
-        });
-      }
-    }
-
-    // Spreads.
-    const spreadRows = present("price_spreads")
-      ? await query(
-          `SELECT trading_period, from_point_of_connection AS a, to_point_of_connection AS b,
-             spread, inputs_complete
-           FROM ${from("price_spreads")} WHERE ${inWindow}
-           ORDER BY a, b, trading_period`,
-        )
-      : [];
-    const spreads: Record<string, Series> = {};
-    for (const [a, b] of SPREAD_PAIRS) {
-      const key = `${a}-${b}`;
-      const rows = spreadRows.filter((row) => row.a === a && row.b === b);
-      spreads[key] = align(rows, "spread");
-      for (const period of claimPeriods) {
-        const row = rowAt(rows, period, () => true);
-        const spread = num(row?.spread);
-        if (row === undefined || spread === null) continue;
-        claim({
-          id: `spread.${key}.p${period}`,
-          label: `Price spread ${a} minus ${b}, period ${period}`,
-          value: spread,
-          unit: "$/MWh",
-          table: "price_spreads",
-          queryId: "spreadClaims",
-          period,
-          subject: key,
-          rowComplete: Boolean(row.inputs_complete),
-        });
-      }
-    }
-
-    // Reserves, by class and island.
-    const reserveRows = present("reserve_by_class_island_period")
-      ? await query(
-          `SELECT trading_period, reserve_class, island, dollars_per_megawatt_hour AS price,
-             max_price, inputs_complete
-           FROM ${from("reserve_by_class_island_period")} WHERE ${inWindow}
-           ORDER BY reserve_class, island, trading_period`,
-        )
-      : [];
-    const reserves: EvidencePackage["context"]["reserves"] = {};
-    for (const reserveClass of [
-      ...new Set(reserveRows.map((row) => String(row.reserve_class))),
-    ].sort()) {
-      const byIsland: Record<string, { price: Series; max_price: Series }> = {};
-      reserves[reserveClass] = byIsland;
-      for (const island of ISLANDS) {
-        const rows = reserveRows.filter(
-          (row) => row.reserve_class === reserveClass && row.island === island,
-        );
-        if (rows.length === 0) continue;
-        const slot = {
-          price: align(rows, "price"),
-          max_price: align(rows, "max_price"),
-        };
-        byIsland[island] = slot;
-        for (const period of claimPeriods) {
-          const row = rowAt(rows, period, () => true);
-          const price = num(row?.price);
-          const maxPrice = num(row?.max_price);
-          if (row === undefined || price === null || maxPrice === null)
-            continue;
-          const common = {
-            table: "reserve_by_class_island_period",
-            queryId: "reserveClaims",
-            period,
-            subject: `${reserveClass}|${island}`,
-            rowComplete: Boolean(row.inputs_complete),
-          };
-          claim({
-            ...common,
-            id: `reserve.${reserveClass}.${island}.p${period}`,
-            label: `${reserveClass} reserve price, ${island}, period ${period}`,
-            value: price,
-            unit: "$/MWh",
-          });
-          claim({
-            ...common,
-            id: `reserve_max.${reserveClass}.${island}.p${period}`,
-            label: `Highest ${reserveClass} reserve publish, ${island}, period ${period}`,
-            value: maxPrice,
-            unit: "$/MWh",
-          });
-        }
-      }
-    }
-
-    // Generation by fuel and island.
-    const fuelRows = present("generation_by_fuel_period")
-      ? await query(
-          `SELECT trading_period, fuel_category, coalesce(island, 'unmapped') AS island,
-             average_megawatts, inputs_complete
-           FROM ${from("generation_by_fuel_period")} WHERE ${inWindow}
-           ORDER BY fuel_category, island, trading_period`,
-        )
-      : [];
-    const generationByFuel: Record<string, Series> = {};
-    for (const key of [
-      ...new Set(fuelRows.map((row) => `${row.fuel_category}|${row.island}`)),
-    ]) {
-      const rows = fuelRows.filter(
-        (row) => `${row.fuel_category}|${row.island}` === key,
-      );
-      generationByFuel[key] = align(rows, "average_megawatts");
-      const row = rowAt(rows, peak, () => true);
-      const mw = num(row?.average_megawatts);
-      if (row === undefined || mw === null) continue;
-      const [fuel, island] = key.split("|");
-      claim({
-        id: `generation.fuel.${fuel}.${island}.p${peak}`,
-        label: `Average generation, ${fuel}, ${island}, period ${peak}`,
-        value: mw,
-        unit: "MW",
-        table: "generation_by_fuel_period",
-        queryId: "generationFuelClaims",
-        period: peak,
-        subject: key,
-        rowComplete: Boolean(row.inputs_complete),
-      });
-    }
-
-    // The top plants of the peak period, with their series across the window.
-    const generationByPlant: EvidencePackage["context"]["generation_by_plant"] =
-      {};
-    if (present("generation_by_plant_period")) {
-      const top = await query(
-        `SELECT plant_id FROM ${from("generation_by_plant_period")}
-         WHERE trading_period = ${peak} AND average_megawatts IS NOT NULL
-         ORDER BY average_megawatts DESC, plant_id
-         LIMIT ${EVIDENCE_CONFIG.topPlants}`,
-      );
-      const ids = top.map((row) => String(row.plant_id));
-      const plantRows =
-        ids.length === 0
-          ? []
-          : await query(
-              `SELECT trading_period, plant_id, plant_name, fuel_category, island,
-                 average_megawatts, inputs_complete
-               FROM ${from("generation_by_plant_period")}
-               WHERE ${inWindow} AND list_contains(${listSql(ids)}, plant_id)
-               ORDER BY plant_id, trading_period`,
-            );
-      for (const id of ids) {
-        const rows = plantRows.filter((row) => row.plant_id === id);
-        const head = rows[0];
-        generationByPlant[id] = {
-          plant_name: String(head?.plant_name ?? id),
-          fuel_category: String(head?.fuel_category ?? "unmapped"),
-          island:
-            head?.island === null || head?.island === undefined
-              ? null
-              : String(head.island),
-          average_megawatts: align(rows, "average_megawatts"),
-        };
-        const row = rowAt(rows, peak, () => true);
-        const mw = num(row?.average_megawatts);
-        if (row === undefined || mw === null) continue;
-        claim({
-          id: `generation.plant.${id}.p${peak}`,
-          label: `Average generation, plant ${id}, period ${peak}`,
-          value: mw,
-          unit: "MW",
-          table: "generation_by_plant_period",
-          queryId: "generationPlantClaims",
-          period: peak,
-          subject: id,
-          rowComplete: Boolean(row.inputs_complete),
-        });
-      }
-    }
-
-    // HVDC. A 30-minute metered average, not an instantaneous peak.
-    const hvdcNote =
-      "A 30-minute metered average at Haywards. It is not an instantaneous peak.";
-    const hvdcRows = present("hvdc_transfer_period")
-      ? await query(
-          `SELECT trading_period, average_megawatts, direction, inputs_complete
-           FROM ${from("hvdc_transfer_period")} WHERE ${inWindow} ORDER BY trading_period`,
-        )
-      : [];
-    const hvdc: EvidencePackage["context"]["hvdc"] = {
-      average_megawatts: align(hvdcRows, "average_megawatts"),
-      direction: periods.map((period) => {
-        const row = rowAt(hvdcRows, period, () => true);
-        return row === undefined || row.direction === null
-          ? null
-          : String(row.direction);
-      }),
-      note: hvdcNote,
+    const context: ClaimContext = {
+      date,
+      config: EVIDENCE_CONFIG,
+      episode,
+      periods,
+      peak,
+      rampStart: Math.max(first, peak - EVIDENCE_CONFIG.rampPeriods),
+      claimPeriods: [...new Set([episode.start_trading_period, peak])].sort(
+        (a, b) => a - b,
+      ),
+      claims,
+      query,
+      from,
+      present,
+      claim,
     };
-    const hvdcPeakRow = rowAt(hvdcRows, peak, () => true);
-    const hvdcMw = num(hvdcPeakRow?.average_megawatts);
-    if (hvdcPeakRow !== undefined && hvdcMw !== null) {
-      const common = {
-        table: "hvdc_transfer_period",
-        queryId: "hvdcClaims",
-        period: peak,
-        subject: "HAY2201",
-        rowComplete: Boolean(hvdcPeakRow.inputs_complete),
-        note: hvdcNote,
-      };
-      claim({
-        ...common,
-        id: `hvdc.mw.p${peak}`,
-        label: `HVDC transfer received in the North Island, period ${peak}`,
-        value: hvdcMw,
-        unit: "MW",
-      });
-      claim({
-        ...common,
-        id: `hvdc.direction.p${peak}`,
-        label: `HVDC direction, period ${peak}`,
-        value: String(hvdcPeakRow.direction),
-        unit: "direction",
-      });
-    }
-    const hvdcValues = hvdcRows
-      .map((row) => ({
-        period: Number(row.trading_period),
-        mw: num(row.average_megawatts),
-      }))
-      .filter(
-        (item): item is { period: number; mw: number } => item.mw !== null,
-      );
-    if (hvdcValues.length > 0) {
-      const top = hvdcValues.reduce((best, item) =>
-        item.mw > best.mw ? item : best,
-      );
-      claim({
-        id: "hvdc.window_peak_mw",
-        label: `Highest 30-minute HVDC transfer in the window (period ${top.period})`,
-        value: top.mw,
-        unit: "MW",
-        table: "hvdc_transfer_period",
-        queryId: "hvdcClaims",
-        period: top.period,
-        subject: "HAY2201",
-        note: hvdcNote,
-      });
-      claim({
-        id: "hvdc.window_mean_mw",
-        label: "Mean HVDC transfer over the window",
-        value:
-          hvdcValues.reduce((sum, item) => sum + item.mw, 0) /
-          hvdcValues.length,
-        unit: "MW",
-        table: "hvdc_transfer_period",
-        queryId: "hvdcClaims",
-        subject: "HAY2201",
-        note: hvdcNote,
-      });
-    }
 
-    // Modelled load and the modelled energy-balance residual.
-    const loadRows = present("grid_load_period")
-      ? await query(
-          `SELECT trading_period, island, load_mwh * 2 AS megawatts, inputs_complete
-           FROM ${from("grid_load_period")} WHERE ${inWindow} ORDER BY island, trading_period`,
-        )
-      : [];
-    const load: EvidencePackage["context"]["load"] = {
-      modelled: true,
-      megawatts: {},
-    };
-    for (const island of ISLANDS) {
-      const rows = loadRows.filter((row) => row.island === island);
-      if (rows.length === 0) continue;
-      load.megawatts[island] = align(rows, "megawatts");
-      const row = rowAt(rows, peak, () => true);
-      const mw = num(row?.megawatts);
-      if (row === undefined || mw === null) continue;
-      claim({
-        id: `load.${island}.p${peak}`,
-        label: `Modelled load, ${island}, period ${peak}`,
-        value: mw,
-        unit: "MW",
-        table: "grid_load_period",
-        queryId: "loadClaims",
-        period: peak,
-        subject: island,
-        rowComplete: Boolean(row.inputs_complete),
-        note: "Real-time dispatch model load at grid exit points, not metered consumption.",
-      });
-    }
-    const niLoad = claims.find((c) => c.id === `load.NI.p${peak}`);
-    const siLoad = claims.find((c) => c.id === `load.SI.p${peak}`);
-    if (niLoad !== undefined && siLoad !== undefined)
-      claim({
-        id: `load.national.p${peak}`,
-        label: `Modelled load, both islands, period ${peak}`,
-        value: Number(niLoad.value) + Number(siLoad.value),
-        unit: "MW",
-        table: "grid_load_period",
-        queryId: "loadClaims",
-        period: peak,
-        subject: "NZ",
-        dependsOn: [niLoad.id, siLoad.id],
-        note: "Real-time dispatch model load at grid exit points, not metered consumption.",
-      });
+    const prices = await priceClaims(context);
+    const spreads = await spreadClaims(context);
+    const reserves = await reserveClaims(context);
+    const generation = await generationClaims(context);
+    const hvdc = await hvdcClaims(context);
+    const load = await loadClaims(context);
+    episodeClaims(context);
+    await dayClaims(context);
+    const dispatchPeak = await dispatchClaims(context);
+    derivedClaims(context);
 
-    const residualNote =
-      "Generation plus HVDC import minus modelled load. It is not the system operator residual.";
-    const balanceRows = present("energy_balance_period")
-      ? await query(
-          `SELECT trading_period, island, residual_mwh * 2 AS megawatts, inputs_complete
-           FROM ${from("energy_balance_period")} WHERE ${inWindow} ORDER BY island, trading_period`,
-        )
-      : [];
-    const residual: EvidencePackage["context"]["energy_balance_residual"] = {
-      modelled: true,
-      note: residualNote,
-      megawatts: {},
-    };
-    for (const island of ISLANDS) {
-      const rows = balanceRows.filter((row) => row.island === island);
-      if (rows.length === 0) continue;
-      residual.megawatts[island] = align(rows, "megawatts");
-      const row = rowAt(rows, peak, () => true);
-      const mw = num(row?.megawatts);
-      if (row === undefined || mw === null) continue;
-      claim({
-        id: `balance_residual.${island}.p${peak}`,
-        label: `Modelled energy-balance residual, ${island}, period ${peak}`,
-        value: mw,
-        unit: "MW",
-        table: "energy_balance_period",
-        queryId: "balanceClaims",
-        period: peak,
-        subject: island,
-        rowComplete: Boolean(row.inputs_complete),
-        note: residualNote,
-      });
-    }
-
-    // The episode itself.
-    for (const [key, label, value, unit] of [
-      [
-        "severity",
-        "Episode severity (worst member)",
-        episode.severity,
-        "severity",
+    // Reference data: names, operators and places of what the claims mention.
+    const reference = await referenceData({
+      query,
+      from,
+      present,
+      date,
+      plantIds: [
+        ...new Set([
+          ...episode.plant_ids,
+          ...Object.keys(generation.generation_by_plant),
+        ]),
+      ].sort(),
+      plants: generation.generation_by_plant,
+      nodes: [
+        ...REFERENCE_NODES.map((node) => node.pointOfConnection),
+        ...(dispatchPeak.energy === null ? [] : [dispatchPeak.energy.node]),
       ],
-      [
-        "member_count",
-        "Observations in the episode",
-        episode.member_count,
-        "count",
-      ],
-      [
-        "period_count",
-        "Trading periods in the episode",
-        episode.period_count,
-        "periods",
-      ],
-    ] as const)
-      claim({
-        id: `episode.${key}`,
-        label,
-        value,
-        unit,
-        table: "episodes",
-        queryId: "episodeClaims",
-        subject: episode.episode_id,
-        rowComplete: episode.inputs_complete,
-      });
+    });
 
-    // Day-level figures, for the context of the day.
-    const dayPrices = present("price_daily_summary")
-      ? await query(
-          `SELECT point_of_connection, mean_price, max_price, inputs_complete
-           FROM ${from("price_daily_summary")} ORDER BY point_of_connection`,
-        )
-      : [];
-    for (const row of dayPrices) {
-      const id = String(row.point_of_connection);
-      const common = {
-        table: "price_daily_summary",
-        queryId: "dayPriceClaims",
-        subject: id,
-        rowComplete: Boolean(row.inputs_complete),
-      };
-      const mean = num(row.mean_price);
-      const max = num(row.max_price);
-      if (mean !== null)
-        claim({
-          ...common,
-          id: `day.price_mean.${id}`,
-          label: `Mean of the period prices at ${id} for the day`,
-          value: mean,
-          unit: "$/MWh",
-        });
-      if (max !== null)
-        claim({
-          ...common,
-          id: `day.price_max.${id}`,
-          label: `Highest dispatch publish at ${id} for the day`,
-          value: max,
-          unit: "$/MWh",
-          note: "An extremum of dispatch publishes, not of period prices.",
-        });
-    }
-    if (present("price_distribution")) {
-      const [row] = await query(
-        `SELECT poc_count, median_price, max_price, inputs_complete
-         FROM ${from("price_distribution")} WHERE trading_period = ${peak}`,
-      );
-      if (row !== undefined) {
-        const common = {
-          table: "price_distribution",
-          queryId: "distributionClaims",
-          period: peak,
-          rowComplete: Boolean(row.inputs_complete),
-        };
-        const median = num(row.median_price);
-        const max = num(row.max_price);
-        const count = num(row.poc_count);
-        if (median !== null)
-          claim({
-            ...common,
-            id: `distribution.median.p${peak}`,
-            label: `Median period price over all priced points of connection, period ${peak}`,
-            value: median,
-            unit: "$/MWh",
-          });
-        if (max !== null)
-          claim({
-            ...common,
-            id: `distribution.max.p${peak}`,
-            label: `Highest period price over all priced points of connection, period ${peak}`,
-            value: max,
-            unit: "$/MWh",
-            note: "Gold does not keep which point of connection it was.",
-          });
-        if (count !== null)
-          claim({
-            ...common,
-            id: `distribution.poc_count.p${peak}`,
-            label: `Points of connection with a period price, period ${peak}`,
-            value: count,
-            unit: "count",
-          });
-      }
-    }
-    if (present("generation_by_fuel_day")) {
-      const rows = await query(
-        `SELECT fuel_category, sum(megawatt_hours) AS mwh, bool_and(inputs_complete) AS inputs_complete
-         FROM ${from("generation_by_fuel_day")} GROUP BY fuel_category ORDER BY fuel_category`,
-      );
-      const ids: string[] = [];
-      let primary = 0;
-      let hydro = 0;
-      for (const row of rows) {
-        const fuel = String(row.fuel_category);
-        const mwh = num(row.mwh);
-        if (mwh === null) continue;
-        const id = `day.generation.${fuel}.mwh`;
-        claim({
-          id,
-          label: `Metered generation for the day, ${fuel}, all islands`,
-          value: mwh,
-          unit: "MWh",
-          table: "generation_by_fuel_day",
-          queryId: "dayGenerationClaims",
-          subject: fuel,
-          rowComplete: Boolean(row.inputs_complete),
-        });
-        if (fuel === "battery") continue;
-        ids.push(id);
-        primary += mwh;
-        if (fuel === "hydro") hydro = mwh;
-      }
-      if (primary > 0 && ids.includes("day.generation.hydro.mwh"))
-        claim({
-          id: "day.generation.hydro_share",
-          label: "Hydro share of primary energy for the day (battery excluded)",
-          value: (hydro / primary) * 100,
-          unit: "%",
-          table: "generation_by_fuel_day",
-          queryId: "dayGenerationClaims",
-          subject: "hydro",
-          dependsOn: ids,
-        });
-    }
-    if (present("hvdc_transfer_day")) {
-      const [row] = await query(
-        `SELECT north_island_received_mwh, average_megawatts, inputs_complete
-         FROM ${from("hvdc_transfer_day")}`,
-      );
-      if (row !== undefined) {
-        const common = {
-          table: "hvdc_transfer_day",
-          queryId: "dayHvdcClaims",
-          subject: "HAY2201",
-          rowComplete: Boolean(row.inputs_complete),
-        };
-        const mwh = num(row.north_island_received_mwh);
-        const mw = num(row.average_megawatts);
-        if (mwh !== null)
-          claim({
-            ...common,
-            id: "day.hvdc.received_mwh",
-            label: "HVDC energy received in the North Island for the day",
-            value: mwh,
-            unit: "MWh",
-          });
-        if (mw !== null)
-          claim({
-            ...common,
-            id: "day.hvdc.average_mw",
-            label: "HVDC average transfer for the day",
-            value: mw,
-            unit: "MW",
-            note: hvdcNote,
-          });
-      }
-    }
-
-    const completenessEntries: CompletenessEntry[] = [...uses.values()]
+    const entries: CompletenessEntry[] = [...uses.values()]
       .map(({ abs: _abs, ...entry }) => entry)
       .sort((a, b) =>
         a.layer === b.layer
           ? a.table.localeCompare(b.table)
           : a.layer.localeCompare(b.layer),
       );
-    const goldPartitions = completenessEntries
-      .filter((entry) => entry.layer === "gold" && entry.status !== "missing")
-      .map((entry) => entry.path);
+    const partitions = (layer: "gold" | "silver") =>
+      entries
+        .filter((entry) => entry.layer === layer && entry.status !== "missing")
+        .map((entry) => entry.path);
+    const silverPartitions = partitions("silver");
 
     return {
       schema_version: EVIDENCE_SCHEMA_VERSION,
@@ -1038,21 +594,28 @@ export async function buildEvidencePackage(
         prices,
         spreads,
         reserves,
-        generation_by_fuel: generationByFuel,
-        generation_by_plant: generationByPlant,
+        generation_by_fuel: generation.generation_by_fuel,
+        generation_by_plant: generation.generation_by_plant,
         hvdc,
-        load,
-        energy_balance_residual: residual,
+        load: load.load,
+        energy_balance_residual: load.energy_balance_residual,
+        dispatch_peak: dispatchPeak,
       },
-      completeness: completenessEntries,
+      reference,
+      completeness: entries,
       claims,
       limits: EVIDENCE_LIMITS,
       links: {
         daily_page: `/${date.slice(0, 4)}/${date.slice(5, 7)}/${date.slice(8, 10)}/`,
         day_json: `gold/site/days/${date}.json`,
-        gold_partitions: goldPartitions,
-        silver_partitions: [],
-        source_datasets: [],
+        gold_partitions: partitions("gold"),
+        silver_partitions: silverPartitions,
+        source_datasets: [
+          ...SILVER_DATE_TABLES.map((item) => item.table),
+          ...SILVER_SNAPSHOT_TABLES,
+        ].filter((table) =>
+          silverPartitions.some((path) => path.startsWith(`silver/${table}/`)),
+        ),
       },
     };
   } finally {
@@ -1060,8 +623,113 @@ export async function buildEvidencePackage(
   }
 }
 
-/** `['a', 'b']::VARCHAR[]` for a DuckDB `list_contains`. */
-const listSql = (values: readonly string[]) =>
-  values.length === 0
-    ? "[]::VARCHAR[]"
-    : `[${values.map(lit).join(", ")}]::VARCHAR[]`;
+/** The package as the CLI writes it: two-space JSON and a final newline. */
+export const serializeEvidencePackage = (pkg: EvidencePackage): string =>
+  `${JSON.stringify(pkg, null, 2)}\n`;
+
+/**
+ * Plants and points of connection that the package mentions. The operator comes from the fleet
+ * through the unit's operator code. The place is the point of connection in force in the network
+ * supply points. A field is null when no row matches.
+ */
+async function referenceData(input: {
+  query: ClaimContext["query"];
+  from: ClaimContext["from"];
+  present: ClaimContext["present"];
+  date: string;
+  plantIds: string[];
+  plants: EvidencePackage["context"]["generation_by_plant"];
+  nodes: string[];
+}): Promise<EvidencePackage["reference"]> {
+  const { query, from, present, date } = input;
+  const units = present("entity_units")
+    ? await query(
+        `SELECT plant_id, point_of_connection, plant_operator_code
+         FROM ${from("entity_units")}
+         WHERE list_contains(${listSql(input.plantIds)}, plant_id)
+         ORDER BY plant_id, point_of_connection, unit_code`,
+      )
+    : [];
+  const operators = new Map<string, string>();
+  if (present("generation_fleet"))
+    for (const row of await query(
+      `SELECT plant_operator_code, min(plant_operator) AS plant_operator
+       FROM ${from("generation_fleet")}
+       WHERE effective_start_date <= DATE ${lit(date)}
+         AND coalesce(effective_end_date, DATE '9999-12-31') > DATE ${lit(date)}
+       GROUP BY plant_operator_code`,
+    ))
+      if (row.plant_operator !== null)
+        operators.set(
+          String(row.plant_operator_code),
+          String(row.plant_operator),
+        );
+
+  const plantPocs = (id: string) => [
+    ...new Set(
+      units
+        .filter((row) => row.plant_id === id)
+        .map((row) => String(row.point_of_connection)),
+    ),
+  ];
+  const pocs = [
+    ...new Set([...input.nodes, ...input.plantIds.flatMap(plantPocs)]),
+  ];
+  const places = new Map<string, Row>();
+  if (present("network_supply_points") && pocs.length > 0)
+    for (const row of await query(
+      `SELECT point_of_connection, description, island, network_reporting_region,
+         latitude, longitude
+       FROM ${from("network_supply_points")}
+       WHERE list_contains(${listSql(pocs)}, point_of_connection)
+         AND start_date <= DATE ${lit(date)}
+         AND coalesce(end_date, DATE '9999-12-31') >= DATE ${lit(date)}
+       ORDER BY point_of_connection, start_date DESC, nsp`,
+    ))
+      if (!places.has(String(row.point_of_connection)))
+        places.set(String(row.point_of_connection), row);
+
+  const text = (value: unknown) =>
+    value === null || value === undefined || value === ""
+      ? null
+      : String(value);
+  const coordinate = (value: unknown) =>
+    value === null || value === undefined ? null : round(Number(value), 6);
+
+  return {
+    plants: input.plantIds.map((id) => {
+      const known = input.plants[id];
+      const own = plantPocs(id);
+      const place = own
+        .map((poc) => places.get(poc))
+        .find((row) => row !== undefined);
+      const code = units.find(
+        (row) => row.plant_id === id,
+      )?.plant_operator_code;
+      return {
+        plant_id: id,
+        plant_name: known?.plant_name ?? null,
+        fuel_category: known?.fuel_category ?? null,
+        island: known?.island ?? null,
+        operator:
+          code === null || code === undefined
+            ? null
+            : (operators.get(String(code)) ?? null),
+        points_of_connection: own,
+        latitude: coordinate(place?.latitude),
+        longitude: coordinate(place?.longitude),
+      };
+    }),
+    points_of_connection: [...new Set(input.nodes)].sort().map((poc) => {
+      const place = places.get(poc);
+      return {
+        point_of_connection: poc,
+        description: text(place?.description),
+        island: text(place?.island),
+        region: text(place?.network_reporting_region),
+        latitude: coordinate(place?.latitude),
+        longitude: coordinate(place?.longitude),
+      };
+    }),
+  };
+}

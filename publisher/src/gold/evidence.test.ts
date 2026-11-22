@@ -16,6 +16,10 @@ import {
   type EvidenceLakeOptions,
   writeEvidenceGold,
 } from "./fixtures/evidence-27-july.ts";
+import {
+  type EvidenceSilverOptions,
+  writeEvidenceSilver,
+} from "./fixtures/evidence-27-july-silver.ts";
 
 let root: string;
 let silverDir: string;
@@ -31,11 +35,18 @@ afterEach(() => rm(root, { recursive: true, force: true }));
 const lake = (options: Omit<EvidenceLakeOptions, "goldDir"> = {}) =>
   writeEvidenceGold({ goldDir, ...options });
 
-const build = (episodeId = EPISODE_ID, date = DAY) =>
+const silver = (options: Omit<EvidenceSilverOptions, "silverDir"> = {}) =>
+  writeEvidenceSilver({ silverDir, ...options });
+
+const build = (
+  episodeId = EPISODE_ID,
+  date = DAY,
+  completeness = completenessView(),
+) =>
   buildEvidencePackage({
     goldDir,
     silverDir,
-    completeness: completenessView(),
+    completeness,
     episodeId,
     date,
   });
@@ -46,10 +57,11 @@ const claimOf = (pkg: EvidencePackage, id: string) =>
 // Catches: a claim without a source or level, a dangling depends_on, a path that links omit.
 test("every claim has a source and a confirmed level, and its references resolve", async () => {
   await lake();
+  await silver();
   const pkg = await build();
   expect(pkg.schema_version).toBe(EVIDENCE_SCHEMA_VERSION);
   expect(pkg.builder_version).toBe(BUILDER_VERSION);
-  expect(pkg.claims.length).toBeGreaterThan(40);
+  expect(pkg.claims.length).toBeGreaterThan(60);
   const ids = new Set(pkg.claims.map((claim) => claim.id));
   expect(ids.size).toBe(pkg.claims.length);
   const paths = new Set([
@@ -146,4 +158,103 @@ test("the window clamps on a 46-period day", async () => {
   expect(pkg.window.start_trading_period).toBe(40);
   expect(pkg.window.periods).toEqual([40, 41, 42, 43, 44, 45, 46]);
   expect(pkg.context.prices.OTA2201?.price).toHaveLength(7);
+});
+
+// Catches: the dispatch rule storing the wrong publish, or counting nodes at one instant.
+test("dispatch publishes of the peak period: highest publish and scarcity counts", async () => {
+  await lake();
+  await silver();
+  const pkg = await build();
+  const value = (id: string) => claimOf(pkg, id)?.value;
+  expect(value("dispatch.energy.max_publish.p36")).toBe(22070.66);
+  expect(value("dispatch.energy.max_publish_node.p36")).toBe("WEL0331");
+  expect(value("dispatch.energy.max_publish_time.p36")).toBe(
+    "2026-07-27T05:50:26Z",
+  );
+  expect(value("dispatch.energy.max_publish_seconds.p36")).toBe(85);
+  expect(value("dispatch.energy.nodes_ge_20000.p36")).toBe(39);
+  expect(value("dispatch.energy.nodes_ge_10000.p36")).toBe(207);
+  expect(value("dispatch.sir.max_publish.p36")).toBe(6500);
+  expect(value("dispatch.sir.max_publish_seconds.p36")).toBe(85);
+  expect(value("dispatch.sir.nodes_ge_10000.p36")).toBe(0);
+  expect(pkg.context.dispatch_peak.energy?.node).toBe("WEL0331");
+  expect(claimOf(pkg, "dispatch.energy.max_publish.p36")?.source.kind).toBe(
+    "silver",
+  );
+});
+
+// Catches: a derived claim that is not tied to the values it came from.
+test("the thermal ramp and the spread-with-HVDC join name their inputs", async () => {
+  await lake();
+  const pkg = await build();
+  expect(pkg.window.start_trading_period).toBe(31);
+  const ramp = claimOf(pkg, "generation.thermal_ramp.NI");
+  expect(ramp?.value).toBe(484.4);
+  expect(ramp?.depends_on).toEqual([
+    "generation.thermal.NI.p32",
+    "generation.thermal.NI.p36",
+  ]);
+  expect(claimOf(pkg, "generation.thermal.NI.p32")?.depends_on).toEqual([
+    "generation.fuel.coal_gas.NI.p32",
+    "generation.fuel.gas.NI.p32",
+  ]);
+  const join = claimOf(pkg, "separation.OTA2201-BEN2201.hvdc_north.p36");
+  expect(join?.value).toBe(true);
+  expect(join?.depends_on).toEqual([
+    "spread.OTA2201-BEN2201.p36",
+    "hvdc.direction.p36",
+  ]);
+});
+
+// Catches: an operator or place invented for a plant or node that has no source row.
+test("reference data is null where no row matches", async () => {
+  await lake();
+  await silver();
+  const pkg = await build();
+  const plant = (id: string) =>
+    pkg.reference.plants.find((item) => item.plant_id === id);
+  expect(plant("HLY/huntly_1_4")).toMatchObject({
+    operator: "Genesis Energy Limited",
+    points_of_connection: ["HLY2201"],
+    latitude: -37.54,
+    longitude: 175.15,
+  });
+  expect(plant("WTK/waitaki")).toMatchObject({
+    operator: null,
+    latitude: null,
+  });
+  expect(plant("OHK/ohakuri")).toMatchObject({
+    operator: null,
+    points_of_connection: [],
+    longitude: null,
+  });
+  const node = (id: string) =>
+    pkg.reference.points_of_connection.find(
+      (item) => item.point_of_connection === id,
+    );
+  expect(node("OTA2201")).toMatchObject({ island: "NI", region: "Auckland" });
+  expect(node("WEL0331")).toMatchObject({ description: null, latitude: null });
+});
+
+// Catches: silver status taken from the partition alone, not from _completeness.
+test("a silver table takes its status from the completeness view", async () => {
+  await lake();
+  await silver({ omit: ["dispatch_energy_prices", "network_supply_points"] });
+  const pkg = await build(
+    EPISODE_ID,
+    DAY,
+    completenessView([["dispatch_reserve_prices", DAY, "partial"]]),
+  );
+  const status = (table: string) =>
+    pkg.completeness.find((entry) => entry.table === table)?.status;
+  expect(status("dispatch_energy_prices")).toBe("missing");
+  expect(status("dispatch_reserve_prices")).toBe("partial");
+  expect(status("entity_units")).toBe("complete");
+  expect(status("network_supply_points")).toBe("missing");
+  expect(pkg.context.dispatch_peak.energy).toBeNull();
+  expect(pkg.claims.some((c) => c.id.startsWith("dispatch.energy."))).toBe(
+    false,
+  );
+  expect(pkg.links.source_datasets).not.toContain("dispatch_energy_prices");
+  expect(pkg.links.source_datasets).toContain("dispatch_reserve_prices");
 });
