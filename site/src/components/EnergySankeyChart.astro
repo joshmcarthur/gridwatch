@@ -1,9 +1,8 @@
 ---
 import type { SiteDay } from "@gridwatch/publisher/site-contract";
 import ChartFigure from "./ChartFigure.astro";
-import { renderSankeySvg } from "../lib/sankey-svg";
+import { renderSankeySvg, sankeyLegend } from "../lib/sankey-svg";
 import {
-  type EnergySankey,
   energySankey,
   sankeyMissingCopy,
   sankeySummary,
@@ -17,44 +16,9 @@ interface Props {
 const { day } = Astro.props;
 const chart = energySankey(day);
 
-const LEGEND: Array<{ label: string; colour: string }> = [
-  { label: "Hydro", colour: "var(--color-fuel-hydro)" },
-  { label: "Geothermal", colour: "var(--color-fuel-geothermal)" },
-  { label: "Wind", colour: "var(--color-fuel-wind)" },
-  { label: "Solar", colour: "var(--color-fuel-solar)" },
-  { label: "Gas", colour: "var(--color-fuel-gas)" },
-  { label: "Coal/gas", colour: "var(--color-fuel-coal-gas)" },
-  { label: "North Island", colour: "var(--color-island-north)" },
-  { label: "South Island", colour: "var(--color-island-south)" },
-  { label: "Inter-island cable", colour: "var(--color-brand)" },
-  { label: "Modelled load", colour: "var(--color-ink-muted)" },
-  { label: "Residual", colour: "var(--color-caution)" },
-  { label: "Cable losses", colour: "var(--color-rule)" },
-  { label: "Battery (stored power)", colour: "var(--color-fuel-battery)" },
-];
-
-function presentLegend(data: EnergySankey): typeof LEGEND {
-  const kinds = new Set(data.nodes.map((node) => node.kind));
-  const fuels = new Set(
-    data.nodes
-      .filter((node) => node.kind === "fuel" || node.kind === "battery")
-      .map((node) => node.label),
-  );
-  return LEGEND.filter((item) => {
-    if (item.label === "Battery (stored power)") return kinds.has("battery");
-    if (item.label === "Residual") return kinds.has("residual");
-    if (item.label === "Cable losses") return kinds.has("losses");
-    if (item.label === "Inter-island cable") return kinds.has("hvdc");
-    if (item.label === "Modelled load") return kinds.has("load");
-    if (item.label === "North Island" || item.label === "South Island")
-      return kinds.has("island");
-    return fuels.has(item.label);
-  });
-}
-
 const svg = chart ? renderSankeySvg(chart) : null;
 const table = chart ? sankeyTable(chart) : null;
-const legend = chart ? presentLegend(chart) : [];
+const legend = chart ? sankeyLegend(chart) : [];
 ---
 
 {

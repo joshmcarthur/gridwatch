@@ -14,7 +14,7 @@ import {
   sankeySummary,
   sankeyTable,
 } from "./sankey.ts";
-import { renderSankeySvg } from "./sankey-svg.ts";
+import { renderSankeySvg, sankeyLegend } from "./sankey-svg.ts";
 
 const fixtureUnknown: unknown = fixtureJson;
 assertSiteDay(fixtureUnknown);
@@ -248,6 +248,22 @@ test("the static SVG labels residual and uses a text alternative", () => {
   const without = energySankey(dayOf(balanced));
   if (!without) throw new Error("expected a sankey");
   expect(renderSankeySvg(without)).not.toContain("North Island residual");
+});
+
+test("the legend has one entry per band colour drawn, including other", () => {
+  const chart = energySankey(
+    dayOf(completeSankey(), [
+      fuel("hydro", "NI", 100),
+      fuel("other", "NI", 50),
+      fuel("hydro", "SI", 100),
+    ]),
+  );
+  if (!chart) throw new Error("expected a sankey");
+  const labels = sankeyLegend(chart).map((item) => item.label);
+  expect(labels).toEqual(
+    expect.arrayContaining(["Hydro", "Other", "Residual", "Modelled load"]),
+  );
+  expect(new Set(labels).size).toBe(labels.length);
 });
 
 test("the numbers table is the gold day table and does not say consumption", () => {
