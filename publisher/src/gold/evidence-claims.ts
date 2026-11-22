@@ -792,6 +792,37 @@ async function publishPeak(
 const PUBLISH_END_NOTE =
   "When the node has no later publish in the period, the period end is the end.";
 
+async function namedEnergyClaims(c: ClaimContext): Promise<void> {
+  if (!c.present("dispatch_energy_prices")) return;
+  const table = "dispatch_energy_prices";
+  for (const node of c.config.namedEnergyNodes) {
+    const peak = await highestPublish(c, table, "energy", node);
+    if (peak === null) continue;
+    const common = {
+      table,
+      queryId: "dispatchClaims",
+      period: c.peak,
+      subject: node,
+    };
+    const base = `dispatch.${node.toLowerCase()}`;
+    c.claim({
+      ...common,
+      id: `${base}.max_publish`,
+      label: `Highest dispatch energy publish at ${node} in period ${c.peak}`,
+      value: peak.price,
+      unit: "$/MWh",
+    });
+    c.claim({
+      ...common,
+      id: `${base}.seconds`,
+      label: `Seconds from the highest ${node} dispatch energy publish to the next publish of that node`,
+      value: peak.seconds_to_next_publish,
+      unit: "s",
+      note: PUBLISH_END_NOTE,
+    });
+  }
+}
+
 /**
  * Dispatch publishes of the peak period (silver). Store the highest publish (node, time, price,
  * seconds to the next publish of that node, or to the period end when it has none) and the count
@@ -861,35 +892,7 @@ export async function dispatchClaims(
         note: "Counted over the whole period, not at one instant.",
       });
   }
-  if (c.present("dispatch_energy_prices")) {
-    const table = "dispatch_energy_prices";
-    for (const node of c.config.namedEnergyNodes) {
-      const peak = await highestPublish(c, table, "energy", node);
-      if (peak === null) continue;
-      const common = {
-        table,
-        queryId: "dispatchClaims",
-        period: c.peak,
-        subject: node,
-      };
-      const base = `dispatch.${node.toLowerCase()}`;
-      c.claim({
-        ...common,
-        id: `${base}.max_publish`,
-        label: `Highest dispatch energy publish at ${node} in period ${c.peak}`,
-        value: peak.price,
-        unit: "$/MWh",
-      });
-      c.claim({
-        ...common,
-        id: `${base}.seconds`,
-        label: `Seconds from the highest ${node} dispatch energy publish to the next publish of that node`,
-        value: peak.seconds_to_next_publish,
-        unit: "s",
-        note: PUBLISH_END_NOTE,
-      });
-    }
-  }
+  await namedEnergyClaims(c);
   return out;
 }
 
