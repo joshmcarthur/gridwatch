@@ -68,3 +68,7 @@ Amended 2026-11-22. The exporter writes a `nodal_map` section on every day. The 
 - **`complete` on the day.** Still generation and prices only.
 - **Index.** `sections.nodal_map` and `latest_complete_sections.nodal_map` are optional so older files still validate.
 - **Do not grow `prices.nodes`.** That array stays the three reference nodes. The site prices section still reads only `PRICE_SECTION_TABLES`.
+
+### Amendment (#170): episode highlights
+
+Amended 2026-11-23. Each episode item may carry `highlights`: one row per observation type, the member with the highest severity. The row has the observation type, the place (`point_of_connection`, or `pair_from` / `pair_to` for a spread), the island, the measured value, and the baseline. Older JSON omits the field. The contract version stays 1. `EXPORT_VERSION` is 6 so published days rebuild.

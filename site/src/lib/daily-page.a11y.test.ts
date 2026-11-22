@@ -46,6 +46,7 @@ test.skipIf(!existsSync(builtPage))(
     );
     expect(html).toMatch(/A spread is the price at one place/);
     expect(html).not.toMatch(/trading day|grouped readings|dataset/i);
+    expect(html).not.toMatch(/overlapped|grid load|regional price gap/i);
     expect(html).toContain("Words on this page");
     expect(html).toContain('id="word-wholesale-price"');
     expect(html).toContain('id="word-megawatt-hour"');

@@ -7,7 +7,7 @@
 
 Detection finds unusual things. It does not decide which of them are worth explaining ([brief §6.3](../brief.md), [#37](https://github.com/joshmcarthur/gridwatch/issues/37)). Episodes ([ADR-0021](0021-episodes.md)) group observations into one situation each. This ADR scores each episode and proposes a short list of candidates for each day. The score has four components. Each is stored, so a reader can see why an episode ranked where it did.
 
-This ADR assumes that ranking **proposes** candidates. It does not publish anything and it does not change the site contract. Two open pull requests decide what happens to a candidate: [#125](https://github.com/joshmcarthur/gridwatch/pull/125) proposes an editorial review flow, and [#131](https://github.com/joshmcarthur/gridwatch/pull/131) (ADR-0022) proposes to publish events as Unreviewed with no editorial gate. If #131 merges, `is_candidate` could become the publish gate for events ([#42](https://github.com/joshmcarthur/gridwatch/issues/42)). That is an owner question below. This ADR does not settle it.
+Ranking writes `is_candidate` on `episode_scores` and does not write site JSON. Owner decision on [#182](https://github.com/joshmcarthur/gridwatch/issues/182) (2026-11-23): `is_candidate` feeds site events directly, so event pages ([#42](https://github.com/joshmcarthur/gridwatch/issues/42)) emit an event for each candidate, labelled Unreviewed ([ADR-0022](0022-editorial-review-and-publish-flow.md)). The site contract stays unchanged until #42 amends [ADR-0014](0014-site-json-contract.md).
 
 Code: `publisher/src/gold/episode-ranking.ts`. Dataset id `gold_episode_ranking`. It runs after `gold_episodes`.
 
@@ -15,7 +15,7 @@ Code: `publisher/src/gold/episode-ranking.ts`. Dataset id `gold_episode_ranking`
 
 ### Tables
 
-Follow [ADR-0011](0011-gold-table-pattern.md). `ANALYSIS_VERSION` starts at 1. One config object, `EPISODE_RANKING_CONFIG`. A test pins its hash. A change to a rule or a value bumps `ANALYSIS_VERSION`.
+Follow [ADR-0011](0011-gold-table-pattern.md). `ANALYSIS_VERSION` starts at 1. It is 2 after [#180](https://github.com/joshmcarthur/gridwatch/issues/180) (corroboration) and 3 after [#181](https://github.com/joshmcarthur/gridwatch/issues/181) (candidate defaults and `price_low` cap). One config object, `EPISODE_RANKING_CONFIG`. A test pins its hash. A change to a rule or a value bumps `ANALYSIS_VERSION`.
 
 Output is Parquet at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`, with a total `ORDER BY`, `SET threads = 1`, `goldStamp` and no `processed_at`.
 
@@ -52,11 +52,11 @@ Each component is in [0, 1].
 | --- | --- | --- | --- |
 | `price_high` | up to about 31 (2026-08-04) | 30 | The largest value seen scores about 1. |
 | `reserve_price_high` | up to about 170 (2026-07-27) | 170 | Same. Reserve prices sit near $0, so the denominator is tiny and severity is large. |
-| `price_low` | peaks at 1.49 | 10 (the default) | See polarity below. |
+| `price_low` | peaks at 1.4937 (109 rows on the 2026-11-23 lake) | 1.49 | Same rounding as `price_high`: the largest seen scores about 1. |
 | `separation_high`, `separation_low`, `reserve_price_low` | no figures in ADR-0019 | 10 (the default) | No evidence yet. Revisit after the first ranking over the backfill. |
 | `generation_high`, `generation_low` | backfill counts pending | 10 (the default) | As above. |
 
-**Polarity.** `price_low` severity is bounded near 1.5, because a price cannot fall far below a median of $0 to $170. With the default cap it scores about 0.17 at most on severity, so a `price_low` episode ranks low by construction. This is deliberate for v1. It is an owner question.
+**Polarity.** `price_low` severity is bounded near 1.5, because a price cannot fall far below a median of $0 to $170. With the default cap of 10 it scored about 0.17 at most on severity, so a `price_low` episode ranked low by construction. [#181](https://github.com/joshmcarthur/gridwatch/issues/181) rescales the cap to the backfill peak (1.49) so those episodes can compete with `price_high`.
 
 **Duration.** `period_count` is the count of distinct trading periods in the episode. Twelve periods (6 hours) scores 1.
 
@@ -66,9 +66,11 @@ Each component is in [0, 1].
 
 ### Candidates
 
-An episode is a candidate when `day_rank <= candidatesPerDay` (3) and `score >= minScore` (0.35). An episode that is in the top 3 but under the floor has reason `below_min_score`. Incomplete inputs do not block candidacy. The flag `inputs_complete` is on the row.
+An episode is a candidate when `day_rank <= candidatesPerDay` (1) and `score >= minScore` (0.5). An episode that is first for the day but under the floor has reason `below_min_score`. Incomplete inputs do not block candidacy. The flag `inputs_complete` is on the row.
 
-### Config values, provisional
+### Config values
+
+Chosen on [#181](https://github.com/joshmcarthur/gridwatch/issues/181). Weights stay as after [#180](https://github.com/joshmcarthur/gridwatch/issues/180).
 
 | Key | Value |
 | --- | --- |
@@ -81,8 +83,8 @@ An episode is a candidate when `day_rank <= candidatesPerDay` (3) and `score >= 
 | `breadthCap` | 4 |
 | `historyDays` | 90 |
 | `minPoolSize` | 20 |
-| `candidatesPerDay` | 3 |
-| `minScore` | 0.35 |
+| `candidatesPerDay` | 1 |
+| `minScore` | 0.5 |
 
 ### Weekly list
 
@@ -114,7 +116,7 @@ ORDER BY week, rk;
 
 ### Backfill run
 
-This environment has no gold lake, so the ranking has not run over the backfill. The "top candidates across the backfill" item on [#37](https://github.com/joshmcarthur/gridwatch/issues/37) waits for a run with the queries above, and for the owner to review the list.
+Version 3 counts from the local lake re-rank are on [#181](https://github.com/joshmcarthur/gridwatch/issues/181).
 
 ### Owner questions
 
@@ -123,12 +125,12 @@ Defaults in brackets. Nothing here is implemented as final.
 1. Do the weights 0.30 / 0.20 / 0.15 / 0.10 / 0.25 (severity, duration, breadth, corroboration, rarity) and the caps suit the site? **[yes, provisional]**
 2. Is rarity the frequency of the same type-set and island-set over 90 days, not a severity percentile? **[yes, frequency]**
 3. Is a window with fewer than 20 prior days neutral (0.5)? **[yes]**
-4. Top 3 per day with a floor of 0.35, and the weekly list as a query? **[yes]**
-5. Do the per-type severity caps stand, with the default 10 for types that have no backfill figure? **[yes, provisional]**
-6. Should `price_low` rank like `price_high`? Today it ranks low by construction. **[no, leave low; flag]**
+4. Top 1 per day with a floor of 0.5, and the weekly list as a query? **[yes, #181 2026-11-23]**
+5. Do the per-type severity caps stand, with the default 10 for types that have no backfill figure? **[yes, except `price_low` at 1.49]**
+6. Should `price_low` rank like `price_high`? **[yes, rescale the cap to the backfill peak; #181]**
 7. Do candidates with incomplete inputs stay candidates, flagged? **[yes]**
 8. Do midnight-split evenings stay two episodes, so each part is ranked alone? **[yes, as in ADR-0021]**
-9. Does `is_candidate` feed [#42](https://github.com/joshmcarthur/gridwatch/issues/42) events directly, if #131 merges? **[no decision; ranking only proposes]**
+9. Does `is_candidate` feed [#42](https://github.com/joshmcarthur/gridwatch/issues/42) events directly, if #131 merges? **[yes; no step between ranking and events. #182, 2026-11-23. ADR-0022 is accepted.]**
 10. Post the backfill top list as one comment on #37 after review? **[yes, only after owner approval]**
 
 ## Alternatives considered
@@ -142,12 +144,12 @@ Defaults in brackets. Nothing here is implemented as final.
 ## Consequences
 
 - A later detector that becomes an episode input changes episodes. The episode day fingerprints change, and the rankings of every date within 90 days rebuild.
-- `ANALYSIS_VERSION` is 2 since [#180](https://github.com/joshmcarthur/gridwatch/issues/180). The fuel generation-change and demand-deviation sentinels are ranking inputs for the episode's own date. They are `optional`: the baselines need history, so a day without a sentinel still ranks, with a corroboration count of 0. A sentinel that arrives later changes the fingerprint.
+- `ANALYSIS_VERSION` is 3 since [#181](https://github.com/joshmcarthur/gridwatch/issues/181). It was 2 after [#180](https://github.com/joshmcarthur/gridwatch/issues/180). The fuel generation-change and demand-deviation sentinels are ranking inputs for the episode's own date. They are `optional`: the baselines need history, so a day without a sentinel still ranks, with a corroboration count of 0. A sentinel that arrives later changes the fingerprint.
 - An episode with no corroboration scores a little lower than under version 1, because weight moved to the new component. Early days with no sentinel cannot corroborate.
 
 ### Measured on the 2026-11-22 lake (#180)
 
 Version 1 over 367 days: 310 episodes, 127 candidates. Version 2: 310 episodes, 150 candidates. Corroboration count 0 / 1 / 2 covers 170 / 129 / 11 episodes. 8 episodes predate the fuel data. 27 July 2026 stays first (0.814 to 0.789). Two days enter the top 12 (2026-05-27, 2026-07-26) and two leave (2025-12-08, which falls from 0.650 to 0.593 but is still its day's first rank, and 2026-08-06).
 - Rarity is cold for the first 20 days of history.
-- Rankings are proposals. Editorial review, or the lack of it, is decided in [#41](https://github.com/joshmcarthur/gridwatch/issues/41).
+- `is_candidate` is the event list for [#42](https://github.com/joshmcarthur/gridwatch/issues/42). Ranking does not wait for a human; after emit, events are Unreviewed until a later mark-as-reviewed flow ([ADR-0022](0022-editorial-review-and-publish-flow.md), [#41](https://github.com/joshmcarthur/gridwatch/issues/41)).
 - Evidence packages ([#38](https://github.com/joshmcarthur/gridwatch/issues/38)) can read `episode_scores` to pick what to build.

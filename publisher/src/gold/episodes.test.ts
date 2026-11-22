@@ -7,7 +7,13 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import { lit } from "../silver/common.ts";
 import { periodToUtc } from "../trading-time.ts";
 import { goldPartitionPath } from "./common.ts";
-import { INPUTS, publishEpisodes, TABLES } from "./episodes.ts";
+import {
+  ANALYSIS_VERSION,
+  EPISODE_GROUPING_CONFIG,
+  INPUTS,
+  publishEpisodes,
+  TABLES,
+} from "./episodes.ts";
 import { episodeIdOf } from "./episodes-group.ts";
 import { completenessView } from "./fixtures/completeness.ts";
 import { TABLES as PRICE_ANOMALY_TABLES } from "./price-anomaly.ts";
@@ -203,6 +209,15 @@ test("overlapping NI price_high and reserve_price_high write one episode", async
   } finally {
     connection.closeSync();
   }
+});
+
+test("the default config is pinned: a changed value without an ANALYSIS_VERSION bump fails here", () => {
+  expect(ANALYSIS_VERSION).toBe(2);
+  expect(
+    createHash("sha256")
+      .update(JSON.stringify(EPISODE_GROUPING_CONFIG))
+      .digest("hex"),
+  ).toBe("3125321d939a3eff3e553899a462a006afb247861595c9faf996ed8bcd03d8d8");
 });
 
 test("INPUTS are the three detector sentinels", () => {

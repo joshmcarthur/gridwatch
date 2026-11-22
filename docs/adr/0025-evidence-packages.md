@@ -58,9 +58,9 @@ Plant absence is never a claim ("no Generation_MD row for Huntly 5" is a gap). H
 
 ### Dispatch publishes
 
-One rule. For the peak period the package stores the highest dispatch publish: node, time (UTC), price, and seconds to the next publish of that node (to the period end when there is none). It stores the number of nodes with a publish at or above $20,000 and at or above $10,000 in that period. The same is stored for SIR. The count is over the whole period, not at one instant.
+For the peak period the package stores the highest dispatch publish: node, time (UTC), price, and seconds to the next publish of that node (or to the period end when there is none). It stores how many nodes publish at or above $20,000 and at or above $10,000 in that period. SIR is stored the same way. The count is over the whole period, not at one instant.
 
-This stores the node with the highest publish, not any node that a reader names. In the #21 write-up that is Wellsford at $22,070.66, not Hepburn Road at $21,000 with an 85-second gap. The Hepburn Road figures stay a named gap: 39 nodes reach $20,000 in that period, so recording HEP0331 beside the highest publish would be a write-up special case, not a builder rule ([#185](https://github.com/joshmcarthur/gridwatch/issues/185)).
+Each node in `EVIDENCE_CONFIG.namedEnergyNodes` also gets its highest peak-period energy publish. The list is Hepburn Road (`HEP0331`). On 27 July 2026 the package has Wellsford at $22,070.66 and Hepburn Road at $21,000 for 85 seconds ([#197](https://github.com/joshmcarthur/gridwatch/issues/197)).
 
 ### Check against #21
 
@@ -79,7 +79,7 @@ Each has a default. The default is what the code does now.
 
 1. Who may write `strong_evidence` or `possible_explanation`? Default: nobody in #38. Interpretation belongs to the editorial flow ([#41](https://github.com/joshmcarthur/gridwatch/issues/41)).
 2. How do report-only facts (Authority report text) enter a package? Default: deferred. They are named gaps today.
-3. Is the dispatch rule above right? Decided: yes. Highest publish of the peak period plus period counts at $20,000 and $10,000. Do not also record HEP0331.
+3. Is the dispatch rule above right? Decided: yes. Highest publish of the peak period, period counts at $20,000 and $10,000, and the highest publish of each named energy node (HEP0331). [#197](https://github.com/joshmcarthur/gridwatch/issues/197).
 4. Is the claim id scheme right? Default: yes. #40 will key on it, so a change later is costly.
 5. Window (4 before, 2 after) and the output path `<gold>/evidence/<date>/<episode_id>.json`, not published? Default: yes.
 6. Does the real-lake check block the merge? Default: no, the PR records what was run.

@@ -29,7 +29,7 @@ import { TABLES as RESERVE_PRICE_ANOMALY_TABLES } from "./reserve-price-anomaly.
 /**
  * Bump by hand when the grouping rules or a config value change (ADR-0011, ADR-0021).
  */
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
 
 export { EPISODE_GROUPING_CONFIG, type EpisodeGroupingConfig };
 
@@ -51,6 +51,11 @@ const DETECTORS = [
     observations: RESERVE_PRICE_ANOMALY_TABLES[1],
   },
 ] as const;
+
+/** Observation partitions that grouping reads. Site export joins the same set for highlights. */
+export const DETECTOR_OBSERVATION_TABLES = DETECTORS.map(
+  (detector) => detector.observations,
+);
 
 /**
  * Observations that corroborate an episode without being members of it (issue #180, ADR-0021).

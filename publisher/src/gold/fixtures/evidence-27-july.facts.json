@@ -588,21 +588,21 @@
     },
     {
       "fact_id": "dispatch.hep0331.max_publish",
-      "claim_id_expected": null,
+      "claim_id_expected": "dispatch.hep0331.max_publish",
       "value": 21000.0,
       "unit": "$/MWh",
       "write_up_query": "Q7b",
-      "status": "gap",
-      "gap_reason": "Decided on #185: do not record a named node beside the highest publish. 39 nodes reach $20,000 in the period; HEP0331 is a write-up special case. The package stores WEL0331 ($22,070.66)."
+      "status": "claim",
+      "decimals": 2
     },
     {
       "fact_id": "dispatch.hep0331.seconds",
-      "claim_id_expected": null,
+      "claim_id_expected": "dispatch.hep0331.seconds",
       "value": 85,
       "unit": "s",
       "write_up_query": "Q7b",
-      "status": "gap",
-      "gap_reason": "The 85-second gap is that of HEP0331. The package stores the gap of the highest-publish node only (WEL0331, also 85 s in the write-up). Same decision as dispatch.hep0331.max_publish."
+      "status": "claim",
+      "decimals": 0
     },
     {
       "fact_id": "dispatch.scarcity_flag",

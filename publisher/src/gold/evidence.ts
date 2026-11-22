@@ -52,7 +52,7 @@ import { TABLES as RESERVE_PRICE_ANOMALY_TABLES } from "./reserve-price-anomaly.
 /** Bump when the shape of the package changes. */
 export const EVIDENCE_SCHEMA_VERSION = 2;
 /** Bump by hand when a claim, a rule or a config value of the builder changes. */
-export const BUILDER_VERSION = 2;
+export const BUILDER_VERSION = 3;
 
 export const EVIDENCE_CONFIG = {
   /** Periods before the episode start that the window holds (clamped to period 1). */
@@ -67,6 +67,8 @@ export const EVIDENCE_CONFIG = {
   scarcityPrices: [20000, 10000],
   /** Fuel categories that make up thermal generation (ADR-0008). */
   thermalFuels: ["coal_gas", "gas"],
+  /** Extra energy nodes whose highest peak-period publish is stored beside the overall highest. */
+  namedEnergyNodes: ["HEP0331"],
 } as const;
 
 export type Confidence =
