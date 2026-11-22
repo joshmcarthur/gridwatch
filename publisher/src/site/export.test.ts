@@ -29,7 +29,8 @@ import {
   SITE_CONTRACT_VERSION,
   type SiteDay,
 } from "./contract.ts";
-import { buildSiteDay, exportSite, round } from "./export.ts";
+import { buildSiteDay, exportSite } from "./export.ts";
+import { round } from "./gold-read.ts";
 
 /** A valid day on a 46-period date. Generation is incomplete, prices are missing. */
 function sampleDay(): SiteDay {
