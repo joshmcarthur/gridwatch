@@ -290,11 +290,16 @@ export async function generationClaims(c: ClaimContext): Promise<{
 
   const byPlant: EvidencePackage["context"]["generation_by_plant"] = {};
   if (c.present("generation_by_plant_period")) {
+    const plants = `SELECT plant_id, fuel_category, island, average_megawatts
+       FROM ${c.from("generation_by_plant_period")}
+       WHERE trading_period = ${c.peak} AND average_megawatts IS NOT NULL`;
     const top = await c.query(
-      `SELECT plant_id FROM ${c.from("generation_by_plant_period")}
-       WHERE trading_period = ${c.peak} AND average_megawatts IS NOT NULL
-       ORDER BY average_megawatts DESC, plant_id
-       LIMIT ${c.config.topPlants}`,
+      `WITH p AS (${plants})
+       SELECT plant_id FROM p
+       WHERE plant_id IN (SELECT plant_id FROM p ORDER BY average_megawatts DESC, plant_id LIMIT ${c.config.topPlants})
+         OR list_contains(${listSql(c.episode.plant_ids)}, plant_id)
+         OR (island = 'NI' AND list_contains(${listSql(c.config.thermalFuels)}, fuel_category))
+       ORDER BY average_megawatts DESC, plant_id`,
     );
     const ids = top.map((row) => String(row.plant_id));
     const rows =
@@ -392,6 +397,7 @@ export async function hvdcClaims(
       mw: num(row.average_megawatts),
     }))
     .filter((item): item is { period: number; mw: number } => item.mw !== null);
+  const windowComplete = rows.every((row) => Boolean(row.inputs_complete));
   if (values.length > 0) {
     const top = values.reduce((best, item) =>
       item.mw > best.mw ? item : best,
@@ -405,6 +411,7 @@ export async function hvdcClaims(
       queryId: "hvdcClaims",
       period: top.period,
       subject: "HAY2201",
+      rowComplete: windowComplete,
       note: HVDC_NOTE,
     });
     c.claim({
@@ -415,6 +422,7 @@ export async function hvdcClaims(
       table: "hvdc_transfer_period",
       queryId: "hvdcClaims",
       subject: "HAY2201",
+      rowComplete: windowComplete,
       note: HVDC_NOTE,
     });
   }
@@ -858,7 +866,7 @@ export function derivedClaims(c: ClaimContext): void {
         period: c.peak,
         subject: "thermal|NI",
         dependsOn: [from, to],
-        note: `The ramp starts ${c.config.rampPeriods} periods before the peak.`,
+        note: `The ramp starts ${c.peak - c.rampStart} periods before the peak.`,
       });
   }
 

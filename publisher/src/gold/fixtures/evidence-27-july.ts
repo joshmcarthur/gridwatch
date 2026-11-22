@@ -209,7 +209,7 @@ const PLANTS: Array<{
     mw: { 36: 172.4 },
   },
   {
-    id: "JRD/junction_road",
+    id: "JRD/junctionroad",
     name: "junction_road",
     fuel: "gas",
     island: "NI",
@@ -217,7 +217,7 @@ const PLANTS: Array<{
     mw: { 36: 90.3 },
   },
   {
-    id: "MCK/mckee",
+    id: "MKE/mckee",
     name: "mckee",
     fuel: "gas",
     island: "NI",

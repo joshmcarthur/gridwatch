@@ -154,8 +154,8 @@ export async function writeEvidenceSilver(options: EvidenceSilverOptions) {
         unit("HLY/huntly_1_4", "HLY2201", "HLY2", "GENE"),
         unit("HLY/huntly_p40", "HLY2201", "HLY6", "GENE"),
         unit("SFD/stratford", "SFD2201", "SFD21", "CTCT"),
-        unit("MCK/mckee", "MCK0111", "MCK1", "TAEL"),
-        unit("JRD/junction_road", "JRD0331", "JRD1", "TAEL"),
+        unit("MKE/mckee", "MCK0111", "MCK1", "TAEL"),
+        unit("JRD/junctionroad", "JRD0331", "JRD1", "TAEL"),
         // No fleet row has this operator code. Ohakuri has no unit row at all.
         unit("WTK/waitaki", "WTK0111", "WTK1", "ZZZ"),
       ],

@@ -257,4 +257,45 @@ test("a silver table takes its status from the completeness view", async () => {
   );
   expect(pkg.links.source_datasets).not.toContain("dispatch_energy_prices");
   expect(pkg.links.source_datasets).toContain("dispatch_reserve_prices");
+  expect(claimOf(pkg, "dispatch.sir.max_publish.p36")?.note).toContain(
+    "not complete",
+  );
+});
+
+// Catches: claims written from an invalid silver table.
+test("an invalid silver table gives no claim", async () => {
+  await lake();
+  await silver();
+  const pkg = await build(
+    EPISODE_ID,
+    DAY,
+    completenessView([["dispatch_energy_prices", DAY, "invalid"]]),
+  );
+  expect(
+    pkg.completeness.find((entry) => entry.table === "dispatch_energy_prices")
+      ?.status,
+  ).toBe("invalid");
+  expect(pkg.context.dispatch_peak.energy).toBeNull();
+  expect(pkg.claims.some((c) => c.id.startsWith("dispatch.energy."))).toBe(
+    false,
+  );
+});
+
+// Catches: a derived claim that looks clean when its input carries the incomplete note.
+test("derived claims carry the incomplete note of their inputs", async () => {
+  await lake({ incomplete: ["generation_by_fuel_period"] });
+  const pkg = await build();
+  expect(claimOf(pkg, "generation.thermal_ramp.NI")?.note).toContain(
+    "not complete",
+  );
+  expect(claimOf(pkg, "price.OTA2201.p36")?.note).toBeUndefined();
+});
+
+// Catches: the gas peakers dropped by a plain top-N cut.
+test("North Island thermal plants are listed beyond the top ten", async () => {
+  await lake();
+  const pkg = await build();
+  expect(Object.keys(pkg.context.generation_by_plant)).toContain(
+    "SFD/stratford",
+  );
 });

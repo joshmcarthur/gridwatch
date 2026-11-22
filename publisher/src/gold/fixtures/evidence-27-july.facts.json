@@ -1039,7 +1039,7 @@
     },
     {
       "fact_id": "plant.junction_road.p36",
-      "claim_id_expected": "generation.plant.JRD/junction_road.p36",
+      "claim_id_expected": "generation.plant.JRD/junctionroad.p36",
       "value": 90.3,
       "unit": "MW",
       "write_up_query": "Q11e",
@@ -1048,7 +1048,7 @@
     },
     {
       "fact_id": "plant.mckee.p36",
-      "claim_id_expected": "generation.plant.MCK/mckee.p36",
+      "claim_id_expected": "generation.plant.MKE/mckee.p36",
       "value": 83.8,
       "unit": "MW",
       "write_up_query": "Q11e",
@@ -1115,7 +1115,7 @@
       "unit": "MW",
       "write_up_query": "Q11e",
       "status": "gap",
-      "gap_reason": "Outside the top 10 plants by MW in the peak period (the package lists 10 plants). Present in the fuel claim for battery only as a fuel total."
+      "gap_reason": "A battery, not a thermal plant, and outside the top 10 plants by MW in the peak period. It is in the battery fuel total only."
     },
     {
       "fact_id": "plant.whirinaki.p36",
@@ -1124,7 +1124,7 @@
       "unit": "MW",
       "write_up_query": "Q11e",
       "status": "gap",
-      "gap_reason": "Outside the top 10 plants by MW in the peak period."
+      "gap_reason": "Not a thermal plant (fuel other) and outside the top 10 plants by MW in the peak period."
     },
     {
       "fact_id": "plant.whirinaki.p35_p37",
@@ -1133,7 +1133,7 @@
       "unit": "MW",
       "write_up_query": "Q11b",
       "status": "gap",
-      "gap_reason": "Outside the top 10 plants by MW in the peak period."
+      "gap_reason": "Not a thermal plant (fuel other) and outside the top 10 plants by MW in the peak period."
     },
     {
       "fact_id": "plant.huntly5.no_row",

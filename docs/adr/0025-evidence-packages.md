@@ -39,7 +39,9 @@ Completeness of a gold input: the partition is present and its `inputs_complete`
 
 ### Window and peak
 
-The window is the episode span, 4 periods before and 2 after, clamped to the periods of the day (46, 48 or 50). The peak period is the period inside the episode with the highest period price at a reference node (ties take the first). Claims about a series are made for the episode's first period and the peak period.
+The window is the episode span, 4 periods before and 2 after, clamped to the periods of the day (46, 48 or 50). The peak period is the period inside the episode with the highest period price at a reference node (ties take the first). Claims about a series are made for the episode's first period and the peak period. If `price_periods` is missing, the peak falls back to the episode's first period, and `completeness` shows the table as `missing`.
+
+Plants are listed from the peak period: the top 10 by average MW, the plants named by the episode, and every North Island plant whose fuel is coal/gas or gas. An episode plant with no row in the peak period is named in `limits`.
 
 ### Claims
 
@@ -80,3 +82,4 @@ Each has a default. The default is what the code does now.
 4. Is the claim id scheme right? Default: yes. #40 will key on it, so a change later is costly.
 5. Window (4 before, 2 after) and the output path `<gold>/evidence/<date>/<episode_id>.json`, not published? Default: yes.
 6. Does the real-lake check block the merge? Default: no, the PR records what was run.
+7. Which plants does the package list? Default: top 10 by MW, the episode's plants and North Island thermal plants. A top 10 alone dropped the gas peakers on the real lake.

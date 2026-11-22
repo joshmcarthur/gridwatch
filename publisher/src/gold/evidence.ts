@@ -53,7 +53,7 @@ export const EVIDENCE_CONFIG = {
   periodsBefore: 4,
   /** Periods after the episode end that the window holds (clamped to the last period). */
   periodsAfter: 2,
-  /** Plants listed from the peak period, by average MW. */
+  /** Plants listed from the peak period: the top N by average MW, the episode's plants and North Island thermal plants. */
   topPlants: 10,
   /** The thermal ramp starts this many periods before the peak (not before the window). */
   rampPeriods: 4,
@@ -324,6 +324,120 @@ export interface BuildEvidenceOptions {
   date: string;
 }
 
+const INCOMPLETE_NOTE =
+  "A source row has inputs_complete = false, or its table is not complete.";
+
+type Query = (sql: string) => Promise<Row[]>;
+
+/** Every table the builder reads gets one completeness entry, present or not. */
+async function registerInputs(options: BuildEvidenceOptions, query: Query) {
+  const { goldDir, silverDir, completeness, date } = options;
+  const uses = new Map<string, Use>();
+  for (const table of GOLD_TABLES) {
+    const abs = goldPartitionPath(goldDir, table, date);
+    const entry: Use = {
+      layer: "gold",
+      table,
+      path: relativePath("gold", table, date),
+      abs,
+      status: "missing",
+    };
+    if (existsSync(abs)) {
+      const [counts] = await query(
+        `SELECT count(*) FILTER (WHERE NOT inputs_complete) AS incomplete
+           FROM read_parquet(${lit(abs)})`,
+      );
+      entry.status = Number(counts?.incomplete) === 0 ? "complete" : "partial";
+      if (entry.status === "partial")
+        entry.detail = `${counts?.incomplete} row(s) have inputs_complete = false`;
+    }
+    uses.set(table, entry);
+  }
+  for (const { table, dataset } of SILVER_DATE_TABLES) {
+    const abs = silverPartitionPath(silverDir, table, date);
+    uses.set(table, {
+      layer: "silver",
+      table,
+      path: relativePath("silver", table, date),
+      abs,
+      status: existsSync(abs)
+        ? (completeness.get(completenessKey(dataset, date))?.status ??
+          "missing")
+        : "missing",
+    });
+  }
+  for (const table of SILVER_SNAPSHOT_TABLES) {
+    const day = snapshotDate(silverDir, table, date);
+    uses.set(table, {
+      layer: "silver",
+      table,
+      path: `silver/${table}/snapshot_date=${day ?? date}/data.parquet`,
+      abs:
+        day === undefined
+          ? ""
+          : join(silverDir, table, `snapshot_date=${day}`, "data.parquet"),
+      status: day === undefined ? "missing" : "complete",
+      ...(day === undefined ? {} : { detail: `snapshot ${day}` }),
+    });
+  }
+  const use = (table: string): Use => {
+    const found = uses.get(table);
+    if (!found) throw new Error(`table ${table} is not registered`);
+    return found;
+  };
+  const from = (table: string) => `read_parquet(${lit(use(table).abs)})`;
+  // invalid is not read: a table is present when it is complete or partial.
+  const present = (table: string) => {
+    const { status } = use(table);
+    return status === "complete" || status === "partial";
+  };
+  return { uses, use, from, present };
+}
+
+/** The episode row. Throws when the date has no episodes partition or the id is not in it. */
+async function loadEpisode(
+  options: BuildEvidenceOptions,
+  query: Query,
+  from: (table: string) => string,
+  present: (table: string) => boolean,
+): Promise<EvidenceEpisode> {
+  const { episodeId, date } = options;
+  if (!present("episodes"))
+    throw new Error(`no episodes partition for ${date}`);
+  const [episodeRow] = await query(
+    `SELECT episode_id, seed_observation_id, trading_date::VARCHAR AS trading_date,
+         start_trading_period, end_trading_period, period_count,
+         event_start_utc, event_end_utc, member_observation_ids, member_count,
+         observation_types, subjects, islands, plant_ids, severity, grouping_reason,
+         inputs_complete
+       FROM ${from("episodes")} WHERE episode_id = ${lit(episodeId)}`,
+  );
+  if (!episodeRow)
+    throw new Error(`episode ${episodeId} is not in the episodes of ${date}`);
+  const strings = (value: unknown): string[] =>
+    Array.isArray(value) ? value.map(String) : [];
+  const episode: EvidenceEpisode = {
+    episode_id: String(episodeRow.episode_id),
+    seed_observation_id: String(episodeRow.seed_observation_id),
+    trading_date: String(episodeRow.trading_date),
+    start_trading_period: Number(episodeRow.start_trading_period),
+    end_trading_period: Number(episodeRow.end_trading_period),
+    period_count: Number(episodeRow.period_count),
+    event_start_utc: asIso(episodeRow.event_start_utc),
+    event_end_utc: asIso(episodeRow.event_end_utc),
+    member_observation_ids: strings(episodeRow.member_observation_ids),
+    member_count: Number(episodeRow.member_count),
+    observation_types: strings(episodeRow.observation_types),
+    subjects: String(episodeRow.subjects),
+    islands: strings(episodeRow.islands),
+    plant_ids: strings(episodeRow.plant_ids),
+    severity: round(Number(episodeRow.severity)),
+    grouping_reason: String(episodeRow.grouping_reason),
+    inputs_complete: Boolean(episodeRow.inputs_complete),
+  };
+  return episode;
+}
+
 /**
  * Build the evidence package of one episode. Throws when the date has no episodes partition or
  * the id is not in it. A table that is absent gives a `missing` entry in `completeness` and no
@@ -332,108 +446,18 @@ export interface BuildEvidenceOptions {
 export async function buildEvidencePackage(
   options: BuildEvidenceOptions,
 ): Promise<EvidencePackage> {
-  const { goldDir, silverDir, completeness, episodeId, date } = options;
+  const { date } = options;
   const periodsInDay = periodsInTradingDate(date);
 
   const connection = await (await DuckDBInstance.create(":memory:")).connect();
   try {
     await connection.run("SET TimeZone = 'UTC'");
     await connection.run("SET threads = 1");
-    const query = async (sql: string): Promise<Row[]> =>
+    const query: Query = async (sql) =>
       (await connection.runAndReadAll(sql)).getRowObjectsJson() as Row[];
 
-    // Every table the builder reads gets one completeness entry, present or not.
-    const uses = new Map<string, Use>();
-    for (const table of GOLD_TABLES) {
-      const abs = goldPartitionPath(goldDir, table, date);
-      const entry: Use = {
-        layer: "gold",
-        table,
-        path: relativePath("gold", table, date),
-        abs,
-        status: "missing",
-      };
-      if (existsSync(abs)) {
-        const [counts] = await query(
-          `SELECT count(*) FILTER (WHERE NOT inputs_complete) AS incomplete
-           FROM read_parquet(${lit(abs)})`,
-        );
-        entry.status =
-          Number(counts?.incomplete) === 0 ? "complete" : "partial";
-        if (entry.status === "partial")
-          entry.detail = `${counts?.incomplete} row(s) have inputs_complete = false`;
-      }
-      uses.set(table, entry);
-    }
-    for (const { table, dataset } of SILVER_DATE_TABLES) {
-      const abs = silverPartitionPath(silverDir, table, date);
-      uses.set(table, {
-        layer: "silver",
-        table,
-        path: relativePath("silver", table, date),
-        abs,
-        status: existsSync(abs)
-          ? (completeness.get(completenessKey(dataset, date))?.status ??
-            "missing")
-          : "missing",
-      });
-    }
-    for (const table of SILVER_SNAPSHOT_TABLES) {
-      const day = snapshotDate(silverDir, table, date);
-      uses.set(table, {
-        layer: "silver",
-        table,
-        path: `silver/${table}/snapshot_date=${day ?? date}/data.parquet`,
-        abs:
-          day === undefined
-            ? ""
-            : join(silverDir, table, `snapshot_date=${day}`, "data.parquet"),
-        status: day === undefined ? "missing" : "complete",
-        ...(day === undefined ? {} : { detail: `snapshot ${day}` }),
-      });
-    }
-    const use = (table: string): Use => {
-      const found = uses.get(table);
-      if (!found) throw new Error(`table ${table} is not registered`);
-      return found;
-    };
-    const from = (table: string) => `read_parquet(${lit(use(table).abs)})`;
-    const present = (table: string) => use(table).status !== "missing";
-
-    // The episode.
-    if (!present("episodes"))
-      throw new Error(`no episodes partition for ${date}`);
-    const [episodeRow] = await query(
-      `SELECT episode_id, seed_observation_id, trading_date::VARCHAR AS trading_date,
-         start_trading_period, end_trading_period, period_count,
-         event_start_utc, event_end_utc, member_observation_ids, member_count,
-         observation_types, subjects, islands, plant_ids, severity, grouping_reason,
-         inputs_complete
-       FROM ${from("episodes")} WHERE episode_id = ${lit(episodeId)}`,
-    );
-    if (!episodeRow)
-      throw new Error(`episode ${episodeId} is not in the episodes of ${date}`);
-    const strings = (value: unknown): string[] =>
-      Array.isArray(value) ? value.map(String) : [];
-    const episode: EvidenceEpisode = {
-      episode_id: String(episodeRow.episode_id),
-      seed_observation_id: String(episodeRow.seed_observation_id),
-      trading_date: String(episodeRow.trading_date),
-      start_trading_period: Number(episodeRow.start_trading_period),
-      end_trading_period: Number(episodeRow.end_trading_period),
-      period_count: Number(episodeRow.period_count),
-      event_start_utc: asIso(episodeRow.event_start_utc),
-      event_end_utc: asIso(episodeRow.event_end_utc),
-      member_observation_ids: strings(episodeRow.member_observation_ids),
-      member_count: Number(episodeRow.member_count),
-      observation_types: strings(episodeRow.observation_types),
-      subjects: String(episodeRow.subjects),
-      islands: strings(episodeRow.islands),
-      plant_ids: strings(episodeRow.plant_ids),
-      severity: round(Number(episodeRow.severity)),
-      grouping_reason: String(episodeRow.grouping_reason),
-      inputs_complete: Boolean(episodeRow.inputs_complete),
-    };
+    const { uses, use, from, present } = await registerInputs(options, query);
+    const episode = await loadEpisode(options, query, from, present);
 
     // The window, and the peak: the episode period with the highest reference-node price.
     const first = Math.max(
@@ -491,11 +515,18 @@ export async function buildEvidencePackage(
       if (claims.some((existing) => existing.id === input.id))
         throw new Error(`duplicate claim id ${input.id}`);
       const table = use(input.table);
+      const dependencies = (input.dependsOn ?? []).map((id) =>
+        claims.find((existing) => existing.id === id),
+      );
+      const incomplete =
+        input.rowComplete === false ||
+        table.status !== "complete" ||
+        dependencies.some((dependency) =>
+          dependency?.note?.includes(INCOMPLETE_NOTE),
+        );
       const notes = [
         input.note,
-        input.rowComplete === false
-          ? "The source row has inputs_complete = false."
-          : undefined,
+        incomplete ? INCOMPLETE_NOTE : undefined,
       ].filter((text): text is string => text !== undefined);
       claims.push({
         id: input.id,
@@ -604,7 +635,15 @@ export async function buildEvidencePackage(
       reference,
       completeness: entries,
       claims,
-      limits: EVIDENCE_LIMITS,
+      limits: [
+        ...EVIDENCE_LIMITS,
+        ...episode.plant_ids
+          .filter((id) => !(id in generation.generation_by_plant))
+          .map((id) => ({
+            issue: 38,
+            text: `Episode plant ${id} has no row in the peak period and is not listed.`,
+          })),
+      ],
       links: {
         daily_page: `/${date.slice(0, 4)}/${date.slice(5, 7)}/${date.slice(8, 10)}/`,
         day_json: `gold/site/days/${date}.json`,
