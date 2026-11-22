@@ -47,6 +47,16 @@ docker compose run --rm collector && docker compose run --rm publisher && docker
 
 The jobs run as `node` (uid 1000) in the image. Files they write under `data/` and `site-out/` are owned by uid 1000. `docker compose up` starts collector and publisher together, and the nginx `site` service. It does not run `site-build` (`site-build` is on the `publish` profile). Use the `run` chain above for the daily path.
 
+Local `docker compose run` builds the image from the `Dockerfile`. On the home server, pull a released image from GitHub Container Registry instead of rebuilding:
+
+```bash
+echo <github-token-with-read:packages> | docker login ghcr.io -u USERNAME --password-stdin
+GRIDWATCH_IMAGE_TAG=0.1.0 docker compose pull
+GRIDWATCH_IMAGE_TAG=0.1.0 docker compose run --no-build --rm collector
+```
+
+`--no-build` uses the pulled image instead of rebuilding from the local `Dockerfile`. Omit `GRIDWATCH_IMAGE_TAG` to use `latest`. See [Releases](#releases).
+
 - **First run.** Each dataset backfills the last 12 months, computed from the run date. This is about 7 GB and about 1.2 hours ([`docs/sources.md`](docs/sources.md) section 4). Make sure the disk has room.
 - **Later runs.** The collector fetches the trailing 5 days, and any date or month of the 12-month window that it does not hold (a failed day, or a gap). The monthly datasets (Generation_MD and HVDC_Flows) are checked again for the last 3 months. The publisher publishes the days that are new or whose bronze file changed. A run with nothing new changes nothing.
 - **A range.** `--from YYYY-MM-DD --to YYYY-MM-DD` replaces the default range. `--dataset <id>` limits the run (repeat it for more). The publisher also takes `--force` to publish up-to-date days again. Older data is never deleted.
@@ -61,6 +71,21 @@ docker compose run --rm collector --help
 The rules for each kind of dataset are in [ADR-0009](docs/adr/0009-runner-default-mode.md).
 
 Architecture decisions are in [`docs/adr/`](docs/adr/). Copy `0000-template.md` for a new one.
+
+## Releases
+
+Merges to `main` with [Conventional Commits](https://www.conventionalcommits.org/) titles (`feat:`, `fix:`, and so on) are picked up by [release-please](https://github.com/googleapis/release-please). Squash-merge PR titles become the commit message, so title the PR that way. release-please opens a release PR that bumps the version and changelog; merging that PR creates a GitHub release and tag (for example `v0.1.0`).
+
+Publishing a GitHub release triggers the **Publish Docker image** workflow, which builds the `Dockerfile` and pushes to GitHub Container Registry:
+
+```text
+ghcr.io/joshmcarthur/gridwatch:<version>
+ghcr.io/joshmcarthur/gridwatch:latest
+```
+
+The image repository is private by default. In GitHub, open **Packages → gridwatch → Package settings** and grant your account access before pulling on the host. For a public image, change the package visibility there.
+
+To publish manually without a release, run the **Publish Docker image** workflow from the Actions tab and supply a tag.
 
 ## How work is tracked
 
