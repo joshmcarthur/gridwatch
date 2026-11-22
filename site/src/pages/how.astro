@@ -11,12 +11,15 @@ import Layout from "../layouts/Layout.astro";
       <h1>How we do this</h1>
       <p>
         The numbers on this site come from files the Electricity Authority
-        publishes. The Authority is the public body that runs New Zealand's
-        wholesale electricity market: the trading layer between power stations
-        and the retailers who send you a bill. It puts those files on a
-        catalogue called Electricity Market Information, or EMI, and on a public
-        file store behind that catalogue. Gridwatch downloads the files from
-        that store.
+        publishes. The Authority is the independent public body that regulates
+        New Zealand's electricity market and sets its rules. Transpower is the
+        system operator, the organisation that keeps the high-voltage network
+        working from minute to minute. This site is separate from both.
+      </p>
+      <p>
+        The files sit on a catalogue the Authority calls Electricity Market
+        Information, or EMI, and on a public file store behind that catalogue.
+        Gridwatch downloads the files from that store.
       </p>
     </div>
 
@@ -42,8 +45,10 @@ import Layout from "../layouts/Layout.astro";
               <strong>Dispatch energy prices</strong>
               <p>
                 The wholesale price at each named place on the grid, in dollars
-                per megawatt-hour. One file per trading day, which is a calendar
-                day in New Zealand time.
+                per megawatt-hour. Dispatch is the market's word for the prices
+                set as the grid is run. One megawatt-hour is 1,000
+                kilowatt-hours, the same kWh unit as a line on a bill. One file
+                per trading day, which is a calendar day in New Zealand time.
               </p>
             </li>
             <li>
@@ -70,23 +75,27 @@ import Layout from "../layouts/Layout.astro";
             <li>
               <strong>Dispatch reserve prices</strong>
               <p>
-                What the market paid for spare capacity, in case a plant trips.
-                Downloaded and tidied, but not on the daily pages yet.
+                Reserve is spare generating capacity, held in case a plant
+                trips. These files are the prices paid for that spare capacity
+                as the grid is run. Downloaded and tidied, but not on the daily
+                pages yet.
               </p>
             </li>
             <li>
               <strong>Nodal prices and volumes</strong>
               <p>
-                Load and generation at each place on the grid, in five-minute
-                slices. Downloaded and tidied. The pages use dispatch energy
-                prices for the price at a place, not this file.
+                A node is a named place on the grid. This file has load and
+                generation at each node, in five-minute slices. Downloaded and
+                tidied. The pages use dispatch energy prices for the price at a
+                place, not this file.
               </p>
             </li>
             <li>
               <strong>Cleared offers</strong>
               <p>
                 How much each plant was accepted to generate or to hold as
-                reserve. Downloaded and tidied, not shown yet.
+                reserve. Cleared means the market took that part of the plant's
+                offer. Downloaded and tidied, not shown yet.
               </p>
             </li>
           </ul>
@@ -98,9 +107,7 @@ import Layout from "../layouts/Layout.astro";
       <h2>What happens to the files</h2>
       <p>
         After a trading day finishes, Gridwatch downloads yesterday's files,
-        tidies them, and builds ordinary web pages from a day that has already
-        ended. There is no live feed, so a price spike that is still going on
-        won't be here yet.
+        tidies them, and builds ordinary web pages from them.
       </p>
       <p>
         The work has three stages, labelled bronze, silver, and gold. Those
@@ -174,8 +181,6 @@ import Layout from "../layouts/Layout.astro";
           Gold is built from silver, not from the original spreadsheets. The
           website reads only the gold files made for it: one per trading day,
           in a folder called gold/site, plus a short index of which days exist.
-          Those files hold generation and prices for a day that has already
-          finished.
         </p>
       </section>
     </div>
@@ -184,10 +189,7 @@ import Layout from "../layouts/Layout.astro";
       <p>
         Once a day, after the Authority has put yesterday's files up (usually
         the next morning), Gridwatch rebuilds the pages from those gold files.
-      </p>
-      <p>
-        Gridwatch stops at what already happened. Tomorrow's prices aren't in
-        these files.
+        Tomorrow's prices aren't in these files.
       </p>
     </div>
   </article>
