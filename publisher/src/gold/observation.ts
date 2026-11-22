@@ -150,8 +150,6 @@ export interface RunTableOptions {
   lowType: string;
 }
 
-type BaselineMode = "period" | "all";
-
 /**
  * The shared rule of the run detectors (ADR-0019). The detector first makes two temp tables:
  * `series(subject_id, trading_date, trading_period, event_start_utc, event_end_utc, value,
@@ -174,32 +172,17 @@ export async function createRunTables(
   { config, date, highType, lowType }: RunTableOptions,
 ): Promise<void> {
   const baselineStart = shiftDate(date, -config.baselineWindowDays);
-  const baselineMode: BaselineMode =
-    config.baselineByTradingPeriod === true ? "period" : "all";
-  switch (baselineMode) {
-    case "period":
-      await createPeriodMatchedRunTables(connection, {
-        config,
-        date,
-        highType,
-        lowType,
-        baselineStart,
-      });
-      return;
-    case "all":
-      await createPooledRunTables(connection, {
-        config,
-        date,
-        highType,
-        lowType,
-        baselineStart,
-      });
-      return;
-    default: {
-      const unreachable: never = baselineMode;
-      return unreachable;
-    }
-  }
+  const create =
+    config.baselineByTradingPeriod === true
+      ? createPeriodMatchedRunTables
+      : createPooledRunTables;
+  await create(connection, {
+    config,
+    date,
+    highType,
+    lowType,
+    baselineStart,
+  });
 }
 
 const thresholdSelect = (config: RunDetectorConfig, readySql: string) =>
