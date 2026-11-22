@@ -237,19 +237,38 @@ test("coverageSentence says when places have no coordinates", () => {
   expect(coverageSentence(empty)).toContain("None of the 1 named places");
 });
 
-test("the committed fixture day plots only POCs that have coordinates", () => {
+test("the committed fixture day plots POCs that have coordinates and lists the rest", () => {
   const view = nodalMapView(fixture);
   if (!view) throw new Error("expected the fixture map");
   expect(view.periods).toHaveLength(46);
-  expect(view.pocs.map((poc) => poc.point_of_connection).sort()).toEqual([
-    "ABY0111",
-    "AKL0331",
-    "ALB0331",
-  ]);
+  expect(view.pocs).toHaveLength(220);
   expect(view.unlocated.map((poc) => poc.point_of_connection).sort()).toEqual([
     "BEN2201",
+    "BPE2201",
+    "DOB0661",
+    "HAM2201",
+    "HAY1101",
     "HAY2201",
+    "HEN2201",
+    "HRP2201",
+    "HTU0331",
+    "HWB2201",
+    "INV2201",
+    "INV2202",
+    "ISL2201",
+    "JRD1101",
+    "KIK2201",
+    "KIW2201",
+    "MDN2201",
+    "NWD0661",
+    "OHG1101",
     "OTA2201",
+    "RDF2201",
+    "STK2201",
+    "TAB0331",
+    "TAB2201",
+    "TRK2201",
+    "WTK2201",
   ]);
   expect(view.pocs.every((poc) => poc.price.length === 46)).toBe(true);
 });
