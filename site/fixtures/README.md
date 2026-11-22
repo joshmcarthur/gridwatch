@@ -11,4 +11,4 @@ The site builds these files when `DATA_ROOT/gold/site/index.json` is missing. Th
 
 Each day has a full fuel mix, real Otahuhu / Haywards / Benmore prices, and a complete energy-balance Sankey. 27 July keeps that day's gold episodes and the Unreviewed event. The other three days may have an empty episode list: the 28-day detector window is not in this sample.
 
-To refresh, collect and publish those dates into a local `DATA_ROOT`, then copy only the complete day files and rewrite `index.json` to list those days. Keep the Unreviewed event on 27 July from this sample; do not invent a new event object. Do not run `UPDATE_SITE_FIXTURES=1`; that updates the exporter lock, not this directory.
+To refresh, collect and publish those dates into a local `DATA_ROOT`, then copy only the complete day files and rewrite `index.json` to list those days. If you refresh 27 July from gold, copy the day file then put this Unreviewed event back. Do not write a new one. Do not run `UPDATE_SITE_FIXTURES=1`; that updates the exporter lock, not this directory.

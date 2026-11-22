@@ -73,7 +73,7 @@ Every number quoted from that evening must match the reconstruction (period 36, 
 
 Do not copy the whole reconstruction into the explainer. Huntly outages, the 85-second $21,000 publish, reserve prices, and SPD cases belong on an event page, not here.
 
-The event page for this evening is `/2026/07/27/events/394f75a3bfa948a3/`, linked from section 5 of the nodal-pricing page.
+Section 5 of the nodal-pricing page links `/2026/07/27/events/394f75a3bfa948a3/`.
 
 ## Out of scope
 
