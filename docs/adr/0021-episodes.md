@@ -104,7 +104,7 @@ Grouping always stays on one trading date, every observation is in one episode (
 
 ### Generation and demand observations ([#180](https://github.com/joshmcarthur/gridwatch/issues/180))
 
-The generation-change and demand-deviation detectors are not episode inputs in v1. Join rules that name them stay in the config and do nothing while the builder omits those sentinels. `ANALYSIS_VERSION` stays 1: grouping and the input list do not change.
+The generation-change and demand-deviation detectors are not episode inputs in v1. Join rules that name them stay in the config and do nothing while the builder omits those sentinels. When [#180](https://github.com/joshmcarthur/gridwatch/issues/180) shipped, `ANALYSIS_VERSION` stayed 1: grouping and the input list did not change. [#183](https://github.com/joshmcarthur/gridwatch/issues/183) later bumped it to 2 when unused flags were removed.
 
 Why they are not members. Plant `generation_low` and fuel `generation_low` are island-wide in the join rules. Taking them as members would glue unrelated plants and fuels into one blob, and into any overlapping `price_high` episode. That would change seeds, member arrays and episode ids. `generation_high` has no partner. `demand_low` has no partner. National `NZ` demand has a null island and cannot join on island.
 
