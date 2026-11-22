@@ -7,7 +7,8 @@ COPY --chown=node:node site/package.json site/
 RUN npm ci --omit=dev
 COPY collector collector
 COPY publisher publisher
+COPY updater updater
 COPY --chown=node:node site site
-RUN mkdir /data && chown node:node /data
+RUN mkdir /data /app/site-out && chown node:node /data /app/site-out
 ENV DATA_ROOT=/data
 USER node
