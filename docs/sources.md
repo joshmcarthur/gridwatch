@@ -363,13 +363,13 @@ Catalogue: [EMI RTD](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPr
 |---|---|
 | Pattern | One ZIP per RTD case. All cases for a calendar day in one folder. Published as a batch the next morning ([RTD page](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/CaseFiles/RTD)). |
 | Count and size | 29 Oct 2026: **434** ZIPs, 260–272 KB each, **114.4 MB** for the day (measured, listing). About 250 cases/day is the page's typical figure; this day was higher. |
-| 12-month size | About **42 GB** raw if every RTD ZIP is kept (365 × 114 MB). Unknown whether every day is 434 cases. |
+| 12-month size | About **27 GB** raw if every RTD ZIP is kept. The 434-case day is high; a typical day is ~75 MB (section 11.3). |
 | Contents | A ZIP is 16 text files. The solved case is `*.SPDSOLVED` (~714 KB uncompressed). Other files are network, market, period, logs, SFT check. |
 | Constraint rows | `I,SOLUTION,CONSTRAINT` then `D,SOLUTION,CONSTRAINT` rows. Header includes `CONSTRAINTNAME, CONSTRAINTTYPE, CONSTRAINTVALUE, LOWERLIMIT, UPPERLIMIT, LOWERMARGINALPRICE, UPPERMARGINALPRICE` (measured). Types `BrCnst` and `MnCnst`. 35 constraint rows in the 00:00 29 Oct 2026 case. Both marginal prices were 0.00000 (nothing binding at midnight). |
 | Cadence | Indeterminate; typically ~5-minute RTD. Count per day varies. |
 | Licence | Site content is CC BY 4.0 (section 5); no dataset-level exception found. |
 
-Sibling folders: `CaseFiles/PRSS/` (fallback prices when RTD is missing), `CaseFiles/RTDP/` (scarcity), `CaseFiles/WDS/` (weekly dispatch, static Jan 2024–Oct 2026 per the hub page). Not opened.
+Sibling folders (`PRSS`, `RTDP`, `WDS`) are measured in section 11.1.
 
 **vSPD GDX.** `Datasets/Wholesale/DispatchAndPricing/GDX/<yyyy>/Pricing_yyyymmdd.gdx`, about **40 MB per day** (measured Jan 2026 files, 36–43 MB). Binary GAMS. About **15 GB** for 12 months. Input to vSPD, not a constraint extract. Needs a GAMS/vSPD reader. Not fetched beyond the listing.
 
@@ -385,7 +385,7 @@ Sibling folders: `CaseFiles/PRSS/` (fallback prices when RTD is missing), `CaseF
 
 **Do not add a collector for BindingConstraints or for every RTD case.** The CSV extract is outside the 12-month window. A full RTD backfill is tens of gigabytes and contradicts the brief's "selectively" rule.
 
-**Do add a targeted RTD read on [#44](https://github.com/joshmcarthur/gridwatch/issues/44), after the owner agrees:** for a flagged period (price separation, high price), fetch that day's RTD folder, pick the case that covers the period, and read `SOLUTION,CONSTRAINT` rows whose `LOWERMARGINALPRICE` or `UPPERMARGINALPRICE` is not zero. Store the constraint name, type, value, limits and shadow price next to the observation. One interesting day is ~114 MB, not 42 GB.
+**Do add a targeted RTD read on [#44](https://github.com/joshmcarthur/gridwatch/issues/44), after the owner agrees:** for a flagged period (price separation, high price), fetch the one ZIP named by the `CaseID` on the row for that period (section 11.5), and read `SOLUTION,CONSTRAINT` rows whose `LOWERMARGINALPRICE` or `UPPERMARGINALPRICE` is not zero. Store the constraint name, type, value, limits and shadow price next to the observation. One interesting interval is ~264 KB, not 27 GB.
 
 **Do not** treat island residuals, HVDC gold, or nodal spreads as a constraint dataset. They are evidence that a constraint may have bound; they are not the constraint.
 
