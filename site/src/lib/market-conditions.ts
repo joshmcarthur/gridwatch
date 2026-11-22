@@ -51,10 +51,13 @@ export interface LatestMarketUpdate {
   date: string | null;
   href: string | null;
   dateLabel: string;
-  headlines: string[];
-  generationLag: string | null;
-  generationDate: string | null;
-  generationHref: string | null;
+  summary: string;
+  generationLag: GenerationLag | null;
+}
+
+export interface GenerationLag {
+  text: string;
+  latest: { label: string; href: string } | null;
 }
 
 export interface RecentDay {
@@ -133,38 +136,41 @@ export function latestMarketUpdate(
       date: null,
       href: null,
       dateLabel: "No complete prices day yet",
-      headlines: [
-        "Wholesale prices (what generators and retailers paid each other, not the rate on a household bill) have no complete day on this site yet.",
-      ],
+      summary: "No day on this site has complete wholesale prices yet.",
       generationLag: null,
-      generationDate: null,
-      generationHref: null,
     };
   }
   const day = loadDay(date);
-  const headlines = [
-    dayHeadline(day).sentence,
-    "Wholesale prices are what generators and retailers paid each other, not the rate on a household bill.",
-  ];
-  const latestGeneration = index.latest_complete_sections.generation;
-  const generationMissing = day.generation.state === "missing";
-  const generationLag = generationMissing
-    ? latestGeneration && latestGeneration !== date
-      ? `Generation numbers for this day are not in yet. The latest complete generation day is ${formatTradingDate(latestGeneration)}.`
-      : "Generation numbers for this day are not in yet."
-    : null;
+  const generationLag = generationLagNote(
+    day,
+    date,
+    index.latest_complete_sections.generation,
+  );
   return {
     date,
     href: dailyPath(date),
     dateLabel: formatTradingDate(date),
-    headlines,
+    summary: dayHeadline(day).sentence,
     generationLag,
-    generationDate:
-      generationMissing && latestGeneration ? latestGeneration : null,
-    generationHref:
-      generationMissing && latestGeneration
-        ? dailyPath(latestGeneration)
-        : null,
+  };
+}
+
+function generationLagNote(
+  day: SiteDay,
+  date: string,
+  latestGeneration: string | null | undefined,
+): GenerationLag | null {
+  if (day.generation.state !== "missing") return null;
+  const text = "Generation numbers for this day are not in yet.";
+  if (!latestGeneration || latestGeneration === date) {
+    return { text, latest: null };
+  }
+  return {
+    text,
+    latest: {
+      label: formatTradingDate(latestGeneration),
+      href: dailyPath(latestGeneration),
+    },
   };
 }
 

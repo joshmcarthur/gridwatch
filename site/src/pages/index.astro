@@ -61,19 +61,22 @@ const episodes = recentEpisodes(index);
         <p>{update.dateLabel}</p>
       )
     }
-    {update.headlines.map((paragraph) => <p>{paragraph}</p>)}
+    <p>{update.summary}</p>
     {
-      update.generationLag && update.generationHref && update.generationDate ? (
+      update.generationLag ? (
         <p>
-          Generation numbers for this day are not in yet. The latest complete
-          generation day is{" "}
-          <a href={update.generationHref}>
-            {formatTradingDate(update.generationDate)}
-          </a>
-          .
+          {update.generationLag.text}
+          {update.generationLag.latest ? (
+            <>
+              {" "}
+              Latest complete generation day:{" "}
+              <a href={update.generationLag.latest.href}>
+                {update.generationLag.latest.label}
+              </a>
+              .
+            </>
+          ) : null}
         </p>
-      ) : update.generationLag ? (
-        <p>{update.generationLag}</p>
       ) : null
     }
     {
