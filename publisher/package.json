@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./site-contract": "./src/site/contract.ts"
+    "./site-contract": "./src/site/contract.ts",
+    "./narrative": "./src/gold/narrative.ts"
   },
   "scripts": {
     "start": "node src/main.ts",

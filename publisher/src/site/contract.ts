@@ -271,6 +271,71 @@ export interface NodalMapSection extends SectionBase {
   unlocated: NodalMapUnlocated[];
 }
 
+/** ADR-0022. Default at publish is `unreviewed`. */
+export type ReviewStatus = "unreviewed" | "reviewed";
+
+/** Brief §7.2. The evidence builder writes `confirmed`; the other two stay for later interpretation. */
+export type ClaimConfidence =
+  | "confirmed"
+  | "strong_evidence"
+  | "possible_explanation";
+
+/** One published event: a ranked candidate whose narrative passed `checkNarrative`. */
+export interface SiteEventClaim {
+  id: string;
+  label: string;
+  value: number | string | boolean;
+  unit: string;
+  confidence: ClaimConfidence;
+  source_kind: "gold" | "silver";
+  source_path: string;
+}
+
+export interface SiteEventWindow {
+  /** Trading periods of the evidence window, not the whole day. */
+  periods: number[];
+  /** Aligned to `periods`. */
+  start_utc: string[];
+  prices: Array<{
+    point_of_connection: string;
+    /** Aligned to `periods`. */
+    price: Array<number | null>;
+  }>;
+  reserves: Array<{
+    reserve_class: ReserveClass;
+    island: Island;
+    /** Aligned to `periods`. */
+    price: Array<number | null>;
+  }>;
+}
+
+export interface SiteEvent {
+  episode_id: string;
+  review_status: ReviewStatus;
+  observation_types: string[];
+  islands: Island[];
+  start_utc: string;
+  end_utc: string;
+  start_trading_period: number;
+  end_trading_period: number;
+  package_id: string;
+  what_happened: string;
+  why: string;
+  what_it_means: string;
+  claims: SiteEventClaim[];
+  daily_page: string;
+  window: SiteEventWindow;
+}
+
+/**
+ * Ranked candidates that have a passing narrative (issue #42, ADR-0022). Optional: absence
+ * means the exporter has not built it. A day with no ranking gold is `missing`. Candidates
+ * without a passing narrative are omitted, not invented.
+ */
+export interface EventsSection extends SectionBase {
+  items: SiteEvent[];
+}
+
 /** An extension point. The v1 exporter never writes one. A consumer treats absence as "not built". */
 export type SiteExtension = { state: SectionState } & Record<string, unknown>;
 
@@ -296,6 +361,8 @@ export interface SiteDay {
   episodes?: EpisodesSection;
   /** Optional. Absence means not built. The exporter writes it on every day, `missing` when gold has no row. */
   nodal_map?: NodalMapSection;
+  /** Optional. Absence means not built. The exporter writes it on every day, `missing` when ranking gold is absent. */
+  events?: EventsSection;
 }
 
 export interface SiteIndexDay {
@@ -314,6 +381,8 @@ export interface SiteIndexDay {
     reserves?: SectionState;
     /** Optional. Nodal price map for the day (ADR-0023). */
     nodal_map?: SectionState;
+    /** Optional. Published events for the day (issue #42). */
+    events?: SectionState;
   };
   /** The held version of the day file (ADR-0014). */
   export_sha256: string;
@@ -337,6 +406,8 @@ export interface SiteIndex {
     reserves?: string | null;
     /** Optional. Latest day whose nodal map section is complete. */
     nodal_map?: string | null;
+    /** Optional. Latest day whose events section is complete. */
+    events?: string | null;
   };
 }
 
@@ -353,12 +424,19 @@ const DATASET_STATES: readonly DatasetState[] = [
 ];
 const ISLANDS: readonly Island[] = ["NI", "SI"];
 const RESERVE_CLASSES: readonly ReserveClass[] = ["FIR", "SIR"];
+const REVIEW_STATUSES: readonly ReviewStatus[] = ["unreviewed", "reviewed"];
+const CLAIM_CONFIDENCES: readonly ClaimConfidence[] = [
+  "confirmed",
+  "strong_evidence",
+  "possible_explanation",
+];
 const EXTENSIONS = [
   "reserves",
   "sankey",
   "observations",
   "episodes",
   "nodal_map",
+  "events",
 ] as const;
 const DAY_LENGTHS = [46, 48, 50];
 
@@ -791,6 +869,83 @@ function checkEpisodes(
   return base.datasets;
 }
 
+function claimValue(value: unknown, path: string): number | string | boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value;
+  return number(value, path);
+}
+
+function checkEventWindow(value: unknown, path: string): void {
+  const window = record(value, path);
+  const periods = integerList(window.periods, `${path}.periods`);
+  const start = texts(window.start_utc, `${path}.start_utc`);
+  if (start.length !== periods.length)
+    fail(`${path}.start_utc`, `expected ${periods.length} entries`);
+  const prices = list(window.prices, `${path}.prices`);
+  prices.forEach((item, i) => {
+    const at = `${path}.prices[${i}]`;
+    const row = record(item, at);
+    text(row.point_of_connection, `${at}.point_of_connection`);
+    nullableNumbers(row.price, periods.length, `${at}.price`);
+  });
+  const reserves = list(window.reserves, `${path}.reserves`);
+  reserves.forEach((item, i) => {
+    const at = `${path}.reserves[${i}]`;
+    const row = record(item, at);
+    oneOf(row.reserve_class, RESERVE_CLASSES, `${at}.reserve_class`);
+    oneOf(row.island, ISLANDS, `${at}.island`);
+    nullableNumbers(row.price, periods.length, `${at}.price`);
+  });
+}
+
+function checkEvents(
+  value: unknown,
+  path: string,
+  periodCount: number,
+): string[] {
+  const section = record(value, path);
+  const base = checkSectionBase(section, path, periodCount);
+  const items = list(section.items, `${path}.items`);
+  checkEmptyWhenMissing(items, base.state, `${path}.items`);
+  items.forEach((item, i) => {
+    const at = `${path}.items[${i}]`;
+    const row = record(item, at);
+    text(row.episode_id, `${at}.episode_id`);
+    oneOf(row.review_status, REVIEW_STATUSES, `${at}.review_status`);
+    texts(row.observation_types, `${at}.observation_types`);
+    const islands = list(row.islands, `${at}.islands`);
+    for (let j = 0; j < islands.length; j++)
+      oneOf(islands[j], ISLANDS, `${at}.islands[${j}]`);
+    text(row.start_utc, `${at}.start_utc`);
+    text(row.end_utc, `${at}.end_utc`);
+    integer(row.start_trading_period, `${at}.start_trading_period`);
+    integer(row.end_trading_period, `${at}.end_trading_period`);
+    text(row.package_id, `${at}.package_id`);
+    text(row.what_happened, `${at}.what_happened`);
+    text(row.why, `${at}.why`);
+    text(row.what_it_means, `${at}.what_it_means`);
+    text(row.daily_page, `${at}.daily_page`);
+    const claims = list(row.claims, `${at}.claims`);
+    claims.forEach((claim, j) => {
+      const claimAt = `${at}.claims[${j}]`;
+      const entry = record(claim, claimAt);
+      text(entry.id, `${claimAt}.id`);
+      text(entry.label, `${claimAt}.label`);
+      claimValue(entry.value, `${claimAt}.value`);
+      text(entry.unit, `${claimAt}.unit`);
+      oneOf(entry.confidence, CLAIM_CONFIDENCES, `${claimAt}.confidence`);
+      oneOf(
+        entry.source_kind,
+        ["gold", "silver"] as const,
+        `${claimAt}.source_kind`,
+      );
+      text(entry.source_path, `${claimAt}.source_path`);
+    });
+    checkEventWindow(row.window, `${at}.window`);
+  });
+  return base.datasets;
+}
+
 /**
  * Throws a `TypeError` with the path of the first field that does not match the contract. The
  * exporter calls it on every day it writes, and the site may call it on every day it reads.
@@ -832,6 +987,9 @@ export function assertSiteDay(value: unknown): asserts value is SiteDay {
         break;
       case "reserves":
         sectionDatasets.push(...checkReserves(day[key], key, periods.length));
+        break;
+      case "events":
+        sectionDatasets.push(...checkEvents(day[key], key, periods.length));
         break;
       case "observations":
         oneOf(record(day[key], key).state, SECTION_STATES, `${key}.state`);
@@ -875,6 +1033,8 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
       oneOf(sections.reserves, SECTION_STATES, `${at}.sections.reserves`);
     if (sections.nodal_map !== undefined)
       oneOf(sections.nodal_map, SECTION_STATES, `${at}.sections.nodal_map`);
+    if (sections.events !== undefined)
+      oneOf(sections.events, SECTION_STATES, `${at}.sections.events`);
     text(day.export_sha256, `${at}.export_sha256`);
   });
   for (const [id, date] of Object.entries(
@@ -895,4 +1055,6 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
     nullable(sections.reserves, text, "latest_complete_sections.reserves");
   if (sections.nodal_map !== undefined)
     nullable(sections.nodal_map, text, "latest_complete_sections.nodal_map");
+  if (sections.events !== undefined)
+    nullable(sections.events, text, "latest_complete_sections.events");
 }
