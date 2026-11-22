@@ -41,6 +41,8 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).not.toMatch(/\bFIR\b/);
     expect(html).not.toMatch(/\bSIR\b/);
     expect(html).toMatch(/household bill/);
+    const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
+    expect(new Set(ids).size).toBe(ids.length);
     expect(html).toMatch(/backup generation/);
     expect(html).toMatch(/Recently detected/);
     expect(html).not.toMatch(/recent events/i);

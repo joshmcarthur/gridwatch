@@ -18,6 +18,8 @@ const moneyFormat = new Intl.NumberFormat("en-NZ", {
 const DATASET_LABELS: Record<string, string> = {
   dispatch_energy_prices:
     "wholesale energy prices (the prices generators and retailers traded at, not a household bill)",
+  dispatch_reserve_prices:
+    "reserve prices (the cost of standing ready to lift or drop generation)",
   generation_md: "generation (what power stations made)",
   entity_mappings: "plant names and locations",
 };
