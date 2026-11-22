@@ -3,7 +3,7 @@ import type {
   SiteDay,
 } from "@gridwatch/publisher/site-contract";
 import { clockLabeller, timeTicks, zonedAt } from "./period-clock.ts";
-import { PRICE_REGIONS } from "./price-regions.ts";
+import { placeLegend, placeName } from "./price-regions.ts";
 
 export const PRICE_MISSING =
   "Wholesale prices for this day are missing, so there is no chart.";
@@ -27,7 +27,7 @@ const money = new Intl.NumberFormat("en-NZ", {
 
 export interface PriceNodeLine {
   poc: string;
-  /** The label from `PRICE_REGIONS`. */
+  /** Place and region, for example `Otahuhu (Upper North Island)`. */
   label: string;
   island: PriceIsland;
   dashed: boolean;
@@ -103,7 +103,7 @@ export function priceChart(day: SiteDay): PriceChart | null {
     const proxyPeriods = new Set(node.proxy_periods);
     return {
       poc: node.point_of_connection,
-      label: PRICE_REGIONS[node.price_region] ?? node.price_region,
+      label: placeLegend(node.point_of_connection, node.price_region),
       island: style.island,
       dashed: style.dashed,
       values,
@@ -206,21 +206,26 @@ export function priceChartSummary(chart: PriceChart): string {
     .map((node) => {
       const plotted = node.values.filter(isNumber);
       if (plotted.length === 0) return null;
-      return `${node.poc} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
+      return `${placeName(node.poc)} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
     })
     .filter((part): part is string => part !== null);
   if (parts.length === 0) return "Period prices for this day are missing.";
   return `Period prices per megawatt-hour: ${parts.join(", ")}.`;
 }
 
+function spreadPlaces(spread: { from: string; to: string }): string {
+  return `${placeName(spread.from)}–${placeName(spread.to)}`;
+}
+
 /** One sentence for the spread chart text alternative. */
 export function priceSpreadSummary(chart: PriceChart): string {
   const parts = chart.plottedSpreads.map((spread) => {
     const plotted = spread.values.filter(isNumber);
-    if (plotted.length === 0) return `${spread.name} has no data`;
-    return `${spread.name} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
+    const label = spreadPlaces(spread);
+    if (plotted.length === 0) return `${label} has no data`;
+    return `${label} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
   });
-  return `Spreads in $/MWh, first node minus second: ${parts.join(", ")}. OTA-BEN is in the table.`;
+  return `Spreads in $/MWh, first place minus second: ${parts.join(", ")}. Otahuhu–Benmore is in the table.`;
 }
 
 /** Three sentences for the daily figures. Highest and lowest are raw row prices, not period averages. */
@@ -238,13 +243,13 @@ export function priceChartDaily(chart: PriceChart): string[] {
   ];
   return lines.flatMap(([heading, pick]) => {
     const values = chart.nodes
-      .map((node) => ({ poc: node.poc, value: pick(node) }))
-      .filter((item): item is { poc: string; value: number } =>
+      .map((node) => ({ place: placeName(node.poc), value: pick(node) }))
+      .filter((item): item is { place: string; value: number } =>
         isNumber(item.value),
       );
     if (values.length === 0) return [];
     const list = values
-      .map((item) => `${item.poc} ${signedMoney(item.value)}`)
+      .map((item) => `${item.place} ${signedMoney(item.value)}`)
       .join(", ");
     return [`${heading}: ${list}, per megawatt-hour.`];
   });

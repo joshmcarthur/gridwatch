@@ -1,4 +1,9 @@
-import type { Island, SiteEpisode } from "@gridwatch/publisher/site-contract";
+import type {
+  Island,
+  SiteDay,
+  SiteEpisode,
+} from "@gridwatch/publisher/site-contract";
+import { clockLabeller12, zonedAt } from "./period-clock.ts";
 
 const TYPE_LABELS: Record<string, string> = {
   price_high: "high wholesale prices",
@@ -56,4 +61,15 @@ export function episodeHeadline(
       ? "overlapped"
       : "showed up";
   return `${body} ${verb}${where}.`;
+}
+
+/** Inclusive start to exclusive end, as `3:00pm–5:30pm`. */
+export function episodeClockRange(
+  episode: Pick<SiteEpisode, "start_utc" | "end_utc">,
+  day: Pick<SiteDay, "periods">,
+): string {
+  const label = clockLabeller12(day);
+  const start = label(zonedAt(episode.start_utc));
+  const end = label(zonedAt(episode.end_utc));
+  return `${start}–${end}`;
 }

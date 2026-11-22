@@ -20,7 +20,7 @@ import Layout from "../layouts/Layout.astro";
       Gridwatch reads those files and makes pages from them for anyone curious
       about how New Zealand's energy market works.
     </p>
-    <h2>The bill and the wholesale market</h2>
+    <h2 id="wholesale">The bill and the wholesale market</h2>
     <p>
       Power stations don't bill households. They offer electricity in bulk into
       a wholesale market, and retailers buy it there. A retailer is the company
@@ -32,6 +32,10 @@ import Layout from "../layouts/Layout.astro";
       contract, and it can move a long way from one slice to the next. A
       household bill is a retail plan, so it doesn't normally jump the same way,
       because most household plans don't pass every wholesale spike through.
+    </p>
+    <p>
+      The files count energy in megawatt-hours. One megawatt-hour is 1,000
+      kilowatt-hours, the same kWh unit as a line on a bill.
     </p>
     <figure class="diagram">
       <figcaption>From power stations to a household bill</figcaption>
@@ -66,7 +70,7 @@ import Layout from "../layouts/Layout.astro";
       Transpower runs the grid, and this site is separate from both. Gridwatch
       reads the EMI files after the day is over.
     </p>
-    <h2>North Island and South Island</h2>
+    <h2 id="islands">North Island and South Island</h2>
     <p>
       A cable under Cook Strait carries power between the North Island and the
       South Island. That link does not make them one market all the time. If the

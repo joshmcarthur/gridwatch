@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { episodeHeadline } from "./episode-copy.ts";
+import { episodeClockRange, episodeHeadline } from "./episode-copy.ts";
 
 test("a scarcity-shaped episode names prices, reserves and the North Island", () => {
   expect(
@@ -33,4 +33,27 @@ test("two islands are named; a singleton does not say overlapped; empty types st
   expect(
     episodeHeadline({ observation_types: [], islands: [], member_count: 0 }),
   ).toBe("An unusual stretch showed up.");
+});
+
+test("episode times are a 12-hour clock range, not trading period numbers", () => {
+  const day = {
+    periods: [
+      { period: 1, start_utc: "2026-05-31T12:00:00Z" },
+      { period: 2, start_utc: "2026-05-31T12:30:00Z" },
+      { period: 33, start_utc: "2026-06-01T04:00:00Z" },
+      { period: 38, start_utc: "2026-06-01T06:30:00Z" },
+    ],
+  };
+  expect(
+    episodeClockRange(
+      { start_utc: "2026-06-01T04:00:00Z", end_utc: "2026-06-01T06:30:00Z" },
+      day,
+    ),
+  ).toBe("4:00pm–6:30pm");
+  expect(
+    episodeClockRange(
+      { start_utc: "2026-05-31T12:00:00Z", end_utc: "2026-05-31T12:30:00Z" },
+      day,
+    ),
+  ).toBe("12:00am–12:30am");
 });

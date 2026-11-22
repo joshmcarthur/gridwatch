@@ -110,21 +110,21 @@ test("daily figures come from the contract summary", () => {
 
 test("the price summary is one exact sentence", () => {
   expect(priceChartSummary(chartOf(fixture))).toBe(
-    "Period prices per megawatt-hour: OTA2201 from $81.00 to $126.00, HAY2201 from $71.00 to $116.00, BEN2201 from $61.00 to $106.00.",
+    "Period prices per megawatt-hour: Otahuhu from $81.00 to $126.00, Haywards from $71.00 to $116.00, Benmore from $61.00 to $106.00.",
   );
 });
 
-test("the spread summary names the drawn spreads and points to the table for OTA-BEN", () => {
+test("the spread summary names the drawn spreads and points to the table for Otahuhu–Benmore", () => {
   expect(priceSpreadSummary(chartOf(fixture))).toBe(
-    "Spreads in $/MWh, first node minus second: OTA-HAY from $10.00 to $10.00, HAY-BEN from $10.00 to $10.00. OTA-BEN is in the table.",
+    "Spreads in $/MWh, first place minus second: Otahuhu–Haywards from $10.00 to $10.00, Haywards–Benmore from $10.00 to $10.00. Otahuhu–Benmore is in the table.",
   );
 });
 
 test("the daily lines label the highest and lowest prices as single prices", () => {
   expect(priceChartDaily(chartOf(fixture))).toEqual([
-    "Average of the period prices for the day: OTA2201 $103.50, HAY2201 $93.50, BEN2201 $83.50, per megawatt-hour.",
-    "Lowest single price published (not a period average): OTA2201 $81.00, HAY2201 $71.00, BEN2201 $61.00, per megawatt-hour.",
-    "Highest single price published (not a period average): OTA2201 $126.00, HAY2201 $116.00, BEN2201 $106.00, per megawatt-hour.",
+    "Average of the period prices for the day: Otahuhu $103.50, Haywards $93.50, Benmore $83.50, per megawatt-hour.",
+    "Lowest single price published (not a period average): Otahuhu $81.00, Haywards $71.00, Benmore $61.00, per megawatt-hour.",
+    "Highest single price published (not a period average): Otahuhu $126.00, Haywards $116.00, Benmore $106.00, per megawatt-hour.",
   ]);
 });
 
@@ -201,7 +201,7 @@ test("a spike inside a period is plotted as the period price, not the daily maxi
   expect(chart.priceDomain[1]).toBe(50.75);
   expect(chart.priceDomain[1]).toBeLessThan(71.24);
   expect(priceChartDaily(chart).join(" ")).toContain(
-    "Highest single price published (not a period average): OTA2201 $50.00, HAY2201 $71.24, BEN2201 $50.00",
+    "Highest single price published (not a period average): Otahuhu $50.00, Haywards $71.24, Benmore $50.00",
   );
 });
 
