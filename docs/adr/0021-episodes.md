@@ -97,10 +97,9 @@ Config values:
 
 | Key | Value | Why |
 | --- | --- | --- |
-| `adjacentPeriodMax` | 2 | Brief dispatch minutes, not hydro weeks. Two unflagged periods (60 minutes) still join a broken run; three do not. |
-| `adjacentGapMinutes` | 60 | The UTC form of `adjacentPeriodMax`. DST-safe. |
+| `adjacentGapMinutes` | 60 | Two unflagged periods (60 minutes) still join a broken run; three do not. Wall-clock minutes, so a DST day does not need period arithmetic. |
 
-Grouping always stays on one trading date, every observation is in one episode (singletons included), and episode severity is the max of members. Those are invariants, not flags. [#183](https://github.com/joshmcarthur/gridwatch/issues/183) removed `sameDateOnly`, `singletonEpisodes` and `episodeSeverity` because nothing used a non-default value.
+Grouping always stays on one trading date, every observation is in one episode (singletons included), and episode severity is the max of members. Those are invariants, not flags. [#183](https://github.com/joshmcarthur/gridwatch/issues/183) removed `sameDateOnly`, `singletonEpisodes`, `episodeSeverity` and unused `adjacentPeriodMax` because nothing read a non-default value.
 
 ### Generation and demand observations ([#180](https://github.com/joshmcarthur/gridwatch/issues/180))
 

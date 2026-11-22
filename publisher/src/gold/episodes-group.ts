@@ -16,12 +16,10 @@ export interface JoinRule {
 }
 
 export interface EpisodeGroupingConfig {
-  adjacentPeriodMax: number;
   adjacentGapMinutes: number;
 }
 
 export const EPISODE_GROUPING_CONFIG: EpisodeGroupingConfig = {
-  adjacentPeriodMax: 2,
   adjacentGapMinutes: 60,
 };
 
