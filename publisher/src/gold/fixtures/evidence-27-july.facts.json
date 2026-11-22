@@ -1,0 +1,1367 @@
+{
+  "source": "docs/events/2026-07-27-north-island-evening-scarcity.md at commit bb4563c (PR #133)",
+  "facts": [
+    {
+      "fact_id": "price.ota.p34",
+      "claim_id_expected": null,
+      "value": 156.25,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.OTA2201.price",
+      "period": 34,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ota.p35",
+      "claim_id_expected": "price.OTA2201.p35",
+      "value": 141.04,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ota.p36",
+      "claim_id_expected": "price.OTA2201.p36",
+      "value": 3296.04,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ota.p37",
+      "claim_id_expected": null,
+      "value": 1311.29,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.OTA2201.price",
+      "period": 37,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ota.p38",
+      "claim_id_expected": null,
+      "value": 1038.33,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.OTA2201.price",
+      "period": 38,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ota.p39",
+      "claim_id_expected": null,
+      "value": 1116.46,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.OTA2201.price",
+      "period": 39,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ota.p40",
+      "claim_id_expected": null,
+      "value": 215.57,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.OTA2201.price",
+      "period": 40,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.hay.p34",
+      "claim_id_expected": null,
+      "value": 130.14,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.HAY2201.price",
+      "period": 34,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.hay.p35",
+      "claim_id_expected": "price.HAY2201.p35",
+      "value": 119.64,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.hay.p36",
+      "claim_id_expected": "price.HAY2201.p36",
+      "value": 2853.43,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.hay.p37",
+      "claim_id_expected": null,
+      "value": 1133.28,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.HAY2201.price",
+      "period": 37,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.hay.p38",
+      "claim_id_expected": null,
+      "value": 892.53,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.HAY2201.price",
+      "period": 38,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.hay.p39",
+      "claim_id_expected": null,
+      "value": 963.99,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.HAY2201.price",
+      "period": 39,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.hay.p40",
+      "claim_id_expected": null,
+      "value": 183.95,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.HAY2201.price",
+      "period": 40,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ben.p34",
+      "claim_id_expected": null,
+      "value": 22.36,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.BEN2201.price",
+      "period": 34,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ben.p35",
+      "claim_id_expected": "price.BEN2201.p35",
+      "value": 54.09,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ben.p36",
+      "claim_id_expected": "price.BEN2201.p36",
+      "value": 571.46,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ben.p37",
+      "claim_id_expected": null,
+      "value": 258.1,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.BEN2201.price",
+      "period": 37,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ben.p38",
+      "claim_id_expected": null,
+      "value": 83.41,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.BEN2201.price",
+      "period": 38,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ben.p39",
+      "claim_id_expected": null,
+      "value": 94.7,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.BEN2201.price",
+      "period": 39,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ben.p40",
+      "claim_id_expected": null,
+      "value": 101.0,
+      "unit": "$/MWh",
+      "write_up_query": "Q3/Q4",
+      "status": "series",
+      "series": "prices.BEN2201.price",
+      "period": 40,
+      "decimals": 2
+    },
+    {
+      "fact_id": "price.ota.p16",
+      "claim_id_expected": null,
+      "value": 1228.29,
+      "unit": "$/MWh",
+      "write_up_query": "Q4",
+      "status": "gap",
+      "gap_reason": "Period 16 is outside the window (episode periods 35 to 40, window 31 to 42). Same-day context, not part of this episode."
+    },
+    {
+      "fact_id": "price_max.ota.p36",
+      "claim_id_expected": "price_max.OTA2201.p36",
+      "value": 20459.18,
+      "unit": "$/MWh",
+      "write_up_query": "Q4/Q7d",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "price_max.ben.p36",
+      "claim_id_expected": "price_max.BEN2201.p36",
+      "value": 9793.96,
+      "unit": "$/MWh",
+      "write_up_query": "Q7",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "day.price_max.ota",
+      "claim_id_expected": "day.price_max.OTA2201",
+      "value": 20459.18,
+      "unit": "$/MWh",
+      "write_up_query": "Q2",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "day.price_mean.ota",
+      "claim_id_expected": "day.price_mean.OTA2201",
+      "value": 248.67,
+      "unit": "$/MWh",
+      "write_up_query": "Q2",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "day.price_mean.hay",
+      "claim_id_expected": "day.price_mean.HAY2201",
+      "value": 214.72,
+      "unit": "$/MWh",
+      "write_up_query": "Q2",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "day.price_mean.ben",
+      "claim_id_expected": "day.price_mean.BEN2201",
+      "value": 70.6,
+      "unit": "$/MWh",
+      "write_up_query": "Q2",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "spread.ota_ben.p36",
+      "claim_id_expected": "spread.OTA2201-BEN2201.p36",
+      "value": 2724.58,
+      "unit": "$/MWh",
+      "write_up_query": "Q5",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "spread.ota_hay.p36",
+      "claim_id_expected": "spread.OTA2201-HAY2201.p36",
+      "value": 442.61,
+      "unit": "$/MWh",
+      "write_up_query": "Q5",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "spread.hay_ben.p36",
+      "claim_id_expected": "spread.HAY2201-BEN2201.p36",
+      "value": 2281.97,
+      "unit": "$/MWh",
+      "write_up_query": "Q5",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "spread.ota_ben.p34",
+      "claim_id_expected": null,
+      "value": 133.89,
+      "unit": "$/MWh",
+      "write_up_query": "Q5b",
+      "status": "series",
+      "series": "spreads.OTA2201-BEN2201",
+      "period": 34,
+      "decimals": 2
+    },
+    {
+      "fact_id": "spread.ota_ben.p37",
+      "claim_id_expected": null,
+      "value": 1053.19,
+      "unit": "$/MWh",
+      "write_up_query": "Q5b",
+      "status": "series",
+      "series": "spreads.OTA2201-BEN2201",
+      "period": 37,
+      "decimals": 2
+    },
+    {
+      "fact_id": "spread.ota_ben.p38",
+      "claim_id_expected": null,
+      "value": 954.92,
+      "unit": "$/MWh",
+      "write_up_query": "Q5b",
+      "status": "series",
+      "series": "spreads.OTA2201-BEN2201",
+      "period": 38,
+      "decimals": 2
+    },
+    {
+      "fact_id": "spread.ota_ben.p39",
+      "claim_id_expected": null,
+      "value": 1021.77,
+      "unit": "$/MWh",
+      "write_up_query": "Q5b",
+      "status": "series",
+      "series": "spreads.OTA2201-BEN2201",
+      "period": 39,
+      "decimals": 2,
+      "tolerance": 0.011
+    },
+    {
+      "fact_id": "distribution.median.p36",
+      "claim_id_expected": "distribution.median.p36",
+      "value": 2918.21,
+      "unit": "$/MWh",
+      "write_up_query": "Q6",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "distribution.max.p36",
+      "claim_id_expected": "distribution.max.p36",
+      "value": 3557.49,
+      "unit": "$/MWh",
+      "write_up_query": "Q6/Q7d",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "distribution.poc_count.p36",
+      "claim_id_expected": "distribution.poc_count.p36",
+      "value": 246,
+      "unit": "count",
+      "write_up_query": "Q6",
+      "status": "claim",
+      "decimals": 0
+    },
+    {
+      "fact_id": "distribution.max_node",
+      "claim_id_expected": null,
+      "value": "MTO0331",
+      "unit": "node",
+      "write_up_query": "Q7d",
+      "status": "gap",
+      "gap_reason": "Gold price_distribution keeps the highest period price, not which point of connection had it."
+    },
+    {
+      "fact_id": "reserve.sir_ni.p36",
+      "claim_id_expected": "reserve.SIR.NI.p36",
+      "value": 2154.45,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve.sir_si.p36",
+      "claim_id_expected": "reserve.SIR.SI.p36",
+      "value": 0,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve.fir_ni.p36",
+      "claim_id_expected": "reserve.FIR.NI.p36",
+      "value": 49.93,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve.fir_si.p36",
+      "claim_id_expected": "reserve.FIR.SI.p36",
+      "value": 0,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve_max.sir_ni.p36",
+      "claim_id_expected": "reserve_max.SIR.NI.p36",
+      "value": 6500.0,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve.sir_ni.p35",
+      "claim_id_expected": "reserve.SIR.NI.p35",
+      "value": 49.78,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve_max.sir_ni.p35",
+      "claim_id_expected": "reserve_max.SIR.NI.p35",
+      "value": 81.14,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve.fir_ni.p35",
+      "claim_id_expected": "reserve.FIR.NI.p35",
+      "value": 7.0,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve.sir_ni.p37",
+      "claim_id_expected": null,
+      "value": 835.13,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "series",
+      "series": "reserves.SIR.NI.price",
+      "period": 37,
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve_max.sir_ni.p37",
+      "claim_id_expected": null,
+      "value": 4375.05,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "series",
+      "series": "reserves.SIR.NI.max_price",
+      "period": 37,
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve.sir_ni.p38",
+      "claim_id_expected": null,
+      "value": 787.79,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "series",
+      "series": "reserves.SIR.NI.price",
+      "period": 38,
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve_max.sir_ni.p38",
+      "claim_id_expected": null,
+      "value": 4401.5,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "series",
+      "series": "reserves.SIR.NI.max_price",
+      "period": 38,
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve.sir_ni.p39",
+      "claim_id_expected": null,
+      "value": 851.46,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "series",
+      "series": "reserves.SIR.NI.price",
+      "period": 39,
+      "decimals": 2
+    },
+    {
+      "fact_id": "reserve_max.sir_ni.p39",
+      "claim_id_expected": null,
+      "value": 4424.61,
+      "unit": "$/MWh",
+      "write_up_query": "Q8",
+      "status": "series",
+      "series": "reserves.SIR.NI.max_price",
+      "period": 39,
+      "decimals": 2
+    },
+    {
+      "fact_id": "dispatch.sir.max_publish.p36",
+      "claim_id_expected": "dispatch.sir.max_publish.p36",
+      "value": 6500.0,
+      "unit": "$/MWh",
+      "write_up_query": "Q8c",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "dispatch.sir.max_publish_time.p36",
+      "claim_id_expected": "dispatch.sir.max_publish_time.p36",
+      "value": "2026-07-27T05:50:26Z",
+      "unit": "UTC",
+      "write_up_query": "Q8c",
+      "status": "claim",
+      "decimals": 2,
+      "note": "Write-up: 17:50:26 NZST."
+    },
+    {
+      "fact_id": "dispatch.energy.max_publish.p36",
+      "claim_id_expected": "dispatch.energy.max_publish.p36",
+      "value": 22070.66,
+      "unit": "$/MWh",
+      "write_up_query": "Q7c",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "dispatch.energy.max_publish_node.p36",
+      "claim_id_expected": "dispatch.energy.max_publish_node.p36",
+      "value": "WEL0331",
+      "unit": "node",
+      "write_up_query": "Q7c",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "dispatch.energy.nodes_ge_20000.p36",
+      "claim_id_expected": "dispatch.energy.nodes_ge_20000.p36",
+      "value": 39,
+      "unit": "count",
+      "write_up_query": "Q7c",
+      "status": "claim",
+      "decimals": 0,
+      "note": "Write-up counts at the same instant (17:50:26). The package counts nodes with any publish at or above the price in the period."
+    },
+    {
+      "fact_id": "dispatch.energy.nodes_ge_10000.p36",
+      "claim_id_expected": "dispatch.energy.nodes_ge_10000.p36",
+      "value": 207,
+      "unit": "count",
+      "write_up_query": "Q7c",
+      "status": "claim",
+      "decimals": 0,
+      "note": "Same note as the $20,000 count."
+    },
+    {
+      "fact_id": "dispatch.hep0331.max_publish",
+      "claim_id_expected": null,
+      "value": 21000.0,
+      "unit": "$/MWh",
+      "write_up_query": "Q7b",
+      "status": "gap",
+      "gap_reason": "HEP0331 is not stored. The package stores the highest publish of the period, which is WEL0331 ($22,070.66) in the write-up."
+    },
+    {
+      "fact_id": "dispatch.hep0331.seconds",
+      "claim_id_expected": null,
+      "value": 85,
+      "unit": "s",
+      "write_up_query": "Q7b",
+      "status": "gap",
+      "gap_reason": "The 85-second gap is that of HEP0331. The package stores the gap of the highest-publish node only."
+    },
+    {
+      "fact_id": "dispatch.scarcity_flag",
+      "claim_id_expected": null,
+      "value": "SPD energy scarcity flag, 84 s",
+      "unit": "report",
+      "write_up_query": "report",
+      "status": "gap",
+      "gap_reason": "No SPD case files (#44). The Authority report is the only source."
+    },
+    {
+      "fact_id": "dispatch.sir_scarcity_report",
+      "claim_id_expected": null,
+      "value": "SIR scarcity price $6,500 for one 5-minute period",
+      "unit": "report",
+      "write_up_query": "report",
+      "status": "gap",
+      "gap_reason": "Report wording. The $6,500 publishes are claims; calling them scarcity pricing needs SPD cases (#44)."
+    },
+    {
+      "fact_id": "generation.coal_gas.p36",
+      "claim_id_expected": "generation.fuel.coal_gas.NI.p36",
+      "value": 295.5,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.gas.p36",
+      "claim_id_expected": "generation.fuel.gas.NI.p36",
+      "value": 451.2,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.hydro_ni.p36",
+      "claim_id_expected": "generation.fuel.hydro.NI.p36",
+      "value": 1571.9,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.hydro_si.p36",
+      "claim_id_expected": "generation.fuel.hydro.SI.p36",
+      "value": 3207.8,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.wind_ni.p36",
+      "claim_id_expected": "generation.fuel.wind.NI.p36",
+      "value": 69.3,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.coal_gas.p32",
+      "claim_id_expected": "generation.fuel.coal_gas.NI.p32",
+      "value": 151.9,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.gas.p32",
+      "claim_id_expected": "generation.fuel.gas.NI.p32",
+      "value": 110.4,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.thermal.p32",
+      "claim_id_expected": "generation.thermal.NI.p32",
+      "value": 262.3,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.thermal.p36",
+      "claim_id_expected": "generation.thermal.NI.p36",
+      "value": 746.7,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.thermal_ramp",
+      "claim_id_expected": "generation.thermal_ramp.NI",
+      "value": 484,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "claim",
+      "decimals": 0,
+      "note": "Write-up: rises 484 MW between 15:30 and 17:30 (periods 32 to 36)."
+    },
+    {
+      "fact_id": "generation.coal_gas.p34",
+      "claim_id_expected": null,
+      "value": 206.4,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.coal_gas|NI",
+      "period": 34,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.gas.p34",
+      "claim_id_expected": null,
+      "value": 204.5,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.gas|NI",
+      "period": 34,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.hydro_ni.p34",
+      "claim_id_expected": null,
+      "value": 1224.1,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.hydro|NI",
+      "period": 34,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.hydro_si.p34",
+      "claim_id_expected": null,
+      "value": 3132.1,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.hydro|SI",
+      "period": 34,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.wind_ni.p34",
+      "claim_id_expected": null,
+      "value": 49.9,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.wind|NI",
+      "period": 34,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.coal_gas.p35",
+      "claim_id_expected": null,
+      "value": 255.9,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.coal_gas|NI",
+      "period": 35,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.gas.p35",
+      "claim_id_expected": null,
+      "value": 309.5,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.gas|NI",
+      "period": 35,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.hydro_ni.p35",
+      "claim_id_expected": null,
+      "value": 1412.0,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.hydro|NI",
+      "period": 35,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.hydro_si.p35",
+      "claim_id_expected": null,
+      "value": 3208.5,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.hydro|SI",
+      "period": 35,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.wind_ni.p35",
+      "claim_id_expected": null,
+      "value": 46.8,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.wind|NI",
+      "period": 35,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.coal_gas.p37",
+      "claim_id_expected": null,
+      "value": 353.2,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.coal_gas|NI",
+      "period": 37,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.gas.p37",
+      "claim_id_expected": null,
+      "value": 460.4,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.gas|NI",
+      "period": 37,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.hydro_ni.p37",
+      "claim_id_expected": null,
+      "value": 1580.3,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.hydro|NI",
+      "period": 37,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.hydro_si.p37",
+      "claim_id_expected": null,
+      "value": 3206.2,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.hydro|SI",
+      "period": 37,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.wind_ni.p37",
+      "claim_id_expected": null,
+      "value": 93.7,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.wind|NI",
+      "period": 37,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.hydro_ni.p32",
+      "claim_id_expected": null,
+      "value": 1026.6,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.hydro|NI",
+      "period": 32,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.hydro_si.p32",
+      "claim_id_expected": null,
+      "value": 2935.8,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.hydro|SI",
+      "period": 32,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.wind_ni.p32",
+      "claim_id_expected": null,
+      "value": 59.3,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "series",
+      "series": "generation_by_fuel.wind|NI",
+      "period": 32,
+      "decimals": 1
+    },
+    {
+      "fact_id": "generation.wind_nz.p36",
+      "claim_id_expected": null,
+      "value": 150.0,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "gap",
+      "gap_reason": "The package keeps wind for each island (NI 69.3, SI 80.7 MW). The national sum is not computed."
+    },
+    {
+      "fact_id": "generation.hydro_ni_rise",
+      "claim_id_expected": null,
+      "value": 545,
+      "unit": "MW",
+      "write_up_query": "Q10d",
+      "status": "gap",
+      "gap_reason": "Only the thermal ramp is computed. The North Island hydro rise is in the series, not a claim."
+    },
+    {
+      "fact_id": "generation.wind_day_range",
+      "claim_id_expected": null,
+      "value": "91.1 to 289.3 MW",
+      "unit": "MW",
+      "write_up_query": "Q10e",
+      "status": "gap",
+      "gap_reason": "A day range of period wind is not computed."
+    },
+    {
+      "fact_id": "day.generation.hydro",
+      "claim_id_expected": "day.generation.hydro.mwh",
+      "value": 96683.5,
+      "unit": "MWh",
+      "write_up_query": "Q10b",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "day.generation.geothermal",
+      "claim_id_expected": "day.generation.geothermal.mwh",
+      "value": 30192.5,
+      "unit": "MWh",
+      "write_up_query": "Q10b",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "day.generation.gas",
+      "claim_id_expected": "day.generation.gas.mwh",
+      "value": 4599.9,
+      "unit": "MWh",
+      "write_up_query": "Q10b",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "day.generation.wind",
+      "claim_id_expected": "day.generation.wind.mwh",
+      "value": 4476.2,
+      "unit": "MWh",
+      "write_up_query": "Q10b",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "day.generation.coal_gas",
+      "claim_id_expected": "day.generation.coal_gas.mwh",
+      "value": 4117.8,
+      "unit": "MWh",
+      "write_up_query": "Q10b",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "day.generation.solar",
+      "claim_id_expected": "day.generation.solar.mwh",
+      "value": 739.5,
+      "unit": "MWh",
+      "write_up_query": "Q10b",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "day.generation.other",
+      "claim_id_expected": "day.generation.other.mwh",
+      "value": 321.5,
+      "unit": "MWh",
+      "write_up_query": "Q10b",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "day.generation.battery",
+      "claim_id_expected": "day.generation.battery.mwh",
+      "value": 165.6,
+      "unit": "MWh",
+      "write_up_query": "Q10b",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "day.generation.hydro_share",
+      "claim_id_expected": "day.generation.hydro_share",
+      "value": 68.5,
+      "unit": "%",
+      "write_up_query": "Q10g",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "plant.huntly_rankine.p36",
+      "claim_id_expected": "generation.plant.HLY/huntly_1_4.p36",
+      "value": 295.5,
+      "unit": "MW",
+      "write_up_query": "Q11e",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "plant.stratford.p36",
+      "claim_id_expected": "generation.plant.SFD/stratford.p36",
+      "value": 172.4,
+      "unit": "MW",
+      "write_up_query": "Q11e",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "plant.junction_road.p36",
+      "claim_id_expected": "generation.plant.JRD/junction_road.p36",
+      "value": 90.3,
+      "unit": "MW",
+      "write_up_query": "Q11e",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "plant.mckee.p36",
+      "claim_id_expected": "generation.plant.MCK/mckee.p36",
+      "value": 83.8,
+      "unit": "MW",
+      "write_up_query": "Q11e",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "plant.huntly_p40.p36",
+      "claim_id_expected": "generation.plant.HLY/huntly_p40.p36",
+      "value": 45.9,
+      "unit": "MW",
+      "write_up_query": "Q11e",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "plant.huntly_rankine.p32",
+      "claim_id_expected": null,
+      "value": 151.9,
+      "unit": "MW",
+      "write_up_query": "Q11b",
+      "status": "series",
+      "series": "generation_by_plant.HLY/huntly_1_4.average_megawatts",
+      "period": 32,
+      "decimals": 1
+    },
+    {
+      "fact_id": "plant.huntly_rankine.p37",
+      "claim_id_expected": null,
+      "value": 353.2,
+      "unit": "MW",
+      "write_up_query": "Q11b",
+      "status": "series",
+      "series": "generation_by_plant.HLY/huntly_1_4.average_megawatts",
+      "period": 37,
+      "decimals": 1
+    },
+    {
+      "fact_id": "plant.huntly_p40.p34",
+      "claim_id_expected": null,
+      "value": 0,
+      "unit": "MW",
+      "write_up_query": "Q11f",
+      "status": "series",
+      "series": "generation_by_plant.HLY/huntly_p40.average_megawatts",
+      "period": 34,
+      "decimals": 1
+    },
+    {
+      "fact_id": "plant.huntly_p40.p35",
+      "claim_id_expected": null,
+      "value": 40.4,
+      "unit": "MW",
+      "write_up_query": "Q11f",
+      "status": "series",
+      "series": "generation_by_plant.HLY/huntly_p40.average_megawatts",
+      "period": 35,
+      "decimals": 1
+    },
+    {
+      "fact_id": "plant.ruakaka.p36",
+      "claim_id_expected": null,
+      "value": 40.6,
+      "unit": "MW",
+      "write_up_query": "Q11e",
+      "status": "gap",
+      "gap_reason": "Outside the top 10 plants by MW in the peak period (the package lists 10 plants). Present in the fuel claim for battery only as a fuel total."
+    },
+    {
+      "fact_id": "plant.whirinaki.p36",
+      "claim_id_expected": null,
+      "value": 7.8,
+      "unit": "MW",
+      "write_up_query": "Q11e",
+      "status": "gap",
+      "gap_reason": "Outside the top 10 plants by MW in the peak period."
+    },
+    {
+      "fact_id": "plant.whirinaki.p35_p37",
+      "claim_id_expected": null,
+      "value": "0 MW to p35, 35.4 MW in p37",
+      "unit": "MW",
+      "write_up_query": "Q11b",
+      "status": "gap",
+      "gap_reason": "Outside the top 10 plants by MW in the peak period."
+    },
+    {
+      "fact_id": "plant.huntly5.no_row",
+      "claim_id_expected": null,
+      "value": "no Generation_MD row",
+      "unit": "text",
+      "write_up_query": "Q11d",
+      "status": "gap",
+      "gap_reason": "The package never computes the absence of a plant. A missing plant is not a claim."
+    },
+    {
+      "fact_id": "plant.whirinaki.fuel_code",
+      "claim_id_expected": null,
+      "value": "DSL",
+      "unit": "code",
+      "write_up_query": "Q14b",
+      "status": "gap",
+      "gap_reason": "Fleet fuel codes are not read by the builder."
+    },
+    {
+      "fact_id": "plant.whirinaki.cleared_offers",
+      "claim_id_expected": null,
+      "value": "non-zero cleared MW and SIR on WHI1 to WHI3 from 17:45",
+      "unit": "MW",
+      "write_up_query": "Q14",
+      "status": "gap",
+      "gap_reason": "Cleared offers are not read by the builder."
+    },
+    {
+      "fact_id": "hvdc.window_peak",
+      "claim_id_expected": "hvdc.window_peak_mw",
+      "value": 1098.0,
+      "unit": "MW",
+      "write_up_query": "Q9b",
+      "status": "claim",
+      "decimals": 1,
+      "note": "Highest 30-minute average in the window (period 34)."
+    },
+    {
+      "fact_id": "hvdc.mw.p36",
+      "claim_id_expected": "hvdc.mw.p36",
+      "value": 966.4,
+      "unit": "MW",
+      "write_up_query": "Q9c",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "hvdc.direction.p36",
+      "claim_id_expected": "hvdc.direction.p36",
+      "value": "north",
+      "unit": "direction",
+      "write_up_query": "Q9",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "day.hvdc.received_mwh",
+      "claim_id_expected": "day.hvdc.received_mwh",
+      "value": 21493.034,
+      "unit": "MWh",
+      "write_up_query": "Q9",
+      "status": "claim",
+      "decimals": 3
+    },
+    {
+      "fact_id": "day.hvdc.average_mw",
+      "claim_id_expected": "day.hvdc.average_mw",
+      "value": 895.5,
+      "unit": "MW",
+      "write_up_query": "Q9",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "hvdc.instantaneous_peak",
+      "claim_id_expected": null,
+      "value": 1170,
+      "unit": "MW",
+      "write_up_query": "report",
+      "status": "gap",
+      "gap_reason": "The Authority reports an instantaneous peak. Gold holds a 30-minute average. The claim notes this."
+    },
+    {
+      "fact_id": "separation.hvdc_north.p36",
+      "claim_id_expected": "separation.OTA2201-BEN2201.hvdc_north.p36",
+      "value": true,
+      "unit": "boolean",
+      "write_up_query": "Q5/Q9",
+      "status": "claim",
+      "decimals": 2
+    },
+    {
+      "fact_id": "load.national.p36",
+      "claim_id_expected": "load.national.p36",
+      "value": 6879.7,
+      "unit": "MW",
+      "write_up_query": "Q12",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "balance_residual.ni.p36",
+      "claim_id_expected": "balance_residual.NI.p36",
+      "value": 23.0,
+      "unit": "MW",
+      "write_up_query": "Q12c",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "balance_residual.si.p36",
+      "claim_id_expected": "balance_residual.SI.p36",
+      "value": 42.0,
+      "unit": "MW",
+      "write_up_query": "Q12c",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "load.national.p37",
+      "claim_id_expected": null,
+      "value": 6954.0,
+      "unit": "MW",
+      "write_up_query": "Q12b",
+      "status": "gap",
+      "gap_reason": "Load is kept for each island in the series. The national sum for another period is not a claim."
+    },
+    {
+      "fact_id": "load.national.p16",
+      "claim_id_expected": null,
+      "value": 7098.8,
+      "unit": "MW",
+      "write_up_query": "Q12b",
+      "status": "gap",
+      "gap_reason": "Period 16 is outside the window."
+    },
+    {
+      "fact_id": "operator_residual.national",
+      "claim_id_expected": null,
+      "value": "58 MW national, 1 MW NI, 40 MW SI",
+      "unit": "MW",
+      "write_up_query": "report",
+      "status": "gap",
+      "gap_reason": "System operator residual: SPD solution (#44). The package only holds the modelled residual."
+    },
+    {
+      "fact_id": "episode.severity",
+      "claim_id_expected": "episode.severity",
+      "value": 170.5,
+      "unit": "severity",
+      "write_up_query": "ADR-0019",
+      "status": "claim",
+      "decimals": 1
+    },
+    {
+      "fact_id": "episode.period_count",
+      "claim_id_expected": "episode.period_count",
+      "value": 6,
+      "unit": "periods",
+      "write_up_query": "ADR-0019",
+      "status": "claim",
+      "decimals": 0
+    },
+    {
+      "fact_id": "observation.measured_value",
+      "claim_id_expected": null,
+      "value": 2154.45,
+      "unit": "$/MWh",
+      "write_up_query": "ADR-0019",
+      "status": "series",
+      "series": "observations.0.measured_value",
+      "period": null,
+      "decimals": 2
+    },
+    {
+      "fact_id": "report.outages",
+      "claim_id_expected": null,
+      "value": "Huntly 2 fault, Huntly 4 and 5 outages, Ruakaka planned outage, Stratford peaker 1",
+      "unit": "text",
+      "write_up_query": "report",
+      "status": "gap",
+      "gap_reason": "Outages (#45)."
+    },
+    {
+      "fact_id": "report.cans",
+      "claim_id_expected": null,
+      "value": "customer advice notices 07:30 to 08:30 and 18:00 to 19:00",
+      "unit": "text",
+      "write_up_query": "report",
+      "status": "gap",
+      "gap_reason": "Notices are not a lake dataset."
+    },
+    {
+      "fact_id": "report.hydro_storage",
+      "claim_id_expected": null,
+      "value": "83% full, about 131% of average",
+      "unit": "%",
+      "write_up_query": "report",
+      "status": "gap",
+      "gap_reason": "Hydro storage (#47)."
+    },
+    {
+      "fact_id": "report.weekly_wind",
+      "claim_id_expected": null,
+      "value": "22 to 1,066 MW, mean 460 MW",
+      "unit": "MW",
+      "write_up_query": "report",
+      "status": "gap",
+      "gap_reason": "A weekly wind range is not computed."
+    },
+    {
+      "fact_id": "report.demand_forecast_error",
+      "claim_id_expected": null,
+      "value": "212 MW above forecast; $115 one-hour-ahead difference",
+      "unit": "text",
+      "write_up_query": "report",
+      "status": "gap",
+      "gap_reason": "Gold holds no demand forecast."
+    },
+    {
+      "fact_id": "report.constraints",
+      "claim_id_expected": null,
+      "value": "binding HVDC risk, named constraints",
+      "unit": "text",
+      "write_up_query": "report",
+      "status": "gap",
+      "gap_reason": "Named constraints (#46) and SPD cases (#44)."
+    }
+  ]
+}

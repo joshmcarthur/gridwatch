@@ -32,7 +32,7 @@ import { REFERENCE_NODES } from "./prices.ts";
 import { TABLES as RESERVE_PRICE_ANOMALY_TABLES } from "./reserve-price-anomaly.ts";
 
 /**
- * Evidence package for one episode (issue #38, ADR-0024). The builder reads gold (and, for
+ * Evidence package for one episode (issue #38, ADR-0025). The builder reads gold (and, for
  * dispatch publishes and reference data, silver) and returns one JSON-ready object. It writes no
  * prose and no file. The CLI (`evidence.cli.ts`) writes the file. The claim catalogue is in
  * `evidence-claims.ts`.
