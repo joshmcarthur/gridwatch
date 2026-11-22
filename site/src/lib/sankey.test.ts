@@ -202,7 +202,7 @@ test("a non-zero residual is a visible node, and a zero residual is omitted", ()
     ),
   ).toBe(true);
   expect(sankeySummary(withResidual)).toMatch(/residual/i);
-  expect(sankeySummary(withResidual)).toMatch(/modelled load/i);
+  expect(sankeySummary(withResidual)).toMatch(/estimated load/i);
   expect(sankeySummary(withResidual)).not.toMatch(/\bconsumption\b/i);
 
   const balanced = completeSankey();
@@ -243,7 +243,7 @@ test("the static SVG labels residual and uses a text alternative", () => {
   expect(svg).toContain('role="img"');
   expect(svg).toContain("energy-sankey-chart-title");
   expect(svg).toContain("North Island residual");
-  expect(svg).toContain("modelled load");
+  expect(svg).toContain("estimated load");
   expect(svg).toContain("Residual");
   expect(svg).not.toMatch(/\bconsumption\b/i);
 
@@ -268,7 +268,7 @@ test("the legend has one entry per band colour drawn, including other", () => {
   if (!chart) throw new Error("expected a sankey");
   const labels = sankeyLegend(chart).map((item) => item.label);
   expect(labels).toEqual(
-    expect.arrayContaining(["Hydro", "Other", "Residual", "Modelled load"]),
+    expect.arrayContaining(["Hydro", "Other", "Residual", "Estimated load"]),
   );
   expect(new Set(labels).size).toBe(labels.length);
 });
@@ -277,7 +277,7 @@ test("the numbers table is the gold day table and does not say consumption", () 
   const chart = energySankey(dayOf(completeSankey()));
   if (!chart) throw new Error("expected a sankey");
   const table = sankeyTable(chart);
-  expect(table.headers.join(" ")).toMatch(/modelled load/i);
+  expect(table.headers.join(" ")).toMatch(/estimated load/i);
   expect(table.headers.join(" ")).not.toMatch(/\bconsumption\b/i);
   expect(table.rows[0]?.[0]).toBe("North Island");
   expect(table.rows[0]?.[1]).toBe("288");

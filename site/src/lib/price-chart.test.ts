@@ -116,21 +116,21 @@ test("daily figures come from the contract summary", () => {
 
 test("the price summary is one exact sentence", () => {
   expect(priceChartSummary(chartOf(fixture))).toBe(
-    "Period prices per megawatt-hour: Otahuhu from $0.01 to $284.43, Haywards from $0.01 to $245.11, Benmore from $0.01 to $50.13.",
+    "Period prices per megawatt-hour: Ōtāhuhu from $0.01 to $284.43, Haywards from $0.01 to $245.11, Benmore from $0.01 to $50.13.",
   );
 });
 
-test("the spread summary names the drawn spreads and points to the table for Otahuhu–Benmore", () => {
+test("the spread summary names the drawn spreads and points to the table for Ōtāhuhu–Benmore", () => {
   expect(priceSpreadSummary(chartOf(fixture))).toBe(
-    "Spreads in $/MWh, first place minus second: Otahuhu–Haywards from $0.00 to $39.42, Haywards–Benmore from $0.00 to $224.98. Otahuhu–Benmore is in the table.",
+    "Spreads in $/MWh, first place minus second: Ōtāhuhu–Haywards from $0.00 to $39.42, Haywards–Benmore from $0.00 to $224.98. Ōtāhuhu–Benmore is in the table.",
   );
 });
 
 test("the daily lines label the highest and lowest prices as single prices", () => {
   expect(priceChartDaily(chartOf(fixture))).toEqual([
-    "Average of the period prices for the day: Otahuhu $73.24, Haywards $63.20, Benmore $20.47, per megawatt-hour.",
-    "Lowest single price published (not a period average): Otahuhu $0.01, Haywards $0.01, Benmore $0.01, per megawatt-hour.",
-    "Highest single price published (not a period average): Otahuhu $295.32, Haywards $256.31, Benmore $50.29, per megawatt-hour.",
+    "Average of the period prices for the day: Ōtāhuhu $73.24, Haywards $63.20, Benmore $20.47, per megawatt-hour.",
+    "Lowest single price published (not a period average): Ōtāhuhu $0.01, Haywards $0.01, Benmore $0.01, per megawatt-hour.",
+    "Highest single price published (not a period average): Ōtāhuhu $295.32, Haywards $256.31, Benmore $50.29, per megawatt-hour.",
   ]);
 });
 
@@ -207,7 +207,7 @@ test("a spike inside a period is plotted as the period price, not the daily maxi
   expect(chart.priceDomain[1]).toBe(50.75);
   expect(chart.priceDomain[1]).toBeLessThan(71.24);
   expect(priceChartDaily(chart).join(" ")).toContain(
-    "Highest single price published (not a period average): Otahuhu $50.00, Haywards $71.24, Benmore $50.00",
+    "Highest single price published (not a period average): Ōtāhuhu $50.00, Haywards $71.24, Benmore $50.00",
   );
 });
 
@@ -219,8 +219,12 @@ test("a proxy period gets a proxy marker in the hover text and the table", () =>
   const chart = chartOf(day);
   expect(chart.nodes[0]?.proxy[4]).toBe(true);
   expect(chart.nodes[0]?.proxy[3]).toBe(false);
-  expect(chart.periods[4]?.title).toContain("OTA2201 $0.08/MWh (proxy price)");
-  expect(priceChartTable(chart).rows[4]?.[1]).toBe("$0.08 (proxy price)");
+  expect(chart.periods[4]?.title).toContain(
+    "OTA2201 $0.08/MWh (copied from a nearby place)",
+  );
+  expect(priceChartTable(chart).rows[4]?.[1]).toBe(
+    "$0.08 (copied from a nearby place)",
+  );
 });
 
 test("a negative spread shows a minus sign and the spread axis includes zero", () => {

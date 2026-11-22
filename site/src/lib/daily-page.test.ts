@@ -123,7 +123,7 @@ test("fixture days build a path for each committed sample", () => {
 test("headline names the kind of day without a unit lecture", () => {
   const headline = dayHeadline(loadSiteDay("2026-09-27"));
   expect(headline.sentence).toBe(
-    "Hydro made most of the power, and wholesale prices pulled apart between the islands.",
+    "Hydro made most of the power, and wholesale prices were far apart across Ōtāhuhu, Haywards and Benmore.",
   );
   expect(headline.sentence).not.toMatch(/kilowatt/);
   expect(headline.sentence).not.toMatch(/household bill/);
@@ -133,7 +133,7 @@ test("headline names the kind of day without a unit lecture", () => {
   expect(headline.stats).toEqual([
     {
       id: "power",
-      label: "Power made",
+      label: "Electricity generated",
       href: "#word-megawatt-hour",
       value: "108,910 MWh",
     },
@@ -145,9 +145,9 @@ test("headline names the kind of day without a unit lecture", () => {
     },
     {
       id: "islands",
-      label: "The two islands",
-      href: "#word-islands",
-      value: "Pulled apart",
+      label: "The three places",
+      href: "#word-places",
+      value: "Far apart",
     },
   ]);
 });
@@ -233,13 +233,13 @@ test("close sample prices use one typical figure", () => {
   };
   const headline = dayHeadline(day);
   expect(headline.sentence).toBe(
-    "Hydro made most of the power, and wholesale prices at the sample points stayed close.",
+    "Hydro made most of the power, and wholesale prices stayed close across Ōtāhuhu, Haywards and Benmore.",
   );
   expect(headline.stats[1]?.value).toBe("$50 / MWh");
   expect(headline.stats[2]?.value).toBe("Stayed close");
 });
 
-test("a wide regional gap is pulled apart, not differed", () => {
+test("a wide gap between places is far apart, not differed", () => {
   const day: HeadlineSource = {
     generation: {
       state: "complete",
@@ -255,6 +255,7 @@ test("a wide regional gap is pulled apart, not differed", () => {
     },
   };
   const headline = dayHeadline(day);
-  expect(headline.sentence).toMatch(/pulled apart/);
-  expect(headline.stats[2]?.value).toBe("Pulled apart");
+  expect(headline.sentence).toMatch(/far apart/);
+  expect(headline.stats[2]?.value).toBe("Far apart");
+  expect(headline.sentence).not.toMatch(/islands/);
 });

@@ -31,6 +31,7 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(/Sunday, 27 September 2026/);
     expect(html).toContain('href="/2026/09/27/"');
     expect(html).not.toMatch(/observatory/i);
+    expect(html).not.toMatch(/trading day|grouped readings|dataset/i);
     expect(html).not.toMatch(/placeholder homepage/i);
     expect(html).toMatch(/no single score/);
     expect(html).not.toMatch(/green\/amber\/red/);

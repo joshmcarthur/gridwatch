@@ -18,7 +18,7 @@ const moneyFormat = new Intl.NumberFormat("en-NZ", {
 
 /** Daily mean prices this far apart still count as close. */
 const CLOSE_DOLLARS = 10;
-/** Daily mean prices this far apart or more have pulled apart. */
+/** Daily mean prices this far apart or more are far apart. */
 const APART_DOLLARS = 50;
 
 const DATASET_LABELS: Record<string, string> = {
@@ -213,7 +213,7 @@ function powerStat(day: HeadlineSource): DayStat {
       : `${energyFormat.format(totals.primary_megawatt_hours)} MWh`;
   return {
     id: "power",
-    label: "Power made",
+    label: "Electricity generated",
     href: "#word-megawatt-hour",
     value,
   };
@@ -257,11 +257,11 @@ function islandsStat(
         ? "Stayed close"
         : agreement === "differed"
           ? "Differed"
-          : "Pulled apart";
+          : "Far apart";
   return {
     id: "islands",
-    label: "The two islands",
-    href: "#word-islands",
+    label: "The three places",
+    href: "#word-places",
     value,
   };
 }
@@ -280,11 +280,11 @@ function islandAgreement(means: number[]): IslandAgreement | null {
 function agreementPhrase(agreement: IslandAgreement | null): string | null {
   switch (agreement) {
     case "close":
-      return "wholesale prices at the sample points stayed close";
+      return "wholesale prices stayed close across Ōtāhuhu, Haywards and Benmore";
     case "differed":
-      return "wholesale prices differed between the islands";
+      return "wholesale prices differed across Ōtāhuhu, Haywards and Benmore";
     case "apart":
-      return "wholesale prices pulled apart between the islands";
+      return "wholesale prices were far apart across Ōtāhuhu, Haywards and Benmore";
     default:
       return null;
   }

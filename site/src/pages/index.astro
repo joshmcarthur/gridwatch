@@ -45,7 +45,7 @@ const episodes = recentEpisodes(index);
     </p>
     <p>
       This site reads those files after the day is over and makes a page for
-      each finished trading day: what power stations made, what it sold for,
+      each finished day: what power stations made, what it sold for,
       and where prices pulled apart.
     </p>
   </section>
@@ -92,7 +92,7 @@ const episodes = recentEpisodes(index);
     <div class="conditions-intro prose">
       <h2 id="conditions-heading">Market conditions</h2>
       <p>
-        Each card is one number from that dataset's latest complete day. There
+        Each card is one number from the latest day with complete files for it. There
         is no single score for the day. A card ranks its number against earlier
         complete days on this site, up to a year back, not against a fixed
         threshold. Each card says how many days it compared with.
@@ -141,12 +141,12 @@ const episodes = recentEpisodes(index);
   <section class="card" aria-labelledby="recent-episodes-heading">
     <h2 id="recent-episodes-heading">Recently detected</h2>
     <p>
-      Unusual stretches grouped from the public files. Not a written-up public
+      Stretches of the day that looked unusual in the public files. Not a written-up public
       event yet.
     </p>
     {
       episodes.length === 0 ? (
-        <p>No grouped readings on the days this site holds yet.</p>
+        <p>No unusual stretches on the days this site holds yet.</p>
       ) : (
         <ol class="episodes">
           {episodes.map(({ date, episode }) => (

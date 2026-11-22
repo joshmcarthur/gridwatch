@@ -9,7 +9,7 @@ export const PRICE_MISSING =
   "Wholesale prices for this day are missing, so there is no chart.";
 
 export const PRICE_NOTICE =
-  "Some wholesale price numbers are missing. A node with no price has a gap in its line, and the table says No data.";
+  "Some wholesale price numbers are missing. A place with no price has a gap in its line, and the table says No data.";
 
 export type PriceIsland = "NI" | "SI";
 
@@ -27,7 +27,7 @@ const money = new Intl.NumberFormat("en-NZ", {
 
 export interface PriceNodeLine {
   poc: string;
-  /** Place and region, for example `Otahuhu (Upper North Island)`. */
+  /** Place and region, for example `Ōtāhuhu (Upper North Island)`. */
   label: string;
   island: PriceIsland;
   dashed: boolean;
@@ -225,7 +225,7 @@ export function priceSpreadSummary(chart: PriceChart): string {
     if (plotted.length === 0) return `${label} has no data`;
     return `${label} from ${signedMoney(Math.min(...plotted))} to ${signedMoney(Math.max(...plotted))}`;
   });
-  return `Spreads in $/MWh, first place minus second: ${parts.join(", ")}. Otahuhu–Benmore is in the table.`;
+  return `Spreads in $/MWh, first place minus second: ${parts.join(", ")}. Ōtāhuhu–Benmore is in the table.`;
 }
 
 /** Three sentences for the daily figures. Highest and lowest are raw row prices, not period averages. */
@@ -282,7 +282,7 @@ function hoverText(
       parts.push(`${node.poc} no data`);
       continue;
     }
-    const proxy = node.proxy[index] ? " (proxy price)" : "";
+    const proxy = node.proxy[index] ? " (copied from a nearby place)" : "";
     parts.push(`${node.poc} ${signedMoney(value)}/MWh${proxy}`);
   }
   for (const spread of spreads) {
@@ -298,7 +298,7 @@ function hoverText(
 
 function priceCell(value: number | null, proxy: boolean): string {
   if (value === null) return "No data";
-  return `${signedMoney(value)}${proxy ? " (proxy price)" : ""}`;
+  return `${signedMoney(value)}${proxy ? " (copied from a nearby place)" : ""}`;
 }
 
 /** Money with a sign before the dollar sign, for example `-$5.00`. */

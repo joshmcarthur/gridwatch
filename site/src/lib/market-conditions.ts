@@ -208,7 +208,7 @@ function pricesCard(index: SiteIndex, loadDay: DayLoader): MarketConditionCard {
     loadDay,
     metricFrom: meanReferencePrice,
     figure: (value) =>
-      `Across three sample places (Otahuhu, Haywards and Benmore), wholesale prices averaged ${money.format(value)} per megawatt-hour.`,
+      `Across three sample places (Ōtāhuhu, Haywards and Benmore), wholesale prices averaged ${money.format(value)} per megawatt-hour.`,
     empty: "No complete wholesale-prices day yet.",
     noFigure: "Wholesale prices for this day have no figure.",
   });

@@ -48,6 +48,10 @@ const months = monthGroups(index);
     <header class="lede">
       <h1>{titleDate}</h1>
       <p>{headline.sentence}</p>
+      <p class="places">
+        Prices here come from three places: Ōtāhuhu in Auckland, Haywards near
+        Wellington, and Benmore in the South Island.
+      </p>
       <dl class="stats">
         {
           headline.stats.map((stat) => (
@@ -99,14 +103,14 @@ const months = monthGroups(index);
     <section class="slot" aria-labelledby="detected-episodes">
       <h2 id="detected-episodes">What stood out</h2>
       <p>
-        Unusual stretches grouped from the public files. Not a written-up
-        public event yet.
+        Stretches of the day that looked unusual in the public files. Not a
+        written-up public event yet.
       </p>
       {
         day.episodes === undefined || day.episodes.state === "missing" ? (
-          <p>Grouped readings have not been published for this day yet.</p>
+          <p>The list of unusual stretches is not ready for this day yet.</p>
         ) : day.episodes.items.length === 0 ? (
-          <p>No overlapping unusual stretches were grouped on this day.</p>
+          <p>No unusual stretches overlapped on this day.</p>
         ) : (
           <ol class="episodes">
             {day.episodes.items.map((episode) => (
@@ -185,13 +189,14 @@ const months = monthGroups(index);
             <a href="/about/#wholesale">About</a>.
           </dd>
         </div>
-        <div id="word-islands">
-          <dt>The two islands</dt>
+        <div id="word-places">
+          <dt>The three places</dt>
           <dd>
-            New Zealand's electricity system runs as two islands joined by a
-            cable. Otahuhu, Haywards and Benmore are sample points, not a
-            house. More on{" "}
-            <a href="/about/#islands">About</a>.
+            Ōtāhuhu (Auckland), Haywards (near Wellington) and Benmore (in the
+            South Island) are the three places this page reports prices for.
+            Two are in the North Island and one is in the South Island. They
+            are points on the grid, not a house. The two islands are joined by
+            a cable. More on <a href="/about/#islands">About</a>.
           </dd>
         </div>
         <div id="word-reserve-price">

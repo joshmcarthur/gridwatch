@@ -22,6 +22,16 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).not.toMatch(/\bNI\b/);
     expect(html).not.toMatch(/\bSI\b/);
     expect(html).not.toMatch(/Trading periods/);
+    expect(html).toMatch(
+      /Prices here come from three places: Ōtāhuhu in Auckland, Haywards near\s+Wellington, and Benmore in the South Island/,
+    );
+    expect(html).not.toMatch(/sample points?/i);
+    expect(html).not.toMatch(/Otahuhu/);
+    expect(html).not.toMatch(
+      /reference nodes?|proxy price|interim|dispatch energy/i,
+    );
+    expect(html).toMatch(/A spread is the price at one place/);
+    expect(html).not.toMatch(/trading day|grouped readings|dataset/i);
     expect(html).toContain("Words on this page");
     expect(html).toContain('id="word-wholesale-price"');
     expect(html).toContain('id="word-megawatt-hour"');
@@ -66,19 +76,35 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain("OTA2201");
     expect(html).toContain("HAY2201");
     expect(html).toContain("BEN2201");
-    expect(html).toContain("Otahuhu");
+    expect(html).toContain("Ōtāhuhu");
     expect(html).toContain("Haywards");
     expect(html).toContain("Benmore");
-    expect(html).toContain("Electricity Authority dispatch energy prices");
+    expect(html).toContain("Electricity Authority wholesale energy prices");
     expect(html.match(/role="img"/g)?.length).toBe(5);
     expect(html).toContain('aria-labelledby="energy-flow"');
     expect(html).toContain(
       'aria-labelledby="energy-sankey-chart-title energy-sankey-chart-summary"',
     );
-    expect(html).toMatch(/modelled load/i);
+    expect(html).toMatch(/estimated load/i);
+    expect(html).not.toMatch(
+      /gold formula|Generation_MD|sources notes|modelled/i,
+    );
     expect(html).not.toMatch(/not published yet/i);
     expect(html).not.toMatch(/not drawn yet/i);
     const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
     expect(new Set(ids).size).toBe(ids.length);
+  },
+);
+
+test.skipIf(!existsSync(builtPage))(
+  "every stat link on the built daily page points at an id on the page",
+  () => {
+    const html = readFileSync(builtPage, "utf8");
+    const stats = html.match(/<dl class="stats[\s\S]*?<\/dl>/)?.[0] ?? "";
+    const targets = [...stats.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
+    expect(targets.length).toBeGreaterThan(0);
+    for (const target of targets) {
+      expect(html).toContain(`id="${target}"`);
+    }
   },
 );
