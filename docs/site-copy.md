@@ -68,10 +68,10 @@ Diagrams are allowed, and they should carry some of the explanation when they ca
 
 ## Prefer
 
-this site, Gridwatch, files, pages, retailer, wholesale price, bill, Electricity Authority, EMI (after spelling it out), Transpower, system operator, slice of the day, the industry, Otahuhu, Haywards, Benmore, megawatt-hour
+this site, Gridwatch, files, pages, retailer, wholesale price, bill, Electricity Authority, EMI (after spelling it out), Transpower, system operator, slice of the day, the industry, Otahuhu, Haywards, Benmore, megawatt-hour, three places, electricity generated
 
 ## Don't
 
-I, we (in body copy), observatory, evidence-led, hostile, "the gap", "exists because of that", "headlines hide", "rewrite your bill", pretty, serves as, it's not X it's Y, unexplained acronyms, "work there" when you mean the industry, trading-period numbers in public sentences, POC codes in daily body copy
+I, we (in body copy), observatory, evidence-led, hostile, "the gap", "exists because of that", "headlines hide", "rewrite your bill", pretty, serves as, it's not X it's Y, unexplained acronyms, "work there" when you mean the industry, trading-period numbers in public sentences, POC codes in daily body copy, "dataset", "grouped readings", "sample points", "Power made" (it is energy, not power), "trading day" on the home and daily pages (How we do this explains it), claims about the two islands drawn from the three places
 
 Run published copy through the humanize skill before it ships.
