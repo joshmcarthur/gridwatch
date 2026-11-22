@@ -76,6 +76,7 @@ function pricePlot(data: PriceChart): LinePlot {
     yLabel: "Wholesale price ($ per megawatt-hour, $/MWh)",
     domain: data.priceDomain,
     lines: data.nodes.map(nodeLine),
+    bands: data.bands,
   };
 }
 
@@ -87,6 +88,7 @@ function spreadPlot(data: PriceChart): LinePlot {
     domain: data.spreadDomain,
     lines: data.plottedSpreads.map(spreadLine),
     zeroLine: true,
+    bands: data.bands,
   };
 }
 
@@ -135,6 +137,12 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
             Spread {placeName(spread.from)} minus {placeName(spread.to)}
           </li>
         ))}
+        {chart.bands.length > 0 && (
+          <li>
+            <span class="band-key" aria-hidden="true" />
+            Unusual stretch
+          </li>
+        )}
       </Fragment>
       <Fragment slot="caption">
         <p>
@@ -149,6 +157,9 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
           period is smoothed out, so the highest price of the day can be above
           the line.
         </p>
+        {chart.bands.length > 0 && (
+          <p>A shaded band marks a stretch that stood out.</p>
+        )}
         <p>
           Where two spread lines have the same values, one sits on top of the
           other.
@@ -182,5 +193,13 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
     width: 1.5rem;
     flex: none;
     border-top-width: 3px;
+  }
+
+  .band-key {
+    width: 1.5rem;
+    height: 0.75rem;
+    flex: none;
+    background: var(--color-header-muted);
+    opacity: 0.55;
   }
 </style>

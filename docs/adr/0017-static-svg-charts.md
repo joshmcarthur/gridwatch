@@ -45,6 +45,10 @@ Amended 2026-11-21. The price chart is the second figure on the daily page. Thes
 
 Consequence: a daily page with prices adds two SVGs. Each figure has one table, so the numbers are not repeated per SVG.
 
+## Amendment (#209): episode clock bands
+
+Amended 2026-11-23. A daily price or spread SVG may draw a static `Plot.rectX` band for each episode whose members are energy prices or spreads. The band uses `start_utc` and exclusive `end_utc`. It is not client JavaScript. Reserve episodes stay unmarked until a per-period reserve chart exists.
+
 ## Amendment (#49): nodal map page may use a slider
 
 Amended 2026-11-22. The nodal price map ([ADR-0023](0023-nodal-price-map.md)) is a separate page, not a daily-page chart. These points extend the decisions above for that page only.
