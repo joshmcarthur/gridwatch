@@ -1,8 +1,10 @@
 import type { SiteDay, SiteIndex } from "@gridwatch/publisher/site-contract";
 import { expect, test } from "vitest";
 import {
+  dayContext,
   gasCoalShare,
   latestMarketUpdate,
+  leadFact,
   marketConditionCards,
   meanIslandSpread,
   meanReferencePrice,
@@ -509,4 +511,119 @@ test("homepage figures stay past tense and skip good, bad, safe, next", () => {
     if (previousDataRoot === undefined) delete process.env.DATA_ROOT;
     else process.env.DATA_ROOT = previousDataRoot;
   }
+});
+
+function daySeries(
+  count: number,
+  last: Parameters<typeof stubDay>[0],
+): { index: SiteIndex; byDate: Record<string, SiteDay>; lastDate: string } {
+  const dates = Array.from({ length: count }, (_, i) =>
+    Temporal.PlainDate.from("2026-08-01").add({ days: i }).toString(),
+  );
+  const byDate: Record<string, SiteDay> = {};
+  for (const [i, date] of dates.entries()) {
+    byDate[date] =
+      i === count - 1
+        ? stubDay({ ...last, date })
+        : stubDay({ date, primary: 1000 + i, meanPrices: [50, 50, 50] });
+  }
+  return {
+    index: indexOf(dates.map((date) => ({ date }))),
+    byDate,
+    lastDate: dates.at(-1) as string,
+  };
+}
+
+test("dayContext ranks a day against earlier days and says the change from the day before", () => {
+  const { index, byDate, lastDate } = daySeries(41, {
+    primary: 1000,
+    meanPrices: [200, 200, 200],
+  });
+  const context = dayContext(
+    index,
+    lastDate,
+    (date) => byDate[date] as SiteDay,
+  );
+  const price = context.find((entry) => entry.id === "price");
+  const power = context.find((entry) => entry.id === "power");
+  expect(price?.line).toBe(
+    "Wholesale prices were one of the highest of the 40 earlier complete days on this site.",
+  );
+  expect(price?.change).toBe("Up $150 per megawatt-hour from the day before.");
+  expect(power?.line).toMatch(/^Generation was lower than most of the 40/);
+  expect(power?.change).toBe("Down 39 MWh from the day before.");
+});
+
+test("two days with different price levels get different comparison lines", () => {
+  const ordinary = daySeries(41, { primary: 1020, meanPrices: [50, 50, 50] });
+  const dear = daySeries(41, { primary: 1020, meanPrices: [200, 200, 200] });
+  const line = (series: ReturnType<typeof daySeries>) =>
+    dayContext(
+      series.index,
+      series.lastDate,
+      (date) => series.byDate[date] as SiteDay,
+    ).find((entry) => entry.id === "price")?.line;
+  expect(line(ordinary)).toMatch(/about usual/);
+  expect(line(dear)).toMatch(/one of the highest/);
+});
+
+test("dayContext says so when there are too few earlier days", () => {
+  const { index, byDate, lastDate } = daySeries(10, { primary: 1000 });
+  const context = dayContext(
+    index,
+    lastDate,
+    (date) => byDate[date] as SiteDay,
+  );
+  expect(context.every((entry) => entry.line !== null)).toBe(true);
+  expect(context.map((entry) => entry.line)).toEqual([
+    "Not enough earlier days yet to compare.",
+    "Not enough earlier days yet to compare.",
+    "Not enough earlier days yet to compare.",
+  ]);
+});
+
+test("leadFact picks the figure furthest from usual and says nothing about cause", () => {
+  const { index, byDate, lastDate } = daySeries(41, {
+    primary: 1020,
+    meanPrices: [200, 200, 200],
+  });
+  const sentence = leadFact(index, lastDate, (date) => byDate[date] as SiteDay);
+  expect(sentence).toBe(
+    "Wholesale prices were one of the highest of the 40 earlier complete days on this site.",
+  );
+  expect(sentence).not.toMatch(/because|caused|due to/i);
+});
+
+test("leadFact says a day was ordinary when no figure is far from normal", () => {
+  const { index, byDate, lastDate } = daySeries(41, {
+    primary: 1020,
+    meanPrices: [50, 50, 50],
+  });
+  expect(leadFact(index, lastDate, (date) => byDate[date] as SiteDay)).toBe(
+    "None of the day's main figures was far from normal against the 40 earlier complete days on this site.",
+  );
+});
+
+test("leadFact is null when there are too few earlier days", () => {
+  const { index, byDate, lastDate } = daySeries(10, { primary: 1000 });
+  expect(
+    leadFact(index, lastDate, (date) => byDate[date] as SiteDay),
+  ).toBeNull();
+});
+
+test("the latest update leads with the same fact as the daily page, and falls back to the kind of day", () => {
+  const long = daySeries(41, { primary: 1020, meanPrices: [200, 200, 200] });
+  const update = latestMarketUpdate(
+    long.index,
+    (date) => long.byDate[date] as SiteDay,
+  );
+  expect(update.summary).toBe(
+    leadFact(long.index, long.lastDate, (date) => long.byDate[date] as SiteDay),
+  );
+  const short = daySeries(10, { primary: 1000 });
+  const fallback = latestMarketUpdate(
+    short.index,
+    (date) => short.byDate[date] as SiteDay,
+  );
+  expect(fallback.summary).toMatch(/made most of the power/);
 });

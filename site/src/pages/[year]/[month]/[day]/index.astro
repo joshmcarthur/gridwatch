@@ -14,9 +14,11 @@ import {
   neighbouringDays,
 } from "../../../../lib/daily-page";
 import { episodeClockRange, episodeHeadline } from "../../../../lib/episode-copy";
+import { dayContext, leadFact } from "../../../../lib/market-conditions";
 import {
   formatTradingDate,
   loadSiteDay,
+  loadSiteDayCached,
   loadSiteIndex,
 } from "../../../../lib/site-data";
 
@@ -31,6 +33,9 @@ const index = loadSiteIndex();
 const day = loadSiteDay(date, index);
 const titleDate = formatTradingDate(date);
 const headline = dayHeadline(day);
+const loadEarlier = (earlier: string) => loadSiteDayCached(earlier, index);
+const context = dayContext(index, date, loadEarlier);
+const lead = leadFact(index, date, loadEarlier);
 const notice = completenessNotice(day);
 const neighbours = neighbouringDays(index, date);
 const months = monthGroups(index);
@@ -60,6 +65,16 @@ const months = monthGroups(index);
                 <a href={stat.href}>{stat.label}</a>
               </dt>
               <dd>{stat.value}</dd>
+              {context
+                .filter((entry) => entry.id === stat.id)
+                .map((entry) => (
+                  <>
+                    {entry.line ? <dd class="context">{entry.line}</dd> : null}
+                    {entry.change ? (
+                      <dd class="context">{entry.change}</dd>
+                    ) : null}
+                  </>
+                ))}
             </div>
           ))
         }
@@ -80,28 +95,9 @@ const months = monthGroups(index);
       )
     }
 
-    <section class="slot" aria-labelledby="generation-mix">
-      <h2 id="generation-mix">What made the power</h2>
-      <GenerationMixChart day={day} />
-    </section>
-
-    <section class="slot" aria-labelledby="wholesale-prices">
-      <h2 id="wholesale-prices">What it sold for</h2>
-      <PriceChart day={day} />
-      <p>
-        <a href={mapPath(date)}>
-          Map of wholesale prices at each named place on the grid
-        </a>
-      </p>
-    </section>
-
-    <section class="slot" aria-labelledby="energy-flow">
-      <h2 id="energy-flow">Where the energy went</h2>
-      <EnergySankeyChart day={day} />
-    </section>
-
     <section class="slot" aria-labelledby="detected-episodes">
       <h2 id="detected-episodes">What stood out</h2>
+      {lead ? <p>{lead}</p> : null}
       <p>
         Stretches of the day that looked unusual in the public files. Not a
         written-up public event yet.
@@ -122,6 +118,26 @@ const months = monthGroups(index);
           </ol>
         )
       }
+    </section>
+
+    <section class="slot" aria-labelledby="generation-mix">
+      <h2 id="generation-mix">What made the power</h2>
+      <GenerationMixChart day={day} />
+    </section>
+
+    <section class="slot" aria-labelledby="wholesale-prices">
+      <h2 id="wholesale-prices">What it sold for</h2>
+      <PriceChart day={day} />
+      <p>
+        <a href={mapPath(date)}>
+          Map of wholesale prices at each named place on the grid
+        </a>
+      </p>
+    </section>
+
+    <section class="slot" aria-labelledby="energy-flow">
+      <h2 id="energy-flow">Where the energy went</h2>
+      <EnergySankeyChart day={day} />
     </section>
 
     <nav class="days" aria-label="Other days">
@@ -263,6 +279,12 @@ const months = monthGroups(index);
     font-size: var(--text-heading);
     font-variant-numeric: tabular-nums;
     color: var(--color-ink);
+  }
+
+  .stats dd.context {
+    font-size: var(--text-label);
+    font-weight: 400;
+    color: var(--color-ink-muted);
   }
 
   @media (min-width: 40rem) {

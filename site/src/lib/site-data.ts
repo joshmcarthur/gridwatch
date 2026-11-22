@@ -64,6 +64,22 @@ export function loadSiteDay(date: string, index = loadSiteIndex()): SiteDay {
   return parsed;
 }
 
+const dayCache = new Map<string, SiteDay>();
+
+/** `loadSiteDay` once per exported file, for pages that read many earlier days. */
+export function loadSiteDayCached(
+  date: string,
+  index = loadSiteIndex(),
+): SiteDay {
+  const entry = index.days.find((day) => day.date === date);
+  const key = entry ? `${entry.path}:${entry.export_sha256}` : date;
+  const hit = dayCache.get(key);
+  if (hit) return hit;
+  const day = loadSiteDay(date, index);
+  dayCache.set(key, day);
+  return day;
+}
+
 /** Load a day when it is in the index. Missing dates return null; they do not fall back. */
 export function loadSiteDayIfPresent(
   date: string,

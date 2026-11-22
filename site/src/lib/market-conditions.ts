@@ -77,15 +77,20 @@ export function rankAgainstEarlier(
   value: number,
   earlier: number[],
 ): RankBand | null {
-  if (earlier.length < RANK_MINIMUM) return null;
-  const window = earlier.slice(-RANK_WINDOW);
-  const below = window.filter((candidate) => candidate < value).length;
-  const tied = window.filter((candidate) => candidate === value).length;
-  const rank = (below + tied / 2) / window.length;
+  const rank = rankFraction(value, earlier);
+  if (rank === null) return null;
   if (rank >= 0.95) return "one of the highest";
   if (rank >= 0.75) return "higher than most";
   if (rank >= 0.25) return "about usual";
   return "lower than most days in the past year";
+}
+
+function rankFraction(value: number, earlier: number[]): number | null {
+  if (earlier.length < RANK_MINIMUM) return null;
+  const window = earlier.slice(-RANK_WINDOW);
+  const below = window.filter((candidate) => candidate < value).length;
+  const tied = window.filter((candidate) => candidate === value).length;
+  return (below + tied / 2) / window.length;
 }
 
 export function meanReferencePrice(day: SiteDay): number | null {
@@ -150,7 +155,7 @@ export function latestMarketUpdate(
     date,
     href: dailyPath(date),
     dateLabel: formatTradingDate(date),
-    summary: dayHeadline(day).sentence,
+    summary: leadFact(index, date, loadDay) ?? dayHeadline(day).sentence,
     generationLag,
   };
 }
@@ -172,6 +177,164 @@ function generationLagNote(
       href: dailyPath(latestGeneration),
     },
   };
+}
+
+export interface StatContext {
+  id: "power" | "price" | "islands";
+  line: string | null;
+  change: string | null;
+}
+
+const energyFormat = new Intl.NumberFormat("en-NZ", {
+  maximumFractionDigits: 0,
+});
+
+const STAT_METRICS: Array<{
+  id: StatContext["id"];
+  section: "generation" | "prices";
+  subject: string;
+  metric: (day: SiteDay) => number | null;
+  change: ((delta: number) => string) | null;
+}> = [
+  {
+    id: "power",
+    section: "generation",
+    subject: "Generation was",
+    metric: primaryGenerationMwh,
+    change: (delta) => `${energyFormat.format(Math.abs(delta))} MWh`,
+  },
+  {
+    id: "price",
+    section: "prices",
+    subject: "Wholesale prices were",
+    metric: meanReferencePrice,
+    change: (delta) => `${money.format(Math.abs(delta))} per megawatt-hour`,
+  },
+  {
+    id: "islands",
+    section: "prices",
+    subject: "The gap between places was",
+    metric: meanIslandSpread,
+    change: null,
+  },
+];
+
+type Metric = Omit<(typeof STAT_METRICS)[number], "id" | "section"> & {
+  id: string;
+  section: "generation" | "prices" | "reserves";
+};
+
+const EXTRA_LEAD_METRICS: Metric[] = [
+  {
+    id: "thermal",
+    section: "generation",
+    subject: "The gas and coal share of generation was",
+    metric: gasCoalShare,
+    change: null,
+  },
+  {
+    id: "reserves",
+    section: "reserves",
+    subject: "Reserve prices (the cost of backup generation kept ready) were",
+    metric: meanReservePrice,
+    change: null,
+  },
+];
+
+/**
+ * The one sentence that leads a day: the figure furthest from "about usual" against earlier
+ * complete days, using the same ranking as the homepage cards. A day with no such figure says so.
+ * Null when no figure has enough earlier days to compare.
+ */
+export function leadFact(
+  index: SiteIndex,
+  date: string,
+  loadDay: DayLoader,
+): string | null {
+  const day = loadDay(date);
+  let best: { score: number; sentence: string } | null = null;
+  let compared = 0;
+  let earlierCount = 0;
+  for (const spec of [...STAT_METRICS, ...EXTRA_LEAD_METRICS] as Metric[]) {
+    const value = spec.metric(day);
+    if (value === null) continue;
+    const earlier = earlierValues(
+      index,
+      spec.section,
+      date,
+      spec.metric,
+      loadDay,
+    );
+    const rank = rankFraction(value, earlier);
+    const band = rankAgainstEarlier(value, earlier);
+    if (rank === null || band === null) continue;
+    compared += 1;
+    earlierCount = Math.max(earlierCount, earlier.length);
+    if (band === "about usual") continue;
+    const score = Math.abs(rank - 0.5);
+    if (best === null || score > best.score) {
+      best = {
+        score,
+        sentence: `${spec.subject} ${bandPhrase(band, earlier.length)}.`,
+      };
+    }
+  }
+  if (best) return best.sentence;
+  if (compared === 0) return null;
+  const days = Math.min(earlierCount, RANK_WINDOW);
+  return `None of the day's main figures was far from normal against the ${days} earlier complete days on this site.`;
+}
+
+export function primaryGenerationMwh(day: SiteDay): number | null {
+  const mwh = day.generation.totals?.primary_megawatt_hours;
+  return mwh === undefined || mwh === null || mwh <= 0 ? null : mwh;
+}
+
+/**
+ * One line per headline figure: where the day sits against earlier complete days, using the same
+ * ranking as the homepage cards, and the change from the day before when that day is complete.
+ */
+export function dayContext(
+  index: SiteIndex,
+  date: string,
+  loadDay: DayLoader,
+): StatContext[] {
+  const day = loadDay(date);
+  const at = index.days.findIndex((entry) => entry.date === date);
+  const previous = at > 0 ? index.days[at - 1] : undefined;
+  const dayBefore = Temporal.PlainDate.from(date).subtract({ days: 1 });
+  return STAT_METRICS.map((spec) => {
+    const value = spec.metric(day);
+    if (value === null) return { id: spec.id, line: null, change: null };
+    const earlier = earlierValues(
+      index,
+      spec.section,
+      date,
+      spec.metric,
+      loadDay,
+    );
+    const band = rankAgainstEarlier(value, earlier);
+    const line = band
+      ? `${spec.subject} ${bandPhrase(band, earlier.length)}.`
+      : "Not enough earlier days yet to compare.";
+    let change: string | null = null;
+    if (
+      spec.change &&
+      previous &&
+      previous.date === dayBefore.toString() &&
+      previous.sections[spec.section] === "complete"
+    ) {
+      const before = spec.metric(loadDay(previous.date));
+      if (before !== null) {
+        const delta = value - before;
+        change =
+          Math.round(delta) === 0
+            ? "About the same as the day before."
+            : `${delta > 0 ? "Up" : "Down"} ${spec.change(delta)} from the day before.`;
+      }
+    }
+    return { id: spec.id, line, change };
+  });
 }
 
 export function recentDays(index: SiteIndex, limit = RECENT_DAYS): RecentDay[] {
@@ -362,6 +525,10 @@ function bandLabel(band: RankBand | null, earlierCount: number): string | null {
       ? "Not enough complete days yet to compare with the past year."
       : null;
   }
+  return `That was ${bandPhrase(band, earlierCount)}.`;
+}
+
+function bandPhrase(band: RankBand, earlierCount: number): string {
   const days = Math.min(earlierCount, RANK_WINDOW);
   const pastYear = days >= RANK_WINDOW;
   const against = pastYear
@@ -369,17 +536,13 @@ function bandLabel(band: RankBand | null, earlierCount: number): string | null {
     : `the ${days} earlier complete days on this site`;
   const most = pastYear ? "most days in the past year" : `most of ${against}`;
   if (band === "lower than most days in the past year") {
-    return `That was lower than ${most}.`;
+    return `lower than ${most}`;
   }
-  if (band === "about usual") {
-    return `That was about usual against ${against}.`;
-  }
-  if (band === "higher than most") {
-    return `That was higher than ${most}.`;
-  }
+  if (band === "about usual") return `about usual against ${against}`;
+  if (band === "higher than most") return `higher than ${most}`;
   return pastYear
-    ? "That was one of the highest days in the past year."
-    : `That was one of the highest of ${against}.`;
+    ? "one of the highest days in the past year"
+    : `one of the highest of ${against}`;
 }
 
 function formatReserveMoney(value: number): string {
