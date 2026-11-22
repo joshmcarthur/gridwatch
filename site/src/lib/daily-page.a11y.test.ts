@@ -28,6 +28,10 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).not.toMatch(/sample points?/i);
     expect(html).not.toMatch(/Otahuhu/);
     expect(html).toContain("Not enough earlier days yet to compare.");
+    expect(html.indexOf('id="detected-episodes"')).toBeGreaterThan(-1);
+    expect(html.indexOf('id="detected-episodes"')).toBeLessThan(
+      html.indexOf('id="generation-mix"'),
+    );
     expect(html).not.toMatch(
       /reference nodes?|proxy price|interim|dispatch energy/i,
     );

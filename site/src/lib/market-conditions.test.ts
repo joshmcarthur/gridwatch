@@ -4,6 +4,7 @@ import {
   dayContext,
   gasCoalShare,
   latestMarketUpdate,
+  leadFact,
   marketConditionCards,
   meanIslandSpread,
   meanReferencePrice,
@@ -579,4 +580,33 @@ test("dayContext says so when there are too few earlier days", () => {
     "Not enough earlier days yet to compare.",
     "Not enough earlier days yet to compare.",
   ]);
+});
+
+test("leadFact picks the figure furthest from usual and says nothing about cause", () => {
+  const { index, byDate, lastDate } = daySeries(41, {
+    primary: 1020,
+    meanPrices: [200, 200, 200],
+  });
+  const sentence = leadFact(index, lastDate, (date) => byDate[date] as SiteDay);
+  expect(sentence).toBe(
+    "Wholesale prices were one of the highest of the 40 earlier complete days on this site.",
+  );
+  expect(sentence).not.toMatch(/because|caused|due to/i);
+});
+
+test("leadFact says a day was ordinary when no figure is far from normal", () => {
+  const { index, byDate, lastDate } = daySeries(41, {
+    primary: 1020,
+    meanPrices: [50, 50, 50],
+  });
+  expect(leadFact(index, lastDate, (date) => byDate[date] as SiteDay)).toBe(
+    "None of the day's main figures was far from normal against the 40 earlier complete days on this site.",
+  );
+});
+
+test("leadFact is null when there are too few earlier days", () => {
+  const { index, byDate, lastDate } = daySeries(10, { primary: 1000 });
+  expect(
+    leadFact(index, lastDate, (date) => byDate[date] as SiteDay),
+  ).toBeNull();
 });

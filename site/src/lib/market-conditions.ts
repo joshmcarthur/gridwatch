@@ -77,15 +77,20 @@ export function rankAgainstEarlier(
   value: number,
   earlier: number[],
 ): RankBand | null {
-  if (earlier.length < RANK_MINIMUM) return null;
-  const window = earlier.slice(-RANK_WINDOW);
-  const below = window.filter((candidate) => candidate < value).length;
-  const tied = window.filter((candidate) => candidate === value).length;
-  const rank = (below + tied / 2) / window.length;
+  const rank = rankFraction(value, earlier);
+  if (rank === null) return null;
   if (rank >= 0.95) return "one of the highest";
   if (rank >= 0.75) return "higher than most";
   if (rank >= 0.25) return "about usual";
   return "lower than most days in the past year";
+}
+
+function rankFraction(value: number, earlier: number[]): number | null {
+  if (earlier.length < RANK_MINIMUM) return null;
+  const window = earlier.slice(-RANK_WINDOW);
+  const below = window.filter((candidate) => candidate < value).length;
+  const tied = window.filter((candidate) => candidate === value).length;
+  return (below + tied / 2) / window.length;
 }
 
 export function meanReferencePrice(day: SiteDay): number | null {
@@ -213,6 +218,72 @@ const STAT_METRICS: Array<{
     change: null,
   },
 ];
+
+type Metric = Omit<(typeof STAT_METRICS)[number], "id" | "section"> & {
+  id: string;
+  section: "generation" | "prices" | "reserves";
+};
+
+const EXTRA_LEAD_METRICS: Metric[] = [
+  {
+    id: "thermal",
+    section: "generation",
+    subject: "The gas and coal share of generation was",
+    metric: gasCoalShare,
+    change: null,
+  },
+  {
+    id: "reserves",
+    section: "reserves",
+    subject: "Reserve prices (the cost of backup generation kept ready) were",
+    metric: meanReservePrice,
+    change: null,
+  },
+];
+
+/**
+ * The one sentence that leads a day: the figure furthest from "about usual" against earlier
+ * complete days, using the same ranking as the homepage cards. A day with no such figure says so.
+ * Null when no figure has enough earlier days to compare.
+ */
+export function leadFact(
+  index: SiteIndex,
+  date: string,
+  loadDay: DayLoader,
+): string | null {
+  const day = loadDay(date);
+  let best: { score: number; sentence: string } | null = null;
+  let compared = 0;
+  let earlierCount = 0;
+  for (const spec of [...STAT_METRICS, ...EXTRA_LEAD_METRICS] as Metric[]) {
+    const value = spec.metric(day);
+    if (value === null) continue;
+    const earlier = earlierValues(
+      index,
+      spec.section,
+      date,
+      spec.metric,
+      loadDay,
+    );
+    const rank = rankFraction(value, earlier);
+    const band = rankAgainstEarlier(value, earlier);
+    if (rank === null || band === null) continue;
+    compared += 1;
+    earlierCount = Math.max(earlierCount, earlier.length);
+    if (band === "about usual") continue;
+    const score = Math.abs(rank - 0.5);
+    if (best === null || score > best.score) {
+      best = {
+        score,
+        sentence: `${spec.subject} ${bandPhrase(band, earlier.length)}.`,
+      };
+    }
+  }
+  if (best) return best.sentence;
+  if (compared === 0) return null;
+  const days = Math.min(earlierCount, RANK_WINDOW);
+  return `None of the day's main figures was far from normal against the ${days} earlier complete days on this site.`;
+}
 
 export function primaryGenerationMwh(day: SiteDay): number | null {
   const mwh = day.generation.totals?.primary_megawatt_hours;
