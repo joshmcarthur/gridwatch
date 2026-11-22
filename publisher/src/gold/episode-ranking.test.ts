@@ -61,10 +61,10 @@ test("the weights add up to 1", () => {
 });
 
 test("the default config is pinned: a changed value without an ANALYSIS_VERSION bump fails here", () => {
-  expect(ANALYSIS_VERSION).toBe(3);
+  expect(ANALYSIS_VERSION).toBe(4);
   expect(
     createHash("sha256").update(JSON.stringify(config)).digest("hex"),
-  ).toBe("66693bf6acc022db069acd04ab9092dcc01ccf2e6a8b1cc24079781d92dd21af");
+  ).toBe("8777cbdd52d1ee8599fc75a631a7f035480730b4b1b44c9de3f619396796f999");
 });
 
 test("components are 0 at the threshold and 1 at the caps, and they clamp", () => {
@@ -323,6 +323,7 @@ test("INPUTS are episode_days with a 90 day window", () => {
     ["episode_days", 90],
     ["fuel_generation_change_baselines", undefined],
     ["demand_deviation_baselines", undefined],
+    ["plant_generation_change_baselines", undefined],
   ]);
 });
 
@@ -417,7 +418,7 @@ test("a rebuilt episode day inside the window changes the fingerprint", async ()
 });
 
 // Catches: corroboration that is not scored, or one that does not stop at the cap.
-test("corroboration scores 0 with no observation, 0.5 with one type and 1 with both", () => {
+test("corroboration scores 0 with no observation, 0.5 with one rule and 1 with two or more", () => {
   const score = (count: number) =>
     only([episode("a", { corroboration_count: count })]);
   expect(score(0).corroboration_component).toBe(0);
@@ -460,7 +461,7 @@ test("corroboration counts each matching rule once and ignores non-matches", asy
     { episode_id: "ni", islands: ["NI"] },
     { episode_id: "si", islands: ["SI"] },
   ]);
-  const [fuel, demand] = CORROBORATION_RULES;
+  const [fuel, demand, plant] = CORROBORATION_RULES;
   const inside = {
     start: "2026-11-11 07:00:00+00",
     end: "2026-11-11 09:00:00+00",
@@ -480,12 +481,16 @@ test("corroboration counts each matching rule once and ignores non-matches", asy
     },
     { type: "demand_high", island: null, ...inside },
   ]);
+  await writeObservations(plant.table, DAY, [
+    { type: "generation_low", island: "NI", ...inside },
+    { type: "generation_high", island: "NI", ...inside },
+  ]);
   await publish(DAY);
   expect(
     await query(TABLES[1], DAY, "episode_id, corroboration_count"),
   ).toEqual(
     expect.arrayContaining([
-      { episode_id: "ni", corroboration_count: 2 },
+      { episode_id: "ni", corroboration_count: 3 },
       { episode_id: "si", corroboration_count: 0 },
     ]),
   );

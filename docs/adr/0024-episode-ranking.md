@@ -15,7 +15,7 @@ Code: `publisher/src/gold/episode-ranking.ts`. Dataset id `gold_episode_ranking`
 
 ### Tables
 
-Follow [ADR-0011](0011-gold-table-pattern.md). `ANALYSIS_VERSION` starts at 1. It is 2 after [#180](https://github.com/joshmcarthur/gridwatch/issues/180) (corroboration) and 3 after [#181](https://github.com/joshmcarthur/gridwatch/issues/181) (candidate defaults and `price_low` cap). One config object, `EPISODE_RANKING_CONFIG`. A test pins its hash. A change to a rule or a value bumps `ANALYSIS_VERSION`.
+Follow [ADR-0011](0011-gold-table-pattern.md). `ANALYSIS_VERSION` starts at 1. It is 2 after [#180](https://github.com/joshmcarthur/gridwatch/issues/180) (corroboration), 3 after [#181](https://github.com/joshmcarthur/gridwatch/issues/181) (candidate defaults and `price_low` cap), and 4 after [#223](https://github.com/joshmcarthur/gridwatch/issues/223) (plant `generation_low` corroboration). One config object, `EPISODE_RANKING_CONFIG`. A test pins its hash. A change to a rule or a value bumps `ANALYSIS_VERSION`.
 
 Output is Parquet at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`, with a total `ORDER BY`, `SET threads = 1`, `goldStamp` and no `processed_at`.
 
@@ -41,7 +41,7 @@ Each component is in [0, 1].
 | `severity_component` | `clamp(log10(severity) / log10(cap), 0, 1)`. `cap` is the largest `severityCapByType` entry among the episode's observation types (the default for an unknown type). | 0.30 |
 | `duration_component` | `clamp(period_count / 12, 0, 1)` | 0.20 |
 | `breadth_component` | `clamp((max(type_count - 1, 0) + max(island_count - 1, 0)) / 4, 0, 1)` | 0.15 |
-| `corroboration_component` | `clamp(corroboration_count / 2, 0, 1)`. `corroboration_count` is the number of `CORROBORATION_RULES` that match the episode: a fuel-level `generation_low`, or an NI/SI `demand_high`, on the same trading date that overlaps the episode span on one of its islands ([ADR-0021](0021-episodes.md), [#180](https://github.com/joshmcarthur/gridwatch/issues/180)). Each rule counts once. These observations are not episode members. | 0.10 |
+| `corroboration_component` | `clamp(corroboration_count / 2, 0, 1)`. `corroboration_count` is the number of `CORROBORATION_RULES` that match the episode: a fuel-level `generation_low`, a plant-level `generation_low`, or an NI/SI `demand_high`, on the same trading date that overlaps the episode span on one of its islands ([ADR-0021](0021-episodes.md), [#180](https://github.com/joshmcarthur/gridwatch/issues/180), [#223](https://github.com/joshmcarthur/gridwatch/issues/223)). Each rule counts once. The cap stays 2, so a third match does not raise the component. These observations are not episode members. | 0.10 |
 | `rarity_component` | `1 - share`, where `share` is the fraction of prior days in the window that had an episode with the same observation-type set and the same island set. | 0.25 |
 
 `score` is the weighted sum. The weights add up to 1. A test asserts it.
@@ -144,12 +144,17 @@ Defaults in brackets. Nothing here is implemented as final.
 ## Consequences
 
 - A later detector that becomes an episode input changes episodes. The episode day fingerprints change, and the rankings of every date within 90 days rebuild.
-- `ANALYSIS_VERSION` is 3 since [#181](https://github.com/joshmcarthur/gridwatch/issues/181). It was 2 after [#180](https://github.com/joshmcarthur/gridwatch/issues/180). The fuel generation-change and demand-deviation sentinels are ranking inputs for the episode's own date. They are `optional`: the baselines need history, so a day without a sentinel still ranks, with a corroboration count of 0. A sentinel that arrives later changes the fingerprint.
+- `ANALYSIS_VERSION` is 4 since [#223](https://github.com/joshmcarthur/gridwatch/issues/223). It was 3 after [#181](https://github.com/joshmcarthur/gridwatch/issues/181) and 2 after [#180](https://github.com/joshmcarthur/gridwatch/issues/180). The fuel and plant generation-change sentinels and the demand-deviation sentinel are ranking inputs for the episode's own date. They are `optional`: the baselines need history, so a day without a sentinel still ranks, with a corroboration count of 0. A sentinel that arrives later changes the fingerprint.
 - An episode with no corroboration scores a little lower than under version 1, because weight moved to the new component. Early days with no sentinel cannot corroborate.
 
 ### Measured on the 2026-11-22 lake (#180)
 
 Version 1 over 367 days: 310 episodes, 127 candidates. Version 2: 310 episodes, 150 candidates. Corroboration count 0 / 1 / 2 covers 170 / 129 / 11 episodes. 8 episodes predate the fuel data. 27 July 2026 stays first (0.814 to 0.789). Two days enter the top 12 (2026-05-27, 2026-07-26) and two leave (2025-12-08, which falls from 0.650 to 0.593 but is still its day's first rank, and 2026-08-06).
+
+### Measured after plant corroboration (#223)
+
+Version 4 over the same 310 episodes, with generation-change at analysis_version 2. Nine episodes match plant `generation_low`. Count 0 / 1 / 2 moves from 187 / 116 / 7 (fuel and demand only) to 184 / 113 / 13. Three of the nine had no corroboration; six already had one. Candidates stay 31. The cap is still 2.
+
 - Rarity is cold for the first 20 days of history.
 - `is_candidate` is the event list for [#42](https://github.com/joshmcarthur/gridwatch/issues/42). Ranking does not wait for a human; after emit, events are Unreviewed until a later mark-as-reviewed flow ([ADR-0022](0022-editorial-review-and-publish-flow.md), [#41](https://github.com/joshmcarthur/gridwatch/issues/41)).
 - Evidence packages ([#38](https://github.com/joshmcarthur/gridwatch/issues/38)) can read `episode_scores` to pick what to build.

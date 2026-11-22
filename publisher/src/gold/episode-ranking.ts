@@ -15,12 +15,15 @@ import {
 } from "./common.ts";
 import { TABLES as DEMAND_DEVIATION_TABLES } from "./demand-deviation.ts";
 import { CORROBORATION_RULES, TABLES as EPISODE_TABLES } from "./episodes.ts";
-import { FUEL_TABLES as FUEL_GENERATION_CHANGE_TABLES } from "./generation-change.ts";
+import {
+  FUEL_TABLES as FUEL_GENERATION_CHANGE_TABLES,
+  PLANT_TABLES as PLANT_GENERATION_CHANGE_TABLES,
+} from "./generation-change.ts";
 
 /**
  * Bump by hand when a rule or a config value changes (ADR-0011, ADR-0024).
  */
-export const ANALYSIS_VERSION = 3;
+export const ANALYSIS_VERSION = 4;
 
 export const TABLES = ["episode_ranking_days", "episode_scores"] as const;
 
@@ -41,7 +44,7 @@ export const EPISODE_RANKING_CONFIG = {
   defaultSeverityCap: 10,
   durationCapPeriods: 12,
   breadthCap: 4,
-  /** Distinct corroborating observation types that score 1. Both rules of `CORROBORATION_RULES`. */
+  /** Matching rules that score 1. A third match does not raise it. */
   corroborationCap: 2,
   corroborationRules: CORROBORATION_RULES,
   historyDays: 90,
@@ -61,16 +64,18 @@ export const INPUTS: GoldGoldInput[] = [
     windowDays: EPISODE_RANKING_CONFIG.historyDays,
   },
   // Corroboration reads these observations for the episode's own date only (ADR-0024).
-  ...[FUEL_GENERATION_CHANGE_TABLES[0], DEMAND_DEVIATION_TABLES[0]].map(
-    (table) => ({
-      layer: "gold" as const,
-      table,
-      versionColumn: "inputs_sha256" as const,
-      completenessDataset: null,
-      // Optional: the baselines need history, so early days have no sentinel. Those days still rank.
-      optional: true,
-    }),
-  ),
+  ...[
+    FUEL_GENERATION_CHANGE_TABLES[0],
+    DEMAND_DEVIATION_TABLES[0],
+    PLANT_GENERATION_CHANGE_TABLES[0],
+  ].map((table) => ({
+    layer: "gold" as const,
+    table,
+    versionColumn: "inputs_sha256" as const,
+    completenessDataset: null,
+    // Optional: the baselines need history, so early days have no sentinel. Those days still rank.
+    optional: true,
+  })),
 ];
 
 export interface RankingEpisode {
@@ -80,7 +85,7 @@ export interface RankingEpisode {
   period_count: number;
   observation_types: readonly string[];
   islands: readonly string[];
-  /** Distinct corroborating observation types that overlap the episode (not members). */
+  /** Distinct corroboration rules that match the episode (not members). */
   corroboration_count: number;
   inputs_complete: boolean;
 }

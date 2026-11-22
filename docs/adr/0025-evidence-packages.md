@@ -28,7 +28,7 @@ One object. Types are in `evidence.ts`; `schema_version` and `builder_version` a
 | `episode` | The `episodes` row. |
 | `window` | The trading date, first and last period, and the peak period. |
 | `observations` | The member observations of the episode. |
-| `related_observations` | Observations that corroborate the episode without being members: fuel-level `generation_low` and NI/SI `demand_high` that overlap the episode span on one of its islands ([ADR-0021](0021-episodes.md), `CORROBORATION_RULES`). Same fields as `observations`. |
+| `related_observations` | Observations that corroborate the episode without being members: fuel-level `generation_low`, plant-level `generation_low`, and NI/SI `demand_high` that overlap the episode span on one of its islands ([ADR-0021](0021-episodes.md), `CORROBORATION_RULES`). Same fields as `observations`. |
 | `context` | Series aligned to `window.periods`: reference-node prices (period mean and highest publish), spreads, reserve by class and island, generation by fuel and island, the top plants of the peak period, HVDC, modelled load, modelled energy-balance residual, and the dispatch publishes of the peak period. A period with no row is `null`. |
 | `reference` | Plants (name, fuel, island, operator, points of connection, place) and points of connection (description, island, region, place). A field is `null` when no source row matches. |
 | `completeness` | One entry for every table that the builder reads: `complete`, `partial`, `missing` or `invalid`. An absent table is `missing`. It is never skipped. |
@@ -71,7 +71,7 @@ Each node in `EVIDENCE_CONFIG.namedEnergyNodes` also gets its highest peak-perio
 - One new module, one script, no new dependency, no change to the registry, the contract, `export.ts` or `datasets.ts`.
 - A package is only as good as the lake. A day without hydro, load or HVDC gold gives `missing` entries and no claims for them.
 - A real lake has no episode for 27 July 2026 until the detectors run on a backfill. The package is proven on a synthetic lake until then. A run on real data needs a hand-written `episodes` row.
-- Changing a claim, a rule or a config value needs a `BUILDER_VERSION` bump. Changing the shape needs an `EVIDENCE_SCHEMA_VERSION` bump.
+- Changing a claim, a rule or a config value needs a `BUILDER_VERSION` bump. Changing the shape needs an `EVIDENCE_SCHEMA_VERSION` bump. `BUILDER_VERSION` is 4 after [#223](https://github.com/joshmcarthur/gridwatch/issues/223) added plant `generation_low` to `related_observations`.
 
 ## Owner questions
 

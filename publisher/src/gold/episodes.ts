@@ -20,7 +20,10 @@ import {
   type GroupingObservation,
   groupObservations,
 } from "./episodes-group.ts";
-import { FUEL_TABLES as FUEL_GENERATION_CHANGE_TABLES } from "./generation-change.ts";
+import {
+  FUEL_TABLES as FUEL_GENERATION_CHANGE_TABLES,
+  PLANT_TABLES as PLANT_GENERATION_CHANGE_TABLES,
+} from "./generation-change.ts";
 import type { SubjectType } from "./observation.ts";
 import { TABLES as PRICE_ANOMALY_TABLES } from "./price-anomaly.ts";
 import { TABLES as PRICE_SEPARATION_TABLES } from "./price-separation.ts";
@@ -60,8 +63,8 @@ export const DETECTOR_OBSERVATION_TABLES = DETECTORS.map(
 /**
  * Observations that corroborate an episode without being members of it (issue #180, ADR-0021).
  * One matches when it is on the episode's trading date, overlaps its time span and has an island
- * that is one of the episode's islands. A null island (national demand) never matches. Plant-level
- * generation change is left out until its noise is cut (#179). Ranking and evidence share this list.
+ * that is one of the episode's islands. A null island (national demand) never matches. Plant
+ * generation_low is in the list (#223). Ranking and evidence share this list.
  */
 export const CORROBORATION_RULES = [
   {
@@ -69,6 +72,10 @@ export const CORROBORATION_RULES = [
     observationType: "generation_low",
   },
   { table: DEMAND_DEVIATION_TABLES[1], observationType: "demand_high" },
+  {
+    table: PLANT_GENERATION_CHANGE_TABLES[1],
+    observationType: "generation_low",
+  },
 ] as const;
 
 export const TABLES = ["episode_days", "episodes"] as const;

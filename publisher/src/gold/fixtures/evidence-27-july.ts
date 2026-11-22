@@ -441,8 +441,8 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
   ]);
   await write(PRICE_SEPARATION_TABLES[1], observationColumns, []);
 
-  // Corroborating observations (#180). Two match the episode. Four do not: the other island,
-  // a run outside the episode, a hit with no island, and the wrong direction.
+  // Corroborating observations (#180, #223). Three match the episode. The rest miss: the other
+  // island, a run outside the episode, a hit with no island, or the wrong direction.
   const related = (
     id: string,
     type: string,
@@ -450,6 +450,7 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
     subjectId: string,
     island: string | null,
     periods: [number, number],
+    plantId: string | null = null,
   ) => ({
     observation_id: id,
     observation_type: type,
@@ -461,11 +462,11 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
     subject_type: subjectType,
     subject_id: subjectId,
     island,
-    plant_id: null,
+    plant_id: plantId,
     measured_value: 100,
     severity: 2,
   });
-  const [fuelRule, demandRule] = CORROBORATION_RULES;
+  const [fuelRule, demandRule, plantRule] = CORROBORATION_RULES;
   await write(fuelRule.table, observationColumns, [
     related(
       "obs-fuel-wind-ni",
@@ -503,6 +504,35 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
       [42, 44],
     ),
     related("obs-demand-nz", "demand_high", "island", "NZ", null, [35, 40]),
+  ]);
+  await write(plantRule.table, observationColumns, [
+    related(
+      "obs-plant-huntly-ni",
+      "generation_low",
+      "plant",
+      "huntly_1_4",
+      "NI",
+      [38, 42],
+      "huntly_1_4",
+    ),
+    related(
+      "obs-plant-manapouri-si",
+      "generation_low",
+      "plant",
+      "manapouri",
+      "SI",
+      [38, 42],
+      "manapouri",
+    ),
+    related(
+      "obs-plant-huntly-high",
+      "generation_high",
+      "plant",
+      "huntly_1_4",
+      "NI",
+      [38, 42],
+      "huntly_1_4",
+    ),
   ]);
 
   // Prices and spreads.

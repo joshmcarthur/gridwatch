@@ -52,7 +52,7 @@ import { TABLES as RESERVE_PRICE_ANOMALY_TABLES } from "./reserve-price-anomaly.
 /** Bump when the shape of the package changes. */
 export const EVIDENCE_SCHEMA_VERSION = 2;
 /** Bump by hand when a claim, a rule or a config value of the builder changes. */
-export const BUILDER_VERSION = 3;
+export const BUILDER_VERSION = 4;
 
 export const EVIDENCE_CONFIG = {
   /** Periods before the episode start that the window holds (clamped to period 1). */
@@ -192,7 +192,7 @@ export interface EvidencePackage {
     periods: number[];
   };
   observations: EvidenceObservation[];
-  /** Observations that overlap the episode on its island but are not members (ADR-0021, #180). */
+  /** Observations that overlap the episode on its island but are not members (ADR-0021, #180, #223). */
   related_observations: EvidenceObservation[];
   /** Series are aligned to `window.periods`. A null is a period with no row. */
   context: {
