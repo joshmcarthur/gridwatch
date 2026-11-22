@@ -1,3 +1,4 @@
+import { lit } from "../silver/common.ts";
 import { ISLANDS, listSql } from "./common.ts";
 import type {
   Claim,
@@ -705,53 +706,97 @@ export async function dayClaims(c: ClaimContext): Promise<void> {
   }
 }
 
-/** The highest dispatch publish of the peak period, with counts of nodes at or above set prices. */
-async function publishPeak(
+type PublishKind = "energy" | "sir";
+
+function publishKindSql(kind: PublishKind): { keys: string; where: string } {
+  switch (kind) {
+    case "energy":
+      return { keys: "point_of_connection", where: "" };
+    case "sir":
+      return {
+        keys: "point_of_connection, island, reserve_class",
+        where: "AND reserve_class = 'SIR'",
+      };
+    default: {
+      const unreachable: never = kind;
+      return unreachable;
+    }
+  }
+}
+
+function publishesSql(
   c: ClaimContext,
   table: string,
-  kind: "energy" | "sir",
-): Promise<DispatchPeak | null> {
-  const keys =
-    kind === "energy"
-      ? "point_of_connection"
-      : "point_of_connection, island, reserve_class";
-  const where = kind === "energy" ? "" : "AND reserve_class = 'SIR'";
-  const thresholds = c.config.scarcityPrices;
-  const publishes = `SELECT point_of_connection AS node, island, source_published_at AS t,
+  kind: PublishKind,
+): string {
+  const { keys, where } = publishKindSql(kind);
+  return `SELECT point_of_connection AS node, island, source_published_at AS t,
        dollars_per_megawatt_hour AS v, event_end_utc,
        lead(source_published_at) OVER (
          PARTITION BY ${keys} ORDER BY source_published_at, dollars_per_megawatt_hour) AS next_t
      FROM ${c.from(table)} WHERE trading_period = ${c.peak} ${where}`;
+}
+
+/** Highest dispatch publish of the peak period, optionally of one node. */
+async function highestPublish(
+  c: ClaimContext,
+  table: string,
+  kind: PublishKind,
+  node?: string,
+): Promise<{
+  node: string;
+  island: string | null;
+  time_utc: string;
+  price: number;
+  seconds_to_next_publish: number;
+} | null> {
+  const filter = node === undefined ? "" : `WHERE node = ${lit(node)}`;
   const [top] = await c.query(
-    `WITH r AS (${publishes})
+    `WITH r AS (${publishesSql(c, table, kind)})
      SELECT node, island, strftime(t, '%Y-%m-%dT%H:%M:%SZ') AS time_utc, v,
        epoch(coalesce(next_t, event_end_utc) - t) AS seconds
-     FROM r ORDER BY v DESC, t, node LIMIT 1`,
+     FROM r ${filter} ORDER BY v DESC, t, node LIMIT 1`,
   );
   if (top === undefined) return null;
-  const [counts] = await c.query(
-    `WITH r AS (${publishes})
-     SELECT ${thresholds.map((limit) => `count(DISTINCT node) FILTER (WHERE v >= ${limit}) AS n${limit}`).join(", ")}
-     FROM r`,
-  );
   return {
     node: String(top.node),
     island: top.island === null ? null : String(top.island),
     time_utc: String(top.time_utc),
     price: round(Number(top.v)),
     seconds_to_next_publish: round(Number(top.seconds), 3),
+  };
+}
+
+/** The highest dispatch publish of the peak period, with counts of nodes at or above set prices. */
+async function publishPeak(
+  c: ClaimContext,
+  table: string,
+  kind: PublishKind,
+): Promise<DispatchPeak | null> {
+  const top = await highestPublish(c, table, kind);
+  if (top === null) return null;
+  const thresholds = c.config.scarcityPrices;
+  const [counts] = await c.query(
+    `WITH r AS (${publishesSql(c, table, kind)})
+     SELECT ${thresholds.map((limit) => `count(DISTINCT node) FILTER (WHERE v >= ${limit}) AS n${limit}`).join(", ")}
+     FROM r`,
+  );
+  return {
+    ...top,
     nodes_at_or_above: Object.fromEntries(
       thresholds.map((limit) => [String(limit), Number(counts?.[`n${limit}`])]),
     ),
   };
 }
 
+const PUBLISH_END_NOTE =
+  "When the node has no later publish in the period, the period end is the end.";
+
 /**
- * Dispatch publishes of the peak period (silver). One rule: store the highest publish (node,
- * time, price, seconds to the next publish of that node, or to the period end when it has none)
- * and the count of nodes that reach each scarcity price in that period. Energy and SIR.
- * HEP0331 at $21,000 for 85 seconds in the #21 write-up is a named gap: 39 nodes reach $20,000
- * in that period, and picking Hepburn Road would be a write-up special case (#185).
+ * Dispatch publishes of the peak period (silver). Store the highest publish (node, time, price,
+ * seconds to the next publish of that node, or to the period end when it has none) and the count
+ * of nodes that reach each scarcity price in that period. Energy and SIR. Also store the highest
+ * energy publish of each node in `namedEnergyNodes` (HEP0331 in the #21 write-up, #197).
  */
 export async function dispatchClaims(
   c: ClaimContext,
@@ -804,7 +849,7 @@ export async function dispatchClaims(
       label: `Seconds from the highest ${label} publish to the next publish of that node`,
       value: peak.seconds_to_next_publish,
       unit: "s",
-      note: "When the node has no later publish in the period, the period end is the end.",
+      note: PUBLISH_END_NOTE,
     });
     for (const [limit, count] of Object.entries(peak.nodes_at_or_above))
       c.claim({
@@ -815,6 +860,35 @@ export async function dispatchClaims(
         unit: "count",
         note: "Counted over the whole period, not at one instant.",
       });
+  }
+  if (c.present("dispatch_energy_prices")) {
+    const table = "dispatch_energy_prices";
+    for (const node of c.config.namedEnergyNodes) {
+      const peak = await highestPublish(c, table, "energy", node);
+      if (peak === null) continue;
+      const common = {
+        table,
+        queryId: "dispatchClaims",
+        period: c.peak,
+        subject: node,
+      };
+      const base = `dispatch.${node.toLowerCase()}`;
+      c.claim({
+        ...common,
+        id: `${base}.max_publish`,
+        label: `Highest dispatch energy publish at ${node} in period ${c.peak}`,
+        value: peak.price,
+        unit: "$/MWh",
+      });
+      c.claim({
+        ...common,
+        id: `${base}.seconds`,
+        label: `Seconds from the highest ${node} dispatch energy publish to the next publish of that node`,
+        value: peak.seconds_to_next_publish,
+        unit: "s",
+        note: PUBLISH_END_NOTE,
+      });
+    }
   }
   return out;
 }
