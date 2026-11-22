@@ -52,6 +52,11 @@ const DETECTORS = [
   },
 ] as const;
 
+/** Observation partitions that grouping reads. Site export joins the same set for highlights. */
+export const DETECTOR_OBSERVATION_TABLES = DETECTORS.map(
+  (detector) => detector.observations,
+);
+
 /**
  * Observations that corroborate an episode without being members of it (issue #180, ADR-0021).
  * One matches when it is on the episode's trading date, overlaps its time span and has an island

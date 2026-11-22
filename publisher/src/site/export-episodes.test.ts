@@ -240,6 +240,29 @@ test("a pair observation exports the two places, not a joined subject id", async
   ]);
 });
 
+test("a dashed subject_id is not a pair unless gold says it is", async () => {
+  const dir = await lake();
+  await writeDays(dir);
+  await writeEpisode(dir, ["obs-price"], ["price_high"]);
+  await writeParquet(
+    goldPartitionPath(dir, PRICE_ANOMALY_TABLES[1], DATE),
+    OBSERVATION_COLUMNS,
+    [priceObs("obs-price", "OTA2201-HAY2201", 200, 2)],
+  );
+  const section = await episodesOf(dir);
+  expect(section.items[0]?.highlights).toEqual([
+    {
+      observation_type: "price_high",
+      point_of_connection: "OTA2201-HAY2201",
+      pair_from: null,
+      pair_to: null,
+      island: "NI",
+      measured_value: 200,
+      baseline_value: 150.2,
+    },
+  ]);
+});
+
 test("missing observation partitions yield empty highlights, not omitted", async () => {
   const dir = await lake();
   await writeDays(dir);

@@ -2,12 +2,10 @@ import { existsSync } from "node:fs";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { goldPartitionPath } from "../gold/common.ts";
 import {
+  DETECTOR_OBSERVATION_TABLES,
   INPUTS as EPISODE_INPUTS,
   TABLES as EPISODE_TABLES,
 } from "../gold/episodes.ts";
-import { TABLES as PRICE_ANOMALY_TABLES } from "../gold/price-anomaly.ts";
-import { TABLES as PRICE_SEPARATION_TABLES } from "../gold/price-separation.ts";
-import { TABLES as RESERVE_PRICE_ANOMALY_TABLES } from "../gold/reserve-price-anomaly.ts";
 import { lit } from "../silver/common.ts";
 import type { CompletenessView } from "../silver/completeness.ts";
 import type {
@@ -29,23 +27,23 @@ export const EPISODES_SECTION: Section = {
   inputs: EPISODE_INPUTS,
 };
 
-const OBSERVATION_TABLES = [
-  PRICE_ANOMALY_TABLES[1],
-  PRICE_SEPARATION_TABLES[1],
-  RESERVE_PRICE_ANOMALY_TABLES[1],
-] as const;
-
-const PAIR_SUBJECT = /^([A-Z0-9]{7})-([A-Z0-9]{7})$/;
-
 interface MemberObservation {
   observation_id: string;
   observation_type: string;
   subject_id: string;
+  subject_type: string;
   point_of_connection: string | null;
   island: string | null;
   measured_value: number;
   baseline_value: number;
   severity: number;
+}
+
+function pairEnds(row: MemberObservation): [string, string] | null {
+  if (row.subject_type !== "point_of_connection_pair") return null;
+  const dash = row.subject_id.indexOf("-");
+  if (dash < 0) return null;
+  return [row.subject_id.slice(0, dash), row.subject_id.slice(dash + 1)];
 }
 
 const asUtc = (value: unknown): string => {
@@ -99,12 +97,12 @@ function winner(
 }
 
 function highlightOf(row: MemberObservation): SiteEpisodeHighlight {
-  const pair = PAIR_SUBJECT.exec(row.subject_id);
+  const pair = pairEnds(row);
   return {
     observation_type: row.observation_type,
     point_of_connection: row.point_of_connection,
-    pair_from: pair?.[1] ?? null,
-    pair_to: pair?.[2] ?? null,
+    pair_from: pair?.[0] ?? null,
+    pair_to: pair?.[1] ?? null,
     island: islandList(row.island === null ? [] : [row.island])[0] ?? null,
     measured_value: round(row.measured_value, 2),
     baseline_value: round(row.baseline_value, 2),
@@ -136,14 +134,14 @@ async function loadMembers(
   goldDir: string,
   date: string,
 ): Promise<Map<string, MemberObservation>> {
-  const paths = OBSERVATION_TABLES.map((table) =>
+  const paths = DETECTOR_OBSERVATION_TABLES.map((table) =>
     goldPartitionPath(goldDir, table, date),
   ).filter((path) => existsSync(path));
   const byId = new Map<string, MemberObservation>();
   if (paths.length === 0) return byId;
   const reader = await connection.runAndReadAll(
-    `SELECT observation_id, observation_type, subject_id, point_of_connection,
-            island, measured_value, baseline_value, severity
+    `SELECT observation_id, observation_type, subject_id, subject_type,
+            point_of_connection, island, measured_value, baseline_value, severity
      FROM read_parquet([${paths.map((path) => lit(path)).join(", ")}], union_by_name = true)`,
   );
   for (const row of reader.getRowObjectsJson() as Array<
@@ -154,6 +152,7 @@ async function loadMembers(
       observation_id: id,
       observation_type: String(row.observation_type),
       subject_id: String(row.subject_id),
+      subject_type: String(row.subject_type),
       point_of_connection: nullableText(row.point_of_connection),
       island: nullableText(row.island),
       measured_value: Number(row.measured_value),
