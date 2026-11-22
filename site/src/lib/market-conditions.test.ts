@@ -5,6 +5,7 @@ import {
   gasCoalShare,
   latestMarketUpdate,
   leadFact,
+  leadFinding,
   marketConditionCards,
   meanIslandSpread,
   meanReferencePrice,
@@ -626,4 +627,44 @@ test("the latest update leads with the same fact as the daily page, and falls ba
     (date) => short.byDate[date] as SiteDay,
   );
   expect(fallback.summary).toMatch(/made most of the power/);
+});
+
+test("a finding has a short form built from the same ranking", () => {
+  const dear = daySeries(41, { primary: 1020, meanPrices: [200, 200, 200] });
+  const finding = leadFinding(
+    dear.index,
+    dear.lastDate,
+    (date) => dear.byDate[date] as SiteDay,
+  );
+  expect(finding?.short).toBe("Prices: one of the highest");
+  const usual = daySeries(41, { primary: 1020, meanPrices: [50, 50, 50] });
+  expect(
+    leadFinding(
+      usual.index,
+      usual.lastDate,
+      (date) => usual.byDate[date] as SiteDay,
+    )?.short,
+  ).toBe("Main figures about usual");
+  const young = daySeries(10, { primary: 1000 });
+  expect(
+    leadFinding(
+      young.index,
+      young.lastDate,
+      (date) => young.byDate[date] as SiteDay,
+    ),
+  ).toBeNull();
+});
+
+test("only the latest seven recent days carry a short finding, and none without a loader", () => {
+  const series = daySeries(41, { primary: 1020, meanPrices: [200, 200, 200] });
+  const days = recentDays(
+    series.index,
+    14,
+    (date) => series.byDate[date] as SiteDay,
+  );
+  expect(days).toHaveLength(14);
+  expect(days.slice(0, 7).every((day) => day.lead !== null)).toBe(true);
+  expect(days.slice(7).every((day) => day.lead === null)).toBe(true);
+  expect(days[0]?.lead).toBe("Prices: one of the highest");
+  expect(recentDays(series.index).every((day) => day.lead === null)).toBe(true);
 });

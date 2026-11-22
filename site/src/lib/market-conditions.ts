@@ -9,6 +9,7 @@ import { formatTradingDate } from "./site-data.ts";
 const RANK_WINDOW = 365;
 const RANK_MINIMUM = 30;
 const RECENT_DAYS = 14;
+const WEEK_DAYS = 7;
 const HAY = "HAY2201";
 const BEN = "BEN2201";
 
@@ -65,6 +66,7 @@ export interface RecentDay {
   href: string;
   label: string;
   complete: boolean;
+  lead: string | null;
 }
 
 export type DayLoader = (date: string) => SiteDay;
@@ -191,6 +193,7 @@ const energyFormat = new Intl.NumberFormat("en-NZ", {
 
 const STAT_METRICS: Array<{
   id: StatContext["id"];
+  label: string;
   section: "generation" | "prices";
   subject: string;
   metric: (day: SiteDay) => number | null;
@@ -198,6 +201,7 @@ const STAT_METRICS: Array<{
 }> = [
   {
     id: "power",
+    label: "Generation",
     section: "generation",
     subject: "Generation was",
     metric: primaryGenerationMwh,
@@ -205,6 +209,7 @@ const STAT_METRICS: Array<{
   },
   {
     id: "price",
+    label: "Prices",
     section: "prices",
     subject: "Wholesale prices were",
     metric: meanReferencePrice,
@@ -212,6 +217,7 @@ const STAT_METRICS: Array<{
   },
   {
     id: "islands",
+    label: "Price gap",
     section: "prices",
     subject: "The gap between places was",
     metric: meanIslandSpread,
@@ -227,6 +233,7 @@ type Metric = Omit<(typeof STAT_METRICS)[number], "id" | "section"> & {
 const EXTRA_LEAD_METRICS: Metric[] = [
   {
     id: "thermal",
+    label: "Gas and coal share",
     section: "generation",
     subject: "The gas and coal share of generation was",
     metric: gasCoalShare,
@@ -234,6 +241,7 @@ const EXTRA_LEAD_METRICS: Metric[] = [
   },
   {
     id: "reserves",
+    label: "Reserve prices",
     section: "reserves",
     subject: "Reserve prices (the cost of backup generation kept ready) were",
     metric: meanReservePrice,
@@ -251,8 +259,29 @@ export function leadFact(
   date: string,
   loadDay: DayLoader,
 ): string | null {
+  return leadFinding(index, date, loadDay)?.sentence ?? null;
+}
+
+export interface LeadFinding {
+  sentence: string;
+  /** The same finding in a few words, for a list of days. */
+  short: string;
+}
+
+const BAND_SHORT: Record<RankBand, string> = {
+  "lower than most days in the past year": "lower than most",
+  "about usual": "about usual",
+  "higher than most": "higher than most",
+  "one of the highest": "one of the highest",
+};
+
+export function leadFinding(
+  index: SiteIndex,
+  date: string,
+  loadDay: DayLoader,
+): LeadFinding | null {
   const day = loadDay(date);
-  let best: { score: number; sentence: string } | null = null;
+  let best: (LeadFinding & { score: number }) | null = null;
   let compared = 0;
   let earlierCount = 0;
   for (const spec of [...STAT_METRICS, ...EXTRA_LEAD_METRICS] as Metric[]) {
@@ -276,13 +305,17 @@ export function leadFact(
       best = {
         score,
         sentence: `${spec.subject} ${bandPhrase(band, earlier.length)}.`,
+        short: `${spec.label}: ${BAND_SHORT[band]}`,
       };
     }
   }
-  if (best) return best.sentence;
+  if (best) return { sentence: best.sentence, short: best.short };
   if (compared === 0) return null;
   const days = Math.min(earlierCount, RANK_WINDOW);
-  return `None of the day's main figures was far from normal against the ${days} earlier complete days on this site.`;
+  return {
+    sentence: `None of the day's main figures was far from normal against the ${days} earlier complete days on this site.`,
+    short: "Main figures about usual",
+  };
 }
 
 export function primaryGenerationMwh(day: SiteDay): number | null {
@@ -337,15 +370,24 @@ export function dayContext(
   });
 }
 
-export function recentDays(index: SiteIndex, limit = RECENT_DAYS): RecentDay[] {
+/** The newest days first. With `loadDay`, the latest `WEEK_DAYS` carry their short finding. */
+export function recentDays(
+  index: SiteIndex,
+  limit = RECENT_DAYS,
+  loadDay?: DayLoader,
+): RecentDay[] {
   return [...index.days]
     .slice(-limit)
     .reverse()
-    .map((entry) => ({
+    .map((entry, position) => ({
       date: entry.date,
       href: dailyPath(entry.date),
       label: formatTradingDate(entry.date),
       complete: entry.complete,
+      lead:
+        loadDay && position < WEEK_DAYS
+          ? (leadFinding(index, entry.date, loadDay)?.short ?? null)
+          : null,
     }));
 }
 
