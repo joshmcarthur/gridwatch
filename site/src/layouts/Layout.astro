@@ -2,6 +2,7 @@
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "@fontsource/dm-sans/700.css";
+import { pageTitle } from "../lib/page-title";
 import "../styles/tokens.css";
 import "../styles/prose.css";
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 const { title, description } = Astro.props;
+const documentTitle = pageTitle(title);
 ---
 
 <!doctype html>
@@ -19,7 +21,7 @@ const { title, description } = Astro.props;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <title>{title}</title>
+    <title>{documentTitle}</title>
   </head>
   <body>
     <header class="masthead">
