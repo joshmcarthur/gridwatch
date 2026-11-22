@@ -14,7 +14,11 @@ import {
   monthGroups,
   neighbouringDays,
 } from "../../../../lib/daily-page";
-import { episodeClockRange, episodeHeadline } from "../../../../lib/episode-copy";
+import {
+  episodeClockRange,
+  episodeEvidenceLinks,
+  episodeHeadline,
+} from "../../../../lib/episode-copy";
 import { dayContext, leadFact } from "../../../../lib/market-conditions";
 import {
   formatTradingDate,
@@ -114,6 +118,11 @@ const months = monthGroups(index);
               <li id={`episode-${episode.episode_id}`}>
                 <p>{episodeHeadline(episode)}</p>
                 <p>{episodeClockRange(episode, day)}</p>
+                {episodeEvidenceLinks(episode).map((link) => (
+                  <p>
+                    <a href={link.href}>{link.label}</a>
+                  </p>
+                ))}
               </li>
             ))}
           </ol>

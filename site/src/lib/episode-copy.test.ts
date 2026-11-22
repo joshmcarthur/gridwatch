@@ -1,5 +1,9 @@
 import { expect, test } from "vitest";
-import { episodeClockRange, episodeHeadline } from "./episode-copy.ts";
+import {
+  episodeClockRange,
+  episodeEvidenceLinks,
+  episodeHeadline,
+} from "./episode-copy.ts";
 
 test("a scarcity-shaped episode names prices, reserves and the North Island", () => {
   expect(
@@ -56,4 +60,21 @@ test("episode times are a 12-hour clock range, not trading period numbers", () =
       day,
     ),
   ).toBe("12:00am–12:30am");
+});
+
+// Catches: a reserve episode with no way to the chart, or a link on episodes that have no reserve chart.
+test("only reserve episodes link to the reserve prices", () => {
+  expect(
+    episodeEvidenceLinks({
+      observation_types: ["price_high", "reserve_price_high"],
+    }),
+  ).toEqual([
+    { label: "See the reserve prices for this day.", href: "#reserve-prices" },
+  ]);
+  expect(
+    episodeEvidenceLinks({ observation_types: ["reserve_price_low"] }),
+  ).toHaveLength(1);
+  expect(episodeEvidenceLinks({ observation_types: ["price_high"] })).toEqual(
+    [],
+  );
 });

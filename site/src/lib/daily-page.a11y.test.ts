@@ -28,6 +28,9 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).not.toMatch(/sample points?/i);
     expect(html).not.toMatch(/Otahuhu/);
     expect(html).toMatch(/<h2 id="reserve-prices"[^>]*>What backup cost<\/h2>/);
+    if (html.includes('href="#reserve-prices"')) {
+      expect(html).toContain('id="reserve-prices"');
+    }
     // Fixture data has no reserve prices. Real data does, so accept the chart or the missing line.
     expect(
       html.includes('id="reserve-chart-title"') ||
