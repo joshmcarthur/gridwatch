@@ -127,6 +127,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **`bronze_sha256`.** A column in every silver table. It holds the SHA-256 of the bronze file the row came from. The runner uses it to find silver that is out of date. See [ADR-0009](adr/0009-runner-default-mode.md).
 
+**Candidate.** An episode that ranks in the top 3 of its trading date and scores at least 0.35. It is a proposal for explanation, not a published event. See [ADR-0024](adr/0024-episode-ranking.md).
+
 **Canonical ID.** The one Gridwatch ID for an entity, such as a POC code or `<site>/<plant>`. Tables keep the source IDs next to it. See [ADR-0008](adr/0008-entity-model.md).
 
 **Claim.** One statement in an evidence package: a value, a unit, the table and function that gave it, and a confidence level. Its id is a stable name, such as `price.OTA2201.p36`. A claim can list the claims it is built from in `depends_on`. See [ADR-0025](adr/0025-evidence-packages.md).
@@ -138,6 +140,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 **Entity.** A thing that appears in several datasets under different IDs, such as a POC, plant, unit or participant. See [ADR-0008](adr/0008-entity-model.md).
 
 **Energy-balance residual.** For an island and a period: generation plus HVDC import, minus grid load (modelled). Gold keeps it as a column and never adjusts it. It holds what the three sources do not explain: transmission losses, Generation_MD omission and zero-fill, definition differences, embedded generation counted twice, calibration, and the gap between RTD model load and metered generation. The plant list is the [sources 3.5 coverage table](sources.md#35-generation_md) (issue #99 / PR #101). See [ADR-0018](adr/0018-energy-balance.md).
+
+**Episode score.** A number from 0 to 1 for one episode. It adds four stored components: severity, duration, breadth and rarity. Rarity is how seldom a day with the same observation types and islands occurred in the last 90 days. See [ADR-0024](adr/0024-episode-ranking.md).
 
 **`event_start_utc` and `event_end_utc`.** The UTC start (included) and end (excluded) of a trading period or dispatch interval. They are unambiguous across the daylight saving change. See [ADR-0003](adr/0003-time-column-naming.md).
 
