@@ -31,6 +31,15 @@ Amended 2026-11-21. The exporter writes an `episodes` section on every day. The 
 - **`complete` on the day.** Still generation and prices only.
 - **Index.** `sections.episodes` and `latest_complete_sections.episodes` are optional so older files still validate.
 
+### Amendment (#29): reserve prices
+
+Amended 2026-11-22. The exporter writes a `reserves` section on every day. The contract version stays 1: the field was already an optional extension. `EXPORT_VERSION` is 4.
+
+- **Shape.** One row per reserve class (`FIR`, then `SIR`) and island (`NI`, then `SI`, null last): daily mean, min and max price in $/MWh, periods present and expected, rows present, and `inputs_complete`. Empty when the section is missing. Period prices stay in gold; the site file carries the daily row only.
+- **State.** `missing` when gold has no `reserve_by_class_island_period` partition. It is never zeros. `incomplete` when gold `inputs_complete` is false, or when `dispatch_reserve_prices` is not `complete` in `_completeness`. `complete` otherwise.
+- **`complete` on the day.** Still generation and prices only. Reserves do not take part.
+- **Index.** `sections.reserves` and `latest_complete_sections.reserves` are optional so older files still validate.
+
 ### Amendment (#97): energy balance and HVDC transfer
 
 Amended 2026-11-21. The exporter writes a `sankey` section on every day. The contract version stays 1: the field was already an optional extension. `EXPORT_VERSION` is 2.
