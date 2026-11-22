@@ -2,17 +2,8 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { type DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
+import { DuckDBInstance } from "@duckdb/node-api";
 import type { PublisherDataset } from "../datasets.ts";
-import { goldPartitionPath } from "../gold/common.ts";
-import {
-  INPUTS as EPISODE_INPUTS,
-  TABLES as EPISODE_TABLES,
-} from "../gold/episodes.ts";
-import {
-  INPUTS as RESERVE_INPUTS,
-  TABLES as RESERVE_TABLES,
-} from "../gold/reserves.ts";
 import type { DatasetSummary } from "../runner.ts";
 import { partitionVersions } from "../silver/common.ts";
 import {
@@ -23,14 +14,9 @@ import { periodsInTradingDate, periodToUtc } from "../trading-time.ts";
 import {
   assertSiteDay,
   assertSiteIndex,
-  type EpisodesSection,
-  type Island,
-  type ReserveClass,
-  type ReservesSection,
   SITE_CONTRACT_VERSION,
   SITE_EXPORT_ID,
   type SiteDay,
-  type SiteEpisode,
   type SiteIndex,
   type SiteIndexDay,
 } from "./contract.ts";
@@ -38,19 +24,14 @@ import {
   datasetStatus,
   type Section,
   sectionDatasets,
-  sectionState,
 } from "./export-common.ts";
+import { buildEpisodes, EPISODES_SECTION } from "./export-episodes.ts";
 import { buildGeneration, GENERATION_SECTION } from "./export-generation.ts";
 import { buildNodalMap, NODAL_MAP_SECTION } from "./export-nodal-map.ts";
 import { buildPrices, PRICES_SECTION } from "./export-prices.ts";
+import { buildReserves, RESERVES_SECTION } from "./export-reserves.ts";
 import { buildSankey, SANKEY_SECTION } from "./export-sankey.ts";
-import {
-  numberOrNull,
-  readStamp,
-  round,
-  roundOrNull,
-  rowsOf,
-} from "./gold-read.ts";
+import { round } from "./gold-read.ts";
 
 export { round };
 
@@ -60,16 +41,6 @@ export { round };
  */
 export const EXPORT_VERSION = 5;
 
-const EPISODES_SECTION: Section = {
-  name: "episodes",
-  sentinel: EPISODE_TABLES[0],
-  inputs: EPISODE_INPUTS,
-};
-const RESERVES_SECTION: Section = {
-  name: "reserves",
-  sentinel: RESERVE_TABLES[0],
-  inputs: RESERVE_INPUTS,
-};
 const SECTIONS: readonly Section[] = [
   GENERATION_SECTION,
   PRICES_SECTION,
@@ -88,171 +59,6 @@ function periodAxis(date: string) {
     period: i + 1,
     start_utc: periodToUtc(date, i + 1).eventStartUtc.toString(),
   }));
-}
-
-const asUtc = (value: unknown): string => {
-  if (value instanceof Date) return value.toISOString().replace(/\.000Z$/, "Z");
-  if (typeof value === "string") {
-    const ms = Date.parse(value);
-    if (Number.isNaN(ms)) throw new TypeError(`not an instant: ${value}`);
-    return new Date(ms).toISOString().replace(/\.000Z$/, "Z");
-  }
-  throw new TypeError("event time is not a string or Date");
-};
-
-const stringList = (value: unknown): string[] => {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string");
-};
-
-const islandList = (value: unknown): Island[] =>
-  stringList(value).flatMap((item) => {
-    if (item === "NI" || item === "SI") return [item];
-    return [];
-  });
-
-function missingEpisodes(
-  base: Pick<EpisodesSection, "silver_tables" | "gold_tables" | "datasets">,
-): EpisodesSection {
-  return {
-    ...base,
-    state: "missing",
-    missing_periods: [],
-    analysis_version: null,
-    inputs_sha256: null,
-    items: [],
-  };
-}
-
-async function buildEpisodes(
-  connection: DuckDBConnection,
-  goldDir: string,
-  date: string,
-  completeness: CompletenessView,
-): Promise<EpisodesSection> {
-  const section = EPISODES_SECTION;
-  const base = {
-    silver_tables: [] as string[],
-    gold_tables: [...EPISODE_TABLES],
-    datasets: sectionDatasets(section),
-  };
-  const stamp = await readStamp(
-    connection,
-    goldPartitionPath(goldDir, section.sentinel, date),
-  );
-  if (!stamp) return missingEpisodes(base);
-  const itemsPath = goldPartitionPath(goldDir, EPISODE_TABLES[1], date);
-  const rows = existsSync(itemsPath)
-    ? await rowsOf(
-        connection,
-        goldDir,
-        EPISODE_TABLES[1],
-        date,
-        `episode_id, seed_observation_id, event_start_utc, event_end_utc,
-         start_trading_period, end_trading_period, member_count,
-         observation_types, islands, severity`,
-        "severity DESC, episode_id",
-      )
-    : [];
-  const items: SiteEpisode[] = rows.map((row) => ({
-    episode_id: String(row.episode_id),
-    seed_observation_id: String(row.seed_observation_id),
-    start_utc: asUtc(row.event_start_utc),
-    end_utc: asUtc(row.event_end_utc),
-    start_trading_period: Number(row.start_trading_period),
-    end_trading_period: Number(row.end_trading_period),
-    member_count: Number(row.member_count),
-    observation_types: stringList(row.observation_types),
-    islands: islandList(row.islands),
-    severity: round(Number(row.severity), 2),
-  }));
-  return {
-    ...base,
-    state: sectionState(stamp, section, completeness, date),
-    missing_periods: [],
-    analysis_version: stamp.analysis_version,
-    inputs_sha256: stamp.inputs_sha256,
-    items,
-  };
-}
-
-function missingReserves(
-  base: Pick<ReservesSection, "silver_tables" | "gold_tables" | "datasets">,
-): ReservesSection {
-  return {
-    ...base,
-    state: "missing",
-    missing_periods: [],
-    analysis_version: null,
-    inputs_sha256: null,
-    classes: [],
-  };
-}
-
-async function buildReserves(
-  connection: DuckDBConnection,
-  goldDir: string,
-  date: string,
-  completeness: CompletenessView,
-): Promise<ReservesSection> {
-  const section = RESERVES_SECTION;
-  const base = {
-    silver_tables: section.inputs.map((input) => input.table),
-    gold_tables: [...RESERVE_TABLES],
-    datasets: sectionDatasets(section),
-  };
-  const stamp = await readStamp(
-    connection,
-    goldPartitionPath(goldDir, section.sentinel, date),
-  );
-  if (!stamp) return missingReserves(base);
-  const dayPath = goldPartitionPath(goldDir, RESERVE_TABLES[1], date);
-  if (!existsSync(dayPath)) return missingReserves(base);
-
-  const dayRows = await rowsOf(
-    connection,
-    goldDir,
-    RESERVE_TABLES[1],
-    date,
-    "reserve_class, island, mean_price, min_price, max_price, periods_present, periods_expected, rows_present, inputs_complete",
-    "reserve_class, island NULLS LAST",
-  );
-  const classes = dayRows.map((row) => ({
-    reserve_class: String(row.reserve_class) as ReserveClass,
-    island: (row.island ?? null) as Island | null,
-    mean_price: roundOrNull(numberOrNull(row.mean_price), 2),
-    min_price: roundOrNull(numberOrNull(row.min_price), 2),
-    max_price: roundOrNull(numberOrNull(row.max_price), 2),
-    periods_present: Number(row.periods_present ?? 0),
-    periods_expected: Number(row.periods_expected ?? 0),
-    rows_present: Number(row.rows_present ?? 0),
-    inputs_complete: row.inputs_complete === true,
-  }));
-
-  const periodRows = await rowsOf(
-    connection,
-    goldDir,
-    RESERVE_TABLES[0],
-    date,
-    "trading_period, dollars_per_megawatt_hour",
-    "trading_period, reserve_class, island NULLS LAST",
-  );
-  const missingPeriods = [
-    ...new Set(
-      periodRows
-        .filter((row) => numberOrNull(row.dollars_per_megawatt_hour) === null)
-        .map((row) => Number(row.trading_period)),
-    ),
-  ].sort((a, b) => a - b);
-
-  return {
-    ...base,
-    state: sectionState(stamp, section, completeness, date),
-    missing_periods: missingPeriods,
-    analysis_version: stamp.analysis_version,
-    inputs_sha256: stamp.inputs_sha256,
-    classes,
-  };
 }
 
 /**
