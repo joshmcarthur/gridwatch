@@ -610,3 +610,20 @@ test("leadFact is null when there are too few earlier days", () => {
     leadFact(index, lastDate, (date) => byDate[date] as SiteDay),
   ).toBeNull();
 });
+
+test("the latest update leads with the same fact as the daily page, and falls back to the kind of day", () => {
+  const long = daySeries(41, { primary: 1020, meanPrices: [200, 200, 200] });
+  const update = latestMarketUpdate(
+    long.index,
+    (date) => long.byDate[date] as SiteDay,
+  );
+  expect(update.summary).toBe(
+    leadFact(long.index, long.lastDate, (date) => long.byDate[date] as SiteDay),
+  );
+  const short = daySeries(10, { primary: 1000 });
+  const fallback = latestMarketUpdate(
+    short.index,
+    (date) => short.byDate[date] as SiteDay,
+  );
+  expect(fallback.summary).toMatch(/made most of the power/);
+});

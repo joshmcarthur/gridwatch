@@ -155,7 +155,7 @@ export function latestMarketUpdate(
     date,
     href: dailyPath(date),
     dateLabel: formatTradingDate(date),
-    summary: dayHeadline(day).sentence,
+    summary: leadFact(index, date, loadDay) ?? dayHeadline(day).sentence,
     generationLag,
   };
 }
