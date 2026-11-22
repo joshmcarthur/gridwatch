@@ -84,6 +84,19 @@ export interface GenerationSection extends SectionBase {
     average_megawatts: number;
   }>;
   /**
+   * Optional. Absence means the exporter has not listed plants yet. One row per plant for the
+   * day, from gold `generation_by_plant_day`. Empty when the section is missing or that gold
+   * table is absent.
+   */
+  plants?: Array<{
+    plant_id: string;
+    plant_name: string;
+    fuel: FuelCategory;
+    island: Island | null;
+    megawatt_hours: number;
+    average_megawatts: number;
+  }>;
+  /**
    * Sums over all islands. `primary` excludes battery and includes `unmapped`. Null when the
    * section is missing. Provisional (ADR-0014).
    */
@@ -519,6 +532,20 @@ function checkGeneration(
     number(row.megawatt_hours, `${at}.megawatt_hours`);
     number(row.average_megawatts, `${at}.average_megawatts`);
   });
+  if (section.plants !== undefined) {
+    const plants = list(section.plants, `${path}.plants`);
+    checkEmptyWhenMissing(plants, base.state, `${path}.plants`);
+    plants.forEach((item, i) => {
+      const at = `${path}.plants[${i}]`;
+      const row = record(item, at);
+      text(row.plant_id, `${at}.plant_id`);
+      text(row.plant_name, `${at}.plant_name`);
+      text(row.fuel, `${at}.fuel`);
+      nullable(row.island, (v, p) => oneOf(v, ISLANDS, p), `${at}.island`);
+      number(row.megawatt_hours, `${at}.megawatt_hours`);
+      number(row.average_megawatts, `${at}.average_megawatts`);
+    });
+  }
   if (base.state === "missing") {
     if (section.totals !== null)
       fail(`${path}.totals`, "a missing section has null totals");

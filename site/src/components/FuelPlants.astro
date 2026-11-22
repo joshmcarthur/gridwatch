@@ -1,0 +1,125 @@
+---
+import type { SiteDay } from "@gridwatch/publisher/site-contract";
+import { fuelPlants } from "../lib/fuel-plants";
+
+interface Props {
+  day: SiteDay;
+}
+
+const { day } = Astro.props;
+const view = fuelPlants(day);
+---
+
+{
+  view.kind === "missing" ? (
+    <p>{view.message}</p>
+  ) : (
+    <div class="plants">
+      <h3 id="fuel-plants">Which plants made it</h3>
+      <p>
+        How much each <a href="#word-plant">plant</a> generated today, in{" "}
+        <a href="#word-megawatt-hour">megawatt-hours</a>, grouped by fuel.
+      </p>
+      {
+        view.tables.map((table) => (
+          <section class="fuel" aria-labelledby={`fuel-plants-heading-${table.fuel}`}>
+            <h4 id={`fuel-plants-heading-${table.fuel}`}>{table.label}</h4>
+            {
+              table.plants.length === 0 ? (
+                <p>The plant list for this fuel is not ready yet.</p>
+              ) : (
+                <div class="table-scroll">
+                  <p class="table-caption" id={table.captionId}>
+                    {table.label} plants today.
+                  </p>
+                  <table aria-labelledby={table.captionId}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Plant</th>
+                        <th scope="col">Island</th>
+                        <th scope="col">Megawatt-hours</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {
+                        table.plants.map((plant) => (
+                          <tr>
+                            <th scope="row">{plant.name}</th>
+                            <td>{plant.island}</td>
+                            <td>{plant.megawatt_hours}</td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              )
+            }
+          </section>
+        ))
+      }
+    </div>
+  )
+}
+
+<style>
+  .plants {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .fuel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  h3,
+  h4,
+  p {
+    margin: 0;
+  }
+
+  h4 {
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  .table-scroll {
+    overflow-x: auto;
+  }
+
+  .table-caption {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-label);
+    line-height: 1.5;
+    color: var(--color-ink-muted);
+  }
+
+  table {
+    border-collapse: collapse;
+    font-size: var(--text-label);
+    white-space: nowrap;
+  }
+
+  th,
+  td {
+    padding: var(--space-1) var(--space-2);
+    border-bottom: 1px solid var(--color-rule);
+    text-align: right;
+  }
+
+  thead th {
+    font-weight: 700;
+  }
+
+  thead th:first-child,
+  tbody th {
+    text-align: left;
+  }
+
+  tbody th {
+    font-weight: 400;
+  }
+</style>

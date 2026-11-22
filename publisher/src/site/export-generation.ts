@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { goldPartitionPath } from "../gold/common.ts";
 import {
@@ -57,6 +58,7 @@ export async function buildGeneration(
       inputs_sha256: null,
       series: [],
       daily: [],
+      plants: [],
       totals: null,
     };
 
@@ -123,6 +125,26 @@ export async function buildGeneration(
     };
   });
 
+  const plantPath = goldPartitionPath(goldDir, "generation_by_plant_day", date);
+  const plantRows = existsSync(plantPath)
+    ? await rowsOf(
+        connection,
+        goldDir,
+        "generation_by_plant_day",
+        date,
+        "plant_id, plant_name, fuel_category, island, megawatt_hours, average_megawatts",
+        "fuel_category, megawatt_hours DESC, plant_id",
+      )
+    : [];
+  const plants = plantRows.map((row) => ({
+    plant_id: String(row.plant_id),
+    plant_name: row.plant_name == null ? "" : String(row.plant_name),
+    fuel: String(row.fuel_category) as FuelCategory,
+    island: (row.island ?? null) as Island | null,
+    megawatt_hours: round(numberOrNull(row.megawatt_hours) ?? 0, 3),
+    average_megawatts: round(numberOrNull(row.average_megawatts) ?? 0, 3),
+  }));
+
   return {
     ...base,
     state,
@@ -131,6 +153,7 @@ export async function buildGeneration(
     inputs_sha256: stamp.inputs_sha256,
     series: [...seriesByKey.values()],
     daily,
+    plants,
     totals: {
       primary_megawatt_hours: round(primary, 3),
       battery_megawatt_hours: round(battery, 3),

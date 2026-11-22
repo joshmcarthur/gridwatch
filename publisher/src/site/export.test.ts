@@ -108,6 +108,24 @@ test("a valid day passes, with and without the optional extensions", () => {
   expect(() =>
     assertSiteDay({
       ...day,
+      generation: {
+        ...day.generation,
+        plants: [
+          {
+            plant_id: "MAN/manapouri",
+            plant_name: "manapouri",
+            fuel: "hydro",
+            island: "SI",
+            megawatt_hours: 100,
+            average_megawatts: 4,
+          },
+        ],
+      },
+    }),
+  ).not.toThrow();
+  expect(() =>
+    assertSiteDay({
+      ...day,
       reserves: {
         state: "missing",
         missing_periods: [],
@@ -144,6 +162,35 @@ test("a valid day passes, with and without the optional extensions", () => {
       },
     }),
   ).not.toThrow();
+});
+
+test("the validator rejects a missing generation section that carries plants", () => {
+  const day = sampleDay();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      generation: {
+        ...day.generation,
+        state: "missing",
+        missing_periods: [],
+        analysis_version: null,
+        inputs_sha256: null,
+        series: [],
+        daily: [],
+        plants: [
+          {
+            plant_id: "MAN/manapouri",
+            plant_name: "manapouri",
+            fuel: "hydro",
+            island: "SI",
+            megawatt_hours: 100,
+            average_megawatts: 4,
+          },
+        ],
+        totals: null,
+      },
+    }),
+  ).toThrow("generation.plants: a missing section has no entries");
 });
 
 test("the validator rejects a missing reserves section that carries classes", () => {
@@ -415,8 +462,14 @@ async function writeGeneration(
   {
     period = [],
     day = [],
+    plants = null,
     stamp = {},
-  }: { period?: Row[]; day?: Row[]; stamp?: Row } = {},
+  }: {
+    period?: Row[];
+    day?: Row[];
+    plants?: Row[] | null;
+    stamp?: Row;
+  } = {},
 ) {
   await writeGold(
     "generation_by_plant_period",
@@ -424,6 +477,21 @@ async function writeGeneration(
     { trading_period: "INTEGER" },
     [{ trading_period: 1, ...stamp }],
   );
+  if (plants !== null) {
+    await writeGold(
+      "generation_by_plant_day",
+      date,
+      {
+        plant_id: "VARCHAR",
+        plant_name: "VARCHAR",
+        fuel_category: "VARCHAR",
+        island: "VARCHAR",
+        megawatt_hours: "DOUBLE",
+        average_megawatts: "DOUBLE",
+      },
+      plants,
+    );
+  }
   await writeGold(
     "generation_by_fuel_period",
     date,
@@ -738,6 +806,85 @@ test("generation pivots by fuel and island, and the totals split battery from pr
   expect(
     day.generation.series.find((s) => s.fuel === "unmapped")?.island,
   ).toBeNull();
+  expect(day.generation.plants).toEqual([]);
+});
+
+test("generation.plants lists gold plant-day rows, largest first", async () => {
+  await writeGeneration(DATE, {
+    period: [
+      {
+        trading_period: 1,
+        fuel_category: "hydro",
+        island: "NI",
+        megawatt_hours: 10,
+      },
+    ],
+    day: [
+      {
+        fuel_category: "hydro",
+        island: "NI",
+        megawatt_hours: 10,
+        average_megawatts: 0.4,
+      },
+    ],
+    plants: [
+      {
+        plant_id: "OHA/ohau_a",
+        plant_name: "ohau_a",
+        fuel_category: "hydro",
+        island: "SI",
+        megawatt_hours: 12.3456,
+        average_megawatts: 0.5,
+      },
+      {
+        plant_id: "MAN/manapouri",
+        plant_name: "manapouri",
+        fuel_category: "hydro",
+        island: "SI",
+        megawatt_hours: 100.1,
+        average_megawatts: 4.17,
+      },
+      {
+        plant_id: "TAB/tauhara",
+        plant_name: "Tauhara",
+        fuel_category: "geothermal",
+        island: "NI",
+        megawatt_hours: 50,
+        average_megawatts: 2,
+      },
+    ],
+  });
+  const day = await buildSiteDay({
+    goldDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  expect(day.generation.plants).toEqual([
+    {
+      plant_id: "TAB/tauhara",
+      plant_name: "Tauhara",
+      fuel: "geothermal",
+      island: "NI",
+      megawatt_hours: 50,
+      average_megawatts: 2,
+    },
+    {
+      plant_id: "MAN/manapouri",
+      plant_name: "manapouri",
+      fuel: "hydro",
+      island: "SI",
+      megawatt_hours: 100.1,
+      average_megawatts: 4.17,
+    },
+    {
+      plant_id: "OHA/ohau_a",
+      plant_name: "ohau_a",
+      fuel: "hydro",
+      island: "SI",
+      megawatt_hours: 12.346,
+      average_megawatts: 0.5,
+    },
+  ]);
 });
 
 test("values round to 3 decimals for MWh and 2 for prices, keeping the sign and no negative zero", async () => {
