@@ -53,7 +53,7 @@ const exampleLabel = formatTradingDate(exampleDate);
             <Fragment set:html={section.html} />
           </div>
           {section.heading === VISUAL_HEADING &&
-            (exampleDay ? (
+            (exampleDay && exampleDay.prices.state !== "missing" ? (
               <PriceChart day={exampleDay} />
             ) : (
               <p class="chart-fallback">

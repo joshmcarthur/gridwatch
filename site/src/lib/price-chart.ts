@@ -15,7 +15,10 @@ export const PRICE_NOTICE =
 export type PriceIsland = "NI" | "SI";
 
 /** Island and line style for each reference node (ADR-0012, Landscape colour rules). */
-const NODE_STYLE: Record<string, { island: PriceIsland; dashed: boolean }> = {
+export const NODE_STYLE: Record<
+  string,
+  { island: PriceIsland; dashed: boolean }
+> = {
   OTA2201: { island: "NI", dashed: false },
   HAY2201: { island: "NI", dashed: true },
   BEN2201: { island: "SI", dashed: false },

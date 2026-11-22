@@ -1,0 +1,200 @@
+---
+import ChartFigure from "../../../../../components/ChartFigure.astro";
+import Layout from "../../../../../layouts/Layout.astro";
+import { dailyPath, dateFromParams } from "../../../../../lib/daily-page";
+import {
+  CONFIDENCE_LEVELS,
+  REVIEW_LABEL,
+  claimAnchor,
+  claimFigure,
+  confidenceLabel,
+  eventHeadline,
+  eventPathsForIndex,
+  eventWindowChart,
+  findEvent,
+  linkClaims,
+  requireCheckedEvent,
+} from "../../../../../lib/event-page";
+import { episodeClockRange } from "../../../../../lib/episode-copy";
+import { placeName } from "../../../../../lib/price-regions";
+import {
+  formatTradingDate,
+  loadSiteDay,
+  loadSiteIndex,
+} from "../../../../../lib/site-data";
+
+export function getStaticPaths() {
+  const index = loadSiteIndex();
+  return eventPathsForIndex(index, (date) => loadSiteDay(date, index));
+}
+
+const { year, month, day: dayParam, id } = Astro.params;
+if (!year || !month || !dayParam || !id) {
+  throw new Error("Missing event params");
+}
+const date = dateFromParams(year, month, dayParam);
+const day = loadSiteDay(date);
+const event = findEvent(day, id);
+requireCheckedEvent(event);
+const titleDate = formatTradingDate(date);
+const headline = eventHeadline(event);
+const clock = episodeClockRange(event, day);
+const charts = eventWindowChart(event);
+const dailyHref = dailyPath(date);
+---
+
+<Layout
+  title={`${headline} · ${titleDate}`}
+  description={`What happened on the New Zealand electricity system on ${titleDate}: ${headline}`}
+>
+  <p class="home">
+    <a href="/">Gridwatch NZ home</a>
+    {" · "}
+    <a href={dailyHref}>{titleDate}</a>
+  </p>
+
+  <article class="prose">
+    <header class="lede">
+      <p class="review">{REVIEW_LABEL}</p>
+      <h1>{headline}</h1>
+      <p>{clock} on {titleDate}.</p>
+    </header>
+
+    <section class="slot" aria-labelledby="what-happened">
+      <h2 id="what-happened">What happened</h2>
+      <p set:html={linkClaims(event.what_happened, event)} />
+    </section>
+
+    <section class="slot" aria-labelledby="why">
+      <h2 id="why">Why it happened</h2>
+      <p set:html={linkClaims(event.why, event)} />
+    </section>
+
+    <section class="slot" aria-labelledby="what-it-means">
+      <h2 id="what-it-means">What it means</h2>
+      <p set:html={linkClaims(event.what_it_means, event)} />
+    </section>
+
+    <section class="slot" aria-labelledby="confidence-heading">
+      <h2 id="confidence-heading">How sure is this?</h2>
+      <p>
+        These figures come from the market files. The labels mean:
+      </p>
+      <dl class="confidence">
+        {
+          CONFIDENCE_LEVELS.map((level) => (
+            <div>
+              <dt>{level.label}</dt>
+              <dd>{level.meaning}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </section>
+
+    <section class="slot" aria-labelledby="evidence-heading">
+      <h2 id="evidence-heading">The numbers</h2>
+      <ul class="claims">
+        {
+          event.claims.map((claim) => (
+            <li id={claimAnchor(claim.id)}>
+              <p>
+                <strong>{claim.label}</strong>
+                {`: ${claimFigure(claim)}. ${confidenceLabel(claim.confidence)}.`}
+              </p>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    {
+      charts ? (
+        <section class="slot" aria-labelledby="event-charts">
+          <h2 id="event-charts">Prices that evening</h2>
+          <ChartFigure
+            plots={[charts.priceSvg, charts.reserveSvg].filter(
+              (svg): svg is string => svg !== null,
+            )}
+            tableCaptionId="event-prices-table-caption"
+            tableCaption="Wholesale prices in $/MWh for each 30-minute slice of this evening."
+            headers={charts.headers}
+            rows={charts.rows}
+            legendLabel="Lines in the evening charts"
+          >
+            <Fragment slot="legend">
+              {event.window.prices.map((node) => (
+                <li>{placeName(node.point_of_connection)}</li>
+              ))}
+              {charts.reserveSvg ? (
+                <li>North Island reserve price</li>
+              ) : null}
+            </Fragment>
+            <Fragment slot="caption">
+              <p>
+                Ōtāhuhu is Auckland, Haywards is near Wellington, Benmore is in
+                the South Island. The reserve line is the cost of backup kept
+                ready in the North Island.
+              </p>
+            </Fragment>
+          </ChartFigure>
+        </section>
+      ) : null
+    }
+
+    <section class="slot" aria-labelledby="event-links">
+      <h2 id="event-links">The rest of this day</h2>
+      <p>
+        <a href={dailyHref}>Open the {titleDate} page</a> for generation, the
+        full day's prices, and backup costs.
+      </p>
+    </section>
+  </article>
+</Layout>
+
+<style>
+  .home {
+    margin: 0 0 var(--space-5);
+    font-size: var(--text-label);
+  }
+
+  .lede,
+  .slot {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .slot {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    padding: var(--space-5);
+  }
+
+  .review {
+    margin: 0;
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  .confidence,
+  .claims {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .claims {
+    padding-left: 1.5rem;
+  }
+
+  .confidence dt {
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  .confidence dd {
+    margin: 0.25rem 0 0;
+  }
+</style>

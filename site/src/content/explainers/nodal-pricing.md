@@ -48,6 +48,6 @@ The daily page for [Monday 27 July 2026](/2026/07/27/) has that day's generation
 
 ## Links to Gridwatch data and events
 
-The daily page for this example is [Monday 27 July 2026](/2026/07/27/). It holds the generation mix, wholesale prices, and energy flow for that trading day.
+The daily page for this example is [Monday 27 July 2026](/2026/07/27/).
 
-A written-up event page for this evening is not on this site yet. When one is published, it will be linked here.
+The written-up event for this evening is [high wholesale prices and high reserve prices on Monday 27 July 2026](/2026/07/27/events/394f75a3bfa948a3/).
