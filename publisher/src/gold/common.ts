@@ -87,6 +87,13 @@ export const shiftDate = (date: string, days: number) =>
 export const windowDates = (date: string, days: number) =>
   Array.from({ length: days + 1 }, (_, i) => shiftDate(date, i - days));
 
+/**
+ * UTF-16 code-unit order. It does not depend on the runtime locale, so gold and
+ * evidence bytes stay the same across machines.
+ */
+export const byString = (a: string, b: string): number =>
+  a < b ? -1 : a > b ? 1 : 0;
+
 /** The rolling window of a gold input, or `undefined` for a single-date input. */
 export const goldInputWindowDays = (input: GoldInput): number | undefined => {
   switch (input.layer) {

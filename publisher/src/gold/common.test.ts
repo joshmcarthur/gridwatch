@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
+  byString,
   type GoldInput,
   goldPartitionPath,
   inputFingerprint,
@@ -84,6 +85,12 @@ const wantedOf = (
   inputs: readonly GoldInput[],
   completeness = completenessView(),
 ) => wantedFingerprints(silverDir, goldDir, 1, inputs, completeness);
+
+// Catches: localeCompare putting "a" next to "A" or "é" next to "e".
+test("byString is code-unit order: uppercase before lowercase, accents after ASCII", () => {
+  expect(["é", "Z", "a", "A"].sort(byString)).toEqual(["A", "Z", "a", "é"]);
+  expect(byString("a", "a")).toBe(0);
+});
 
 // Catches: a gold input read from the silver directory, or a changed upstream gold
 // fingerprint that does not change the wanted fingerprint (the date would never rebuild).

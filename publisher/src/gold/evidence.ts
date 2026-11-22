@@ -7,7 +7,7 @@ import {
   completenessKey,
 } from "../silver/completeness.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
-import { goldPartitionPath, silverPartitionPath } from "./common.ts";
+import { byString, goldPartitionPath, silverPartitionPath } from "./common.ts";
 import {
   type ClaimContext,
   type ClaimInput,
@@ -506,9 +506,7 @@ export async function buildEvidencePackage(
           inputs_complete: Boolean(row.inputs_complete),
         });
     }
-    observations.sort((a, b) =>
-      a.observation_id.localeCompare(b.observation_id),
-    );
+    observations.sort((a, b) => byString(a.observation_id, b.observation_id));
 
     const claims: Claim[] = [];
     const claim = (input: ClaimInput) => {
@@ -600,8 +598,8 @@ export async function buildEvidencePackage(
       .map(({ abs: _abs, ...entry }) => entry)
       .sort((a, b) =>
         a.layer === b.layer
-          ? a.table.localeCompare(b.table)
-          : a.layer.localeCompare(b.layer),
+          ? byString(a.table, b.table)
+          : byString(a.layer, b.layer),
       );
     const partitions = (layer: "gold" | "silver") =>
       entries
