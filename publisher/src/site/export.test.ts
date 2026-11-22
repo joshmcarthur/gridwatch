@@ -177,6 +177,69 @@ test("the validator rejects a missing reserves section that carries classes", ()
   ).toThrow("reserves.classes: a missing section has no entries");
 });
 
+test("a reserves class may omit price", () => {
+  const day = sampleDay();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      reserves: {
+        state: "complete",
+        missing_periods: [],
+        analysis_version: 1,
+        inputs_sha256: "abc",
+        silver_tables: ["dispatch_reserve_prices"],
+        gold_tables: ["reserve_by_class_island_period"],
+        datasets: [],
+        classes: [
+          {
+            reserve_class: "FIR",
+            island: "NI",
+            mean_price: 1,
+            min_price: 0,
+            max_price: 2,
+            periods_present: 46,
+            periods_expected: 46,
+            rows_present: 46,
+            inputs_complete: true,
+          },
+        ],
+      },
+    }),
+  ).not.toThrow();
+});
+
+test("a reserves class price must match the period axis", () => {
+  const day = sampleDay();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      reserves: {
+        state: "complete",
+        missing_periods: [],
+        analysis_version: 1,
+        inputs_sha256: "abc",
+        silver_tables: ["dispatch_reserve_prices"],
+        gold_tables: ["reserve_by_class_island_period"],
+        datasets: [],
+        classes: [
+          {
+            reserve_class: "FIR",
+            island: "NI",
+            mean_price: 1,
+            min_price: 0,
+            max_price: 2,
+            periods_present: 46,
+            periods_expected: 46,
+            rows_present: 46,
+            inputs_complete: true,
+            price: [1],
+          },
+        ],
+      },
+    }),
+  ).toThrow("reserves.classes[0].price: expected 46 entries");
+});
+
 test("the validator rejects a missing sankey that carries zeros", () => {
   const day = sampleDay();
   expect(() =>
