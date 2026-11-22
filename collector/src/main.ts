@@ -7,7 +7,7 @@ import {
   USAGE,
 } from "./runner.ts";
 
-// docker compose run --rm collector [--from YYYY-MM-DD --to YYYY-MM-DD] [--dataset ID]...
+// docker compose --profile jobs run --rm collector [--from YYYY-MM-DD --to YYYY-MM-DD] [--dataset ID]...
 // Exit code 1 if any dataset failed. Exit code 2 for bad arguments.
 let args: ReturnType<typeof parseRunArgs>;
 try {

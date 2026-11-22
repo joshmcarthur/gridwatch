@@ -9,8 +9,8 @@ import {
 } from "./runner.ts";
 import { completenessStatusLines } from "./silver/completeness.ts";
 
-// docker compose run --rm publisher [--from YYYY-MM-DD --to YYYY-MM-DD] [--dataset ID]... [--force]
-// docker compose run --rm publisher status
+// docker compose --profile jobs run --rm publisher [--from YYYY-MM-DD --to YYYY-MM-DD] [--dataset ID]... [--force]
+// docker compose --profile jobs run --rm publisher status
 // Exit code 1 if any dataset failed. Exit code 2 for bad arguments.
 const argv = process.argv.slice(2);
 if (argv[0] === "status") {

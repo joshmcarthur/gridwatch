@@ -59,3 +59,5 @@ A dataset can fail without stopping the others: a thrown error, a failed downloa
 - The fleet file gets one silver partition for each run date, even when the file did not change. This follows ADR-0006.
 - A row in silver whose `bronze_sha256` equals the manifest is trusted. A hand-edited partition is not detected. Use `--force`.
 - `compose.yml` sets `entrypoint`, so arguments after the service name reach the runner. This also means `docker compose up` runs the real job (a backfill on a new data folder), not a no-op.
+
+Amended 2026-11-23. The `collector` and `publisher` services are now on the `jobs` profile ([ADR-0026](0026-self-hosting-stack.md)), so `docker compose up` does not start them. The `updater` service starts the default mode itself, newest days first. The rules above are unchanged.

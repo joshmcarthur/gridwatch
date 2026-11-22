@@ -12,7 +12,8 @@ The repository is a TypeScript monorepo. To add a dataset, follow [ADR-0005](doc
 | `publisher/`  | Reads bronze. Writes `data/silver/` (normalised) and `data/gold/` (derived tables and site JSON) |
 | `data/`       | The data. Gitignored. [`data/README.md`](data/README.md) explains the layers                     |
 | `site/`       | Astro site. Reads `data/gold/site/` at build time. `site/publish.ts` builds it into `site-out/`  |
-| `compose.yml` | Runs `collector`, `publisher` and `site-build` as one-shot jobs, and serves the site with nginx  |
+| `updater/`    | Long-running loop. Runs collect, publish and the site build in cycles, newest days first         |
+| `compose.yml` | Runs `updater` and a Caddy `site`. The one-shot jobs are on the `jobs` profile                   |
 
 Processing is per NZ trading day. Dataset code lives in `collector/src/electricity-authority/<dataset>.ts`, `publisher/src/silver/<dataset>.ts` and `publisher/src/gold/`.
 
@@ -37,38 +38,79 @@ npm run typecheck   # tsc, all workspaces
 npm test            # Vitest
 ```
 
-## Run
+## Run it yourself
 
-Two one-shot jobs bring `data/` up to date. Run the collector, then the publisher. The daily cron job does the same ([ADR-0002](docs/adr/0002-daily-run-data-and-site-hosting.md)).
-
-```bash
-docker compose run --rm collector && docker compose run --rm publisher && docker compose run --rm site-build
-```
-
-The jobs run as `node` (uid 1000) in the image. Files they write under `data/` and `site-out/` are owned by uid 1000. `docker compose up` starts collector and publisher together, and the nginx `site` service. It does not run `site-build` (`site-build` is on the `publish` profile). Use the `run` chain above for the daily path.
-
-Local `docker compose run` builds the image from the `Dockerfile`. On the home server, pull the image GitHub Actions publishes to GitHub Container Registry on every merge to `main`:
+You need Docker with Compose. You do not need a checkout of this repository. The stack pulls a prebuilt image from [GitHub Container Registry](#container-images).
 
 ```bash
-echo <github-token-with-read:packages> | docker login ghcr.io -u USERNAME --password-stdin
-docker compose pull
-docker compose run --no-build --rm collector
+mkdir gridwatch && cd gridwatch
+curl -fsSLO https://raw.githubusercontent.com/joshmcarthur/gridwatch/main/compose.yml
+docker compose up -d
 ```
 
-`--no-build` uses the pulled image instead of rebuilding from the local `Dockerfile`. That pull is `latest`. To pin a commit, set `GRIDWATCH_IMAGE_TAG=sha-<7-char>` (the short SHA GitHub Actions also pushes). See [Container images](#container-images).
+Open <http://localhost:8080>. Any tool that takes a `compose.yml` can run the same file.
 
-- **First run.** Each dataset backfills the last 12 months, computed from the run date. This is about 7 GB and about 1.2 hours ([`docs/sources.md`](docs/sources.md) section 4). Make sure the disk has room.
-- **Later runs.** The collector fetches the trailing 5 days, and any date or month of the 12-month window that it does not hold (a failed day, or a gap). The monthly datasets (Generation_MD and HVDC_Flows) are checked again for the last 3 months. The publisher publishes the days that are new or whose bronze file changed. A run with nothing new changes nothing.
+The stack has two services:
+
+- **`updater`** fetches the data, builds the site and keeps it current. It needs no cron job.
+- **`site`** is [Caddy](https://caddy.community/). It serves the last good build, so the site stays up while a new build runs.
+
+The site is ready in stages. The first page you see says the pages are on their way. After about 5 minutes the site shows the latest 7 days. The updater then fills in older days, 30 days at a time, back to 12 months. A test run took about 12 minutes for each 30-day step, so the full fill takes about 2.5 hours. It needs about 7 GB of disk ([`docs/sources.md`](docs/sources.md) section 4). After that, it checks for new data every 6 hours and rebuilds the site only when something changed. If you stop or restart it, it carries on from the data it already holds.
+
+### Settings
+
+Set these in your shell, or in a `.env` file next to `compose.yml`.
+
+| Variable              | Default          | Meaning                                                                |
+| --------------------- | ---------------- | ---------------------------------------------------------------------- |
+| `GRIDWATCH_PORT`      | `8080`           | The port the site listens on                                           |
+| `GRIDWATCH_IMAGE_TAG` | `latest`         | The image to run. Use `sha-<7-char>` to pin a commit                   |
+| `GRIDWATCH_DATA`      | a Docker volume  | Where the data lives. A path such as `./data` uses a folder on the host |
+| `GRIDWATCH_SITE_OUT`  | a Docker volume  | Where the built site lives. Same rule as `GRIDWATCH_DATA`              |
+
+Prefer the default volumes. If you use host folders, create them first and give them to uid 1000, because the containers run as `node` (uid 1000). Docker would otherwise create them owned by root, and the updater could not write to them. On Docker Desktop for Mac, a host folder for `GRIDWATCH_SITE_OUT` can make the site return errors for a few seconds after each build.
+
+```bash
+mkdir data site-out && sudo chown 1000:1000 data site-out
+```
+
+### Update
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+The data volume stays. The updater rebuilds the site once when it starts, so new pages from the new image appear.
+
+### Run a job by hand
+
+The `collector`, `publisher` and `site-build` services are one-shot jobs on the `jobs` profile. `docker compose up` does not start them. Stop the `updater` first, so two runs do not write the same data:
+
+```bash
+docker compose stop updater
+docker compose --profile jobs run --rm collector --from 2025-01-01 --to 2025-03-31 --dataset dispatch_energy_prices
+docker compose --profile jobs run --rm publisher --from 2025-01-01 --to 2025-03-31 --dataset dispatch_energy_prices
+docker compose --profile jobs run --rm site-build
+docker compose start updater
+```
+
+- **No range.** The collector fetches the trailing 5 days, and any date or month of the 12-month window that it does not hold (a failed day, or a gap). The monthly datasets (Generation_MD and HVDC_Flows) are checked again for the last 3 months. The publisher publishes the days that are new or whose bronze file changed. A run with nothing new changes nothing.
 - **A range.** `--from YYYY-MM-DD --to YYYY-MM-DD` replaces the default range. `--dataset <id>` limits the run (repeat it for more). The publisher also takes `--force` to publish up-to-date days again. Older data is never deleted.
 - **Failures.** One failing dataset does not stop the others. The summary names it and the exit code is 1.
+- **Help.** `docker compose --profile jobs run --rm collector --help` lists the options.
+
+The rules for each kind of dataset are in [ADR-0009](docs/adr/0009-runner-default-mode.md). The stack design is in [ADR-0026](docs/adr/0026-self-hosting-stack.md).
+
+### From a checkout
+
+`compose.yml` has no `build:` section, so it runs only a published image. To run your own build, build and tag the image, then point the stack at it:
 
 ```bash
-docker compose run --rm collector --from 2025-01-01 --to 2025-03-31 --dataset dispatch_energy_prices
-docker compose run --rm publisher --from 2025-01-01 --to 2025-03-31 --dataset dispatch_energy_prices
-docker compose run --rm collector --help
+docker build -t ghcr.io/joshmcarthur/gridwatch:local .
+GRIDWATCH_IMAGE_TAG=local docker compose up -d
 ```
 
-The rules for each kind of dataset are in [ADR-0009](docs/adr/0009-runner-default-mode.md).
+To keep the data in `./data` as the queries in `docs/events/` expect, also set `GRIDWATCH_DATA=./data` (see the settings above).
 
 Architecture decisions are in [`docs/adr/`](docs/adr/). Copy `0000-template.md` for a new one.
 
@@ -81,7 +123,11 @@ ghcr.io/joshmcarthur/gridwatch:latest
 ghcr.io/joshmcarthur/gridwatch:sha-<7-char>
 ```
 
-The package is private by default. In GitHub, open **Packages → gridwatch → Package settings** and grant your account access before pulling on the host. For a public image, change the package visibility there.
+The package is public, so `docker compose pull` needs no login. GitHub creates a new package as private. If you fork the repository and publish your own image, either make the package public (**Packages → gridwatch → Package settings**) or log in on the host first, with a token that has `read:packages`:
+
+```bash
+echo <github-token-with-read:packages> | docker login ghcr.io -u USERNAME --password-stdin
+```
 
 To publish manually, run the **Publish Docker image** workflow from the Actions tab. You can supply an extra tag.
 

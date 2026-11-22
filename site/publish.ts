@@ -3,7 +3,7 @@ import { access, mkdir, readlink, rename, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// docker compose run --rm site-build
+// docker compose --profile jobs run --rm site-build
 // Builds the site into the inactive slot (releases/a or releases/b), then points current at it.
 // Exit code 1 if the build fails. The live site stays on the old slot.
 
