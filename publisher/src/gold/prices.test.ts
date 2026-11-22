@@ -264,6 +264,48 @@ test("spreads are from minus to, by period, flagged when either side has no row"
   });
 });
 
+test("nodal_price_periods keeps every priced POC on every period, with nulls where silver has no row", async () => {
+  await writeSilver(synthetic);
+  await publishGoldPrices({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DATE,
+  });
+  const rows = await readGold("nodal_price_periods");
+  const pocs = [
+    ...new Set(rows.map((r) => String(r.point_of_connection))),
+  ].sort();
+  expect(pocs).toEqual(["BEN2201", "HAY2201", "OTA2201", "Z1", "Z2"]);
+  expect(rows).toHaveLength(5 * 48);
+  const at = (poc: string, period: number) =>
+    rows.find(
+      (r) => r.point_of_connection === poc && r.trading_period === period,
+    );
+  expect(at("OTA2201", 1)).toMatchObject({
+    price: 30,
+    min_price: 10,
+    max_price: 60,
+    rows_present: 3,
+    has_proxy_price: false,
+    inputs_complete: true,
+  });
+  expect(at("OTA2201", 1)).not.toHaveProperty("price_region");
+  expect(at("OTA2201", 1)).not.toHaveProperty("latitude");
+  expect(at("Z1", 1)).toMatchObject({ price: 0, rows_present: 1 });
+  expect(at("Z2", 1)).toMatchObject({ price: 100, rows_present: 1 });
+  expect(at("Z1", 2)).toMatchObject({
+    price: null,
+    rows_present: 0,
+    inputs_complete: false,
+  });
+  expect(at("HAY2201", 3)).toMatchObject({
+    price: null,
+    rows_present: 0,
+    inputs_complete: false,
+  });
+});
+
 test("national distribution of period prices over the POCs that have a row", async () => {
   await writeSilver(synthetic);
   await publishGoldPrices({

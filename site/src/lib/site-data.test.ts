@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import {
   formatTradingDate,
   loadSiteDay,
+  loadSiteDayIfPresent,
   loadSiteIndex,
   recentEpisodes,
 } from "./site-data.ts";
@@ -57,7 +58,11 @@ test("formatTradingDate formats a trading date in en-NZ", () => {
 test("loadSiteIndex uses the fixture when gold is absent", () => {
   process.env.DATA_ROOT = dataRoot;
   const index = loadSiteIndex();
-  expect(index.days[0]?.date).toBe("2026-09-27");
+  expect(index.days.map((day) => day.date)).toEqual([
+    "2026-09-26",
+    "2026-09-27",
+    "2026-10-29",
+  ]);
 });
 
 test("loadSiteIndex returns gold when DATA_ROOT points at a valid index", async () => {
@@ -90,6 +95,18 @@ test("loadSiteDay reads the fixture day when gold is absent", () => {
 test("loadSiteDay throws when the date is not in the index", () => {
   process.env.DATA_ROOT = dataRoot;
   expect(() => loadSiteDay("1999-01-01")).toThrow(/1999-01-01/);
+});
+
+test("loadSiteDayIfPresent returns null for a date that is not in the index", () => {
+  process.env.DATA_ROOT = dataRoot;
+  expect(loadSiteDayIfPresent("2026-07-27")).toBeNull();
+  expect(loadSiteDayIfPresent("1999-01-01")).toBeNull();
+});
+
+test("loadSiteDayIfPresent does not fall back from 2026-07-27 to the fixture day", () => {
+  process.env.DATA_ROOT = dataRoot;
+  expect(loadSiteDayIfPresent("2026-07-27")).toBeNull();
+  expect(loadSiteDayIfPresent("2026-09-27")?.trading_date).toBe("2026-09-27");
 });
 
 test("loadSiteDay reads a gold day when DATA_ROOT has a matching file", async () => {

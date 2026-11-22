@@ -9,6 +9,7 @@ import {
   dailyStaticPaths,
   dateFromParams,
   dayHeadline,
+  mapPath,
   monthGroups,
   neighbouringDays,
 } from "../../../../lib/daily-page";
@@ -83,6 +84,11 @@ const months = monthGroups(index);
     <section class="slot" aria-labelledby="wholesale-prices">
       <h2 id="wholesale-prices">What it sold for</h2>
       <PriceChart day={day} />
+      <p>
+        <a href={mapPath(date)}>
+          Map of wholesale prices at each named place on the grid
+        </a>
+      </p>
     </section>
 
     <section class="slot" aria-labelledby="energy-flow">

@@ -116,7 +116,7 @@ The rejected alternative is a hash of the sorted member `observation_id`s. That 
 
 ### Severity
 
-Member `severity` is unitless and equals 1 at that detector's threshold ([ADR-0019](0019-observations-and-price-anomaly-detector.md)). Episode `severity` is the maximum of the members. There are still no bands. Ranking which episodes become public events is editorial ([#41](https://github.com/joshmcarthur/gridwatch/issues/41)), not this table.
+Member `severity` is unitless and equals 1 at that detector's threshold ([ADR-0019](0019-observations-and-price-anomaly-detector.md)). Episode `severity` is the maximum of the members. There are still no bands. Ranking which episodes become public events is [#37](https://github.com/joshmcarthur/gridwatch/issues/37), not this table. Once emitted, those events are public and Unreviewed ([ADR-0022](0022-editorial-review-and-publish-flow.md)).
 
 Max is biased toward a single extreme spike. A long moderate cluster can look quieter than a short spike. That is accepted for v1. Duration stays visible in `period_count` and the time span.
 
@@ -137,7 +137,7 @@ It would *not* be one episode if `generation_low` never fires (plant-size cutoff
 ### Out of v1
 
 - LLM prose (brief §7 step 5). Episodes are deterministic grouping.
-- Editorial review and the publish flow for events ([#41](https://github.com/joshmcarthur/gridwatch/issues/41), brief §6.3). An event is an episode someone chooses to explain.
+- Public events and `review_status` ([ADR-0022](0022-editorial-review-and-publish-flow.md), [#41](https://github.com/joshmcarthur/gridwatch/issues/41), brief §6.3). An event is an episode the pipeline explains publicly. There is no publish gate; emitted events are Unreviewed until a later moderation flag.
 - Evidence packages ([#38](https://github.com/joshmcarthur/gridwatch/issues/38)).
 - Constraint and SPD case grouping ([#44](https://github.com/joshmcarthur/gridwatch/issues/44)). No constraint observations exist.
 - Hydro observations and any window longer than 60 minutes.

@@ -165,14 +165,14 @@ Class: `omission` (no Generation_MD row while RTD has energy), `zero-fill` (Gene
 
 | Plant / POC | Class | Generation_MD GWh | RTD GWh | Verdict | Evidence |
 |---|---|---:|---:|---|---|
-| Waipori `WPG0331` vs parent `HWB0331` | definition | 124.1 | 108.8 | Different POCs, not a mapping error. NSP `WPG0331` is embedded under `HWB0331`. | **Measured.** RTD at `HWB0331` is `MAH0` Mahinerangi 94.4 + `WPI0` Deep Stream 14.4. Period correlation with `MAH0` is 0.995. |
-| Waipori fuel at `WPG0331` | definition | ~94 of 124.1 labelled Hydro | `MAH0` 94.4 wind | Hydro label includes Mahinerangi wind. Gold relabels plant `WPG/waipori` as wind ([#105](https://github.com/joshmcarthur/gridwatch/issues/105)). The BWK1101 row stays hydro. Generation_MD is one row, so the Deep Stream share at `WPG0331` is also labelled wind. | **Inferred** from the 0.995 correlation. `MAH0` is 36 MW wind. No source statement. Owner chose relabel. |
+| Waipori `WPG0331` vs parent `HWB0331` | definition | 124.1 | 108.8 | Different POCs, not a mapping error. NSP `WPG0331` is embedded under `HWB0331`. | **Measured.** RTD at `HWB0331` is `MAH0` Mahinerangi 94.4 + `WPI0` Deep Stream 14.4. The half-hour correlation of `WPG0331` with `MAH0` is 0.90. With the `HWB0331` total it is 0.97. |
+| Waipori fuel at `WPG0331` | definition | ~94 of 124.1 labelled Hydro | `MAH0` 94.4 wind | Hydro label includes Mahinerangi wind. Gold relabels plant `WPG/waipori` as wind ([#105](https://github.com/joshmcarthur/gridwatch/issues/105)). The BWK1101 row stays hydro. Generation_MD is one row, so the Deep Stream share at `WPG0331` is also labelled wind. | **Inferred** from the 0.90 correlation with `MAH0` (the split is not measured). `MAH0` is 36 MW wind. No source statement. Owner chose relabel. |
 | Waipori `BWK1101` | not-a-gap | 107.1 | 105.5 (`WPI0`) | The two files match. | **Measured.** |
 | Matahina `MAT1101` (`MAT0`) | omission | 0 | ~285 | Omitted from Generation_MD since about October 2021. | **Measured** unless marked. Fleet has `MAT0` (80 MW hydro) and `ANI0` Aniwhenua (25 MW) at `MAT1101`. Generation_MD has only Aniwhenua (BOPD): 139.9 GWh vs RTD `ANI0` 134.6, correlation 0.984; adding `MAT0` drops it to 0.17. No Matahina row in the 12 months of silver. Files 202001 and 202109 have `MAT,MAT1101,TRUS,matahina,Hydro`; 202112 and 202309 have none. Fleet ownership of `MAT0` changed from TRUS to CNIR on 2021-10-01. File 202110 was not fetched, so the exact month is **inferred**. Cause not documented by EMI that was found. |
 | Ngawha `KOE1101` | definition | 420.6 | 221.2 (`NGB0`) | Generation_MD includes generation that was not dispatched. | **Measured** volumes. The extra energy is **inferred** from the difference. |
 | Twin Rivers solar `TRS0` | omission | none | ~29 | No Generation_MD row. | **Measured.** |
 | Pukenui | omission | none before 2026-04 | — | In Generation_MD from 2026-04. | **Measured.** |
-| Maraetai `MTI2201` | unresolved | 830 | 911 | RTD is higher in every month, by 5% to 25%. Cause unknown. | **Measured.** |
+| Maraetai `MTI2201` | unresolved | 830 | 911 | RTD is higher in 11 of 12 months, by 5.1% to 19.8%. In October 2026 RTD is 0.3% lower. Cause unknown. | **Measured.** |
 | Glenbrook-Ohurua battery `GLB0` | omission | none | 23.2 | No Generation_MD row. | **Measured.** |
 | Huntly Battery `HLY11` | omission | none | 5.5 | No Generation_MD row. | **Measured.** |
 | Taiohi Solar `TOH0` at `HLY0331` | omission | none | 38.3 | No Generation_MD row. | **Measured.** |
@@ -255,6 +255,8 @@ One 11.5 MB nodal file downloaded at about 1.6 MB/s on a single stream (one meas
 ## 5. Licence and attribution
 
 Website content, including these datasets, is licensed under Creative Commons Attribution 4.0 International unless an item says otherwise. You may copy, store, distribute and adapt it "as long as you attribute it to the Electricity Authority and abide by the other license terms". Logos, trade marks, site design and third-party works are excluded. The Authority accepts no liability for accuracy and may change or delete content without notice. Source: [copyright, disclaimer and transparency statement](https://www.ea.govt.nz/copyright-disclaimer-transparency/). I found no dataset-level licence text that differs ([example page](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/DispatchEnergyPrices)).
+
+**Map coastline (LINZ, [#49](https://github.com/joshmcarthur/gridwatch/issues/49)).** The nodal price map uses a simplified coastline of the North Island, South Island and Rakiura / Stewart Island, committed as `site/src/data/nz-coastline.json`. Source family: [NZ Coastlines and Islands Polygons (Topo 1:250k)](https://data.linz.govt.nz/layer/51559-nz-coastlines-and-islands-polygons-topo-1250k/), LINZ Data Service layer 51559, mean high water, [CC BY 4.0](https://www.linz.govt.nz/products-services/data/licensing-and-using-data/attributing-linz-data). Required credit on the map page and Terms: "Contains data sourced from the LINZ Data Service licensed for reuse under CC BY 4.0". The committed file is clipped (mainland + Stewart Island; no Chatham or subantarctic islands), interiors dropped, and simplified for a national SVG. No tile server. See [ADR-0023](adr/0023-nodal-price-map.md).
 
 ## 6. Surprises that change the plan
 
@@ -363,13 +365,13 @@ Catalogue: [EMI RTD](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPr
 |---|---|
 | Pattern | One ZIP per RTD case. All cases for a calendar day in one folder. Published as a batch the next morning ([RTD page](https://www.emi.ea.govt.nz/Wholesale/Datasets/DispatchAndPricing/CaseFiles/RTD)). |
 | Count and size | 29 Oct 2026: **434** ZIPs, 260–272 KB each, **114.4 MB** for the day (measured, listing). About 250 cases/day is the page's typical figure; this day was higher. |
-| 12-month size | About **42 GB** raw if every RTD ZIP is kept (365 × 114 MB). Unknown whether every day is 434 cases. |
+| 12-month size | About **27 GB** raw if every RTD ZIP is kept. The 434-case day is high; a typical day is ~75 MB (section 11.3). |
 | Contents | A ZIP is 16 text files. The solved case is `*.SPDSOLVED` (~714 KB uncompressed). Other files are network, market, period, logs, SFT check. |
 | Constraint rows | `I,SOLUTION,CONSTRAINT` then `D,SOLUTION,CONSTRAINT` rows. Header includes `CONSTRAINTNAME, CONSTRAINTTYPE, CONSTRAINTVALUE, LOWERLIMIT, UPPERLIMIT, LOWERMARGINALPRICE, UPPERMARGINALPRICE` (measured). Types `BrCnst` and `MnCnst`. 35 constraint rows in the 00:00 29 Oct 2026 case. Both marginal prices were 0.00000 (nothing binding at midnight). |
 | Cadence | Indeterminate; typically ~5-minute RTD. Count per day varies. |
 | Licence | Site content is CC BY 4.0 (section 5); no dataset-level exception found. |
 
-Sibling folders: `CaseFiles/PRSS/` (fallback prices when RTD is missing), `CaseFiles/RTDP/` (scarcity), `CaseFiles/WDS/` (weekly dispatch, static Jan 2024–Oct 2026 per the hub page). Not opened.
+Sibling folders (`PRSS`, `RTDP`, `WDS`) are measured in section 11.1.
 
 **vSPD GDX.** `Datasets/Wholesale/DispatchAndPricing/GDX/<yyyy>/Pricing_yyyymmdd.gdx`, about **40 MB per day** (measured Jan 2026 files, 36–43 MB). Binary GAMS. About **15 GB** for 12 months. Input to vSPD, not a constraint extract. Needs a GAMS/vSPD reader. Not fetched beyond the listing.
 
@@ -385,7 +387,7 @@ Sibling folders: `CaseFiles/PRSS/` (fallback prices when RTD is missing), `CaseF
 
 **Do not add a collector for BindingConstraints or for every RTD case.** The CSV extract is outside the 12-month window. A full RTD backfill is tens of gigabytes and contradicts the brief's "selectively" rule.
 
-**Do add a targeted RTD read on [#44](https://github.com/joshmcarthur/gridwatch/issues/44), after the owner agrees:** for a flagged period (price separation, high price), fetch that day's RTD folder, pick the case that covers the period, and read `SOLUTION,CONSTRAINT` rows whose `LOWERMARGINALPRICE` or `UPPERMARGINALPRICE` is not zero. Store the constraint name, type, value, limits and shadow price next to the observation. One interesting day is ~114 MB, not 42 GB.
+**Do add a targeted RTD read on [#44](https://github.com/joshmcarthur/gridwatch/issues/44), after the owner agrees:** for a flagged period (price separation, high price), fetch the one ZIP named by the `CaseID` on the row for that period (section 11.5), and read `SOLUTION,CONSTRAINT` rows whose `LOWERMARGINALPRICE` or `UPPERMARGINALPRICE` is not zero. Store the constraint name, type, value, limits and shadow price next to the observation. One interesting interval is ~264 KB, not 27 GB.
 
 **Do not** treat island residuals, HVDC gold, or nodal spreads as a constraint dataset. They are evidence that a constraint may have bound; they are not the constraint.
 

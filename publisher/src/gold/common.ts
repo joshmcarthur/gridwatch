@@ -399,3 +399,10 @@ export const goldStamp = (
   inputsCompleteSql: string,
 ) =>
   `${analysisVersion}::INTEGER AS analysis_version, ${lit(inputsSha256)} AS inputs_sha256, (${inputsCompleteSql})::BOOLEAN AS inputs_complete`;
+
+/**
+ * A day term of a gold day table, as a select item: the sum of the period values, only when every
+ * period (46, 48 or 50) has a value. Otherwise null, because a partial sum would be false.
+ */
+export const dayTermSql = (column: string, periods: number) =>
+  `CASE WHEN count(${column}) = ${periods} THEN sum(${column}) END AS ${column}`;

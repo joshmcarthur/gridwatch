@@ -64,6 +64,15 @@ export function loadSiteDay(date: string, index = loadSiteIndex()): SiteDay {
   return parsed;
 }
 
+/** Load a day when it is in the index. Missing dates return null; they do not fall back. */
+export function loadSiteDayIfPresent(
+  date: string,
+  index = loadSiteIndex(),
+): SiteDay | null {
+  if (!index.days.some((day) => day.date === date)) return null;
+  return loadSiteDay(date, index);
+}
+
 /** Newest detected episodes across the latest days, highest severity first per day. */
 export function recentEpisodes(
   index: SiteIndex,

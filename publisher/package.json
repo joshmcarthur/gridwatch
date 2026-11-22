@@ -16,6 +16,7 @@
     "publish:generation-md": "node src/silver/generation-md.cli.ts",
     "publish:hvdc-flows": "node src/silver/hvdc-flows.cli.ts",
     "publish:entity-mappings": "node src/silver/entity-mappings.cli.ts",
+    "build:evidence": "node src/gold/evidence.cli.ts",
     "typecheck": "tsc -p ."
   },
   "dependencies": {

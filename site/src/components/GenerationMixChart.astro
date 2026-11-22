@@ -5,6 +5,7 @@ import ChartFigure from "./ChartFigure.astro";
 import { renderPlot } from "../lib/chart-svg";
 import {
   type GenerationMix,
+  type MixPoint,
   type StackFuel,
   batteryPointTitle,
   generationMix,
@@ -49,6 +50,16 @@ function timeAxis(data: GenerationMix) {
   };
 }
 
+function hoverRules(data: GenerationMix, titleOf: (point: MixPoint) => string) {
+  return Plot.ruleX(
+    data.points.map((point) => ({
+      start: point.start,
+      title: titleOf(point),
+    })),
+    { x: "start", stroke: "transparent", strokeWidth: 8, title: "title" },
+  );
+}
+
 function chartSvg(data: GenerationMix): string {
   return renderPlot(
     {
@@ -67,18 +78,7 @@ function chartSvg(data: GenerationMix): string {
           stroke: "var(--color-card)",
           strokeWidth: 1,
         }),
-        Plot.ruleX(
-          data.points.map((point) => ({
-            start: point.start,
-            title: mixPointTitle(point, data.layers),
-          })),
-          {
-            x: "start",
-            stroke: "transparent",
-            strokeWidth: 8,
-            title: "title",
-          },
-        ),
+        hoverRules(data, (point) => mixPointTitle(point, data.layers)),
       ],
     },
     {
@@ -103,18 +103,7 @@ function batterySvg(data: GenerationMix): string {
           stroke: "var(--color-card)",
           strokeWidth: 1,
         }),
-        Plot.ruleX(
-          data.points.map((point) => ({
-            start: point.start,
-            title: batteryPointTitle(point),
-          })),
-          {
-            x: "start",
-            stroke: "transparent",
-            strokeWidth: 8,
-            title: "title",
-          },
-        ),
+        hoverRules(data, batteryPointTitle),
       ],
     },
     {

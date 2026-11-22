@@ -50,15 +50,12 @@ const DETECTORS = [
 
 export const TABLES = ["episode_days", "episodes"] as const;
 
-const inputsFor = (): GoldInput[] =>
-  DETECTORS.map((detector) => ({
-    layer: "gold" as const,
-    table: detector.sentinel,
-    versionColumn: "inputs_sha256" as const,
-    completenessDataset: null,
-  }));
-
-export const INPUTS: GoldInput[] = inputsFor();
+export const INPUTS: GoldInput[] = DETECTORS.map((detector) => ({
+  layer: "gold" as const,
+  table: detector.sentinel,
+  versionColumn: "inputs_sha256" as const,
+  completenessDataset: null,
+}));
 
 const SUBJECT_TYPES: readonly SubjectType[] = [
   "point_of_connection",

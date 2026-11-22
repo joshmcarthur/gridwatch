@@ -29,7 +29,8 @@ import {
   SITE_CONTRACT_VERSION,
   type SiteDay,
 } from "./contract.ts";
-import { buildSiteDay, exportSite, round } from "./export.ts";
+import { buildSiteDay, exportSite } from "./export.ts";
+import { round } from "./gold-read.ts";
 
 /** A valid day on a 46-period date. Generation is incomplete, prices are missing. */
 function sampleDay(): SiteDay {
@@ -107,7 +108,16 @@ test("a valid day passes, with and without the optional extensions", () => {
   expect(() =>
     assertSiteDay({
       ...day,
-      reserves: { state: "missing" },
+      reserves: {
+        state: "missing",
+        missing_periods: [],
+        analysis_version: null,
+        inputs_sha256: null,
+        silver_tables: [],
+        gold_tables: [],
+        datasets: [],
+        classes: [],
+      },
       sankey: {
         state: "missing",
         missing_periods: [],
@@ -121,8 +131,50 @@ test("a valid day passes, with and without the optional extensions", () => {
         inputs_complete: null,
       },
       observations: { state: "incomplete" },
+      nodal_map: {
+        state: "missing",
+        missing_periods: [],
+        analysis_version: null,
+        inputs_sha256: null,
+        silver_tables: [],
+        gold_tables: [],
+        datasets: [],
+        pocs: [],
+        unlocated: [],
+      },
     }),
   ).not.toThrow();
+});
+
+test("the validator rejects a missing reserves section that carries classes", () => {
+  const day = sampleDay();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      reserves: {
+        state: "missing",
+        missing_periods: [],
+        analysis_version: null,
+        inputs_sha256: null,
+        silver_tables: ["dispatch_reserve_prices"],
+        gold_tables: ["reserve_by_class_island_period"],
+        datasets: [],
+        classes: [
+          {
+            reserve_class: "FIR",
+            island: "NI",
+            mean_price: 0,
+            min_price: 0,
+            max_price: 0,
+            periods_present: 0,
+            periods_expected: 48,
+            rows_present: 0,
+            inputs_complete: false,
+          },
+        ],
+      },
+    }),
+  ).toThrow("reserves.classes: a missing section has no entries");
 });
 
 test("the validator rejects a missing sankey that carries zeros", () => {
@@ -406,6 +458,43 @@ async function writePrices(
 }
 
 const NODES = ["OTA2201", "HAY2201", "BEN2201"];
+
+/** Reserve gold for a date. The period table is the reserves sentinel. */
+async function writeReservesGold(
+  date: string,
+  {
+    period = [],
+    day = [],
+    stamp = {},
+  }: { period?: Row[]; day?: Row[]; stamp?: Row } = {},
+) {
+  await writeGold(
+    "reserve_by_class_island_period",
+    date,
+    {
+      trading_period: "INTEGER",
+      reserve_class: "VARCHAR",
+      island: "VARCHAR",
+      dollars_per_megawatt_hour: "DOUBLE",
+    },
+    period.map((row) => ({ ...stamp, ...row })),
+  );
+  await writeGold(
+    "reserve_by_class_island_day",
+    date,
+    {
+      reserve_class: "VARCHAR",
+      island: "VARCHAR",
+      mean_price: "DOUBLE",
+      min_price: "DOUBLE",
+      max_price: "DOUBLE",
+      periods_present: "INTEGER",
+      periods_expected: "INTEGER",
+      rows_present: "INTEGER",
+    },
+    day.map((row) => ({ ...stamp, ...row })),
+  );
+}
 
 /** Energy-balance gold for a date. The period table is the sankey sentinel. */
 async function writeSankeyGold(
@@ -698,7 +787,211 @@ test("a section without gold is written as missing, with empty arrays, and the d
     analysis_version: null,
     inputs_sha256: null,
   });
+  expect(day.reserves).toMatchObject({
+    state: "missing",
+    classes: [],
+    missing_periods: [],
+    analysis_version: null,
+    inputs_sha256: null,
+  });
   expect(() => assertSiteDay(day)).not.toThrow();
+});
+
+test("reserves carries the gold day table, FIR then SIR, islands north to south", async () => {
+  await writeReservesGold(DATE, {
+    period: [
+      {
+        trading_period: 1,
+        reserve_class: "FIR",
+        island: "NI",
+        dollars_per_megawatt_hour: 1.25,
+      },
+      {
+        trading_period: 1,
+        reserve_class: "FIR",
+        island: "SI",
+        dollars_per_megawatt_hour: 0.5,
+      },
+      {
+        trading_period: 1,
+        reserve_class: "SIR",
+        island: "NI",
+        dollars_per_megawatt_hour: 0.4,
+      },
+      {
+        trading_period: 1,
+        reserve_class: "SIR",
+        island: "SI",
+        dollars_per_megawatt_hour: 0.2,
+      },
+    ],
+    day: [
+      {
+        reserve_class: "FIR",
+        island: "NI",
+        mean_price: 1.249,
+        min_price: 0.1,
+        max_price: 4,
+        periods_present: 48,
+        periods_expected: 48,
+        rows_present: 200,
+      },
+      {
+        reserve_class: "FIR",
+        island: "SI",
+        mean_price: 0.5,
+        min_price: 0,
+        max_price: 1,
+        periods_present: 48,
+        periods_expected: 48,
+        rows_present: 180,
+      },
+      {
+        reserve_class: "SIR",
+        island: "NI",
+        mean_price: 0.4,
+        min_price: 0,
+        max_price: 2,
+        periods_present: 48,
+        periods_expected: 48,
+        rows_present: 200,
+      },
+      {
+        reserve_class: "SIR",
+        island: "SI",
+        mean_price: 0.2,
+        min_price: 0,
+        max_price: 1,
+        periods_present: 48,
+        periods_expected: 48,
+        rows_present: 180,
+      },
+    ],
+  });
+  const day = await buildSiteDay({
+    goldDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  expect(day.reserves).toMatchObject({
+    state: "complete",
+    analysis_version: 1,
+    inputs_sha256: `sha-${DATE}`,
+    silver_tables: ["dispatch_reserve_prices"],
+    gold_tables: [
+      "reserve_by_class_island_period",
+      "reserve_by_class_island_day",
+    ],
+    datasets: ["dispatch_reserve_prices"],
+    missing_periods: [],
+  });
+  expect(day.reserves?.classes).toEqual([
+    {
+      reserve_class: "FIR",
+      island: "NI",
+      mean_price: 1.25,
+      min_price: 0.1,
+      max_price: 4,
+      periods_present: 48,
+      periods_expected: 48,
+      rows_present: 200,
+      inputs_complete: true,
+    },
+    {
+      reserve_class: "FIR",
+      island: "SI",
+      mean_price: 0.5,
+      min_price: 0,
+      max_price: 1,
+      periods_present: 48,
+      periods_expected: 48,
+      rows_present: 180,
+      inputs_complete: true,
+    },
+    {
+      reserve_class: "SIR",
+      island: "NI",
+      mean_price: 0.4,
+      min_price: 0,
+      max_price: 2,
+      periods_present: 48,
+      periods_expected: 48,
+      rows_present: 200,
+      inputs_complete: true,
+    },
+    {
+      reserve_class: "SIR",
+      island: "SI",
+      mean_price: 0.2,
+      min_price: 0,
+      max_price: 1,
+      periods_present: 48,
+      periods_expected: 48,
+      rows_present: 180,
+      inputs_complete: true,
+    },
+  ]);
+  expect(day.complete).toBe(false);
+  expect(() => assertSiteDay(day)).not.toThrow();
+});
+
+test("a day with no reserve gold exports reserves as missing, never zeros", async () => {
+  const day = await buildSiteDay({
+    goldDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  expect(day.reserves?.state).toBe("missing");
+  expect(day.reserves?.classes).toEqual([]);
+  expect(day.reserves?.analysis_version).toBeNull();
+  expect(day.reserves?.inputs_sha256).toBeNull();
+});
+
+test("reserves is incomplete when a class-island period has no price", async () => {
+  await writeReservesGold(DATE, {
+    period: [
+      {
+        trading_period: 1,
+        reserve_class: "FIR",
+        island: "NI",
+        dollars_per_megawatt_hour: 1,
+      },
+      {
+        trading_period: 2,
+        reserve_class: "FIR",
+        island: "NI",
+        dollars_per_megawatt_hour: null,
+        inputs_complete: false,
+      },
+    ],
+    day: [
+      {
+        reserve_class: "FIR",
+        island: "NI",
+        mean_price: 1,
+        min_price: 1,
+        max_price: 1,
+        periods_present: 47,
+        periods_expected: 48,
+        rows_present: 100,
+        inputs_complete: false,
+      },
+    ],
+    stamp: { inputs_complete: false },
+  });
+  const day = await buildSiteDay({
+    goldDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  expect(day.reserves?.state).toBe("incomplete");
+  expect(day.reserves?.missing_periods).toEqual([2]);
+  expect(day.reserves?.classes[0]).toMatchObject({
+    reserve_class: "FIR",
+    island: "NI",
+    mean_price: 1,
+    inputs_complete: false,
+  });
 });
 
 test("sankey carries the gold day table, with residual sign and percent of load", async () => {
@@ -1014,6 +1307,91 @@ test("nodes and spreads follow the reference order, and the distribution keeps p
   expect(day.prices.distribution.median.slice(0, 2)).toEqual([50, 6]);
 });
 
+test("nodal_map plots only POCs with coordinates and lists the rest unlocated", async () => {
+  const silverDir = join(root, "silver");
+  await writeGold(
+    "nodal_price_periods",
+    DATE,
+    {
+      point_of_connection: "VARCHAR",
+      trading_period: "INTEGER",
+      price: "DOUBLE",
+      has_proxy_price: "BOOLEAN",
+    },
+    [
+      {
+        point_of_connection: "ALB0331",
+        trading_period: 1,
+        price: 90.126,
+        has_proxy_price: false,
+      },
+      {
+        point_of_connection: "HAY2201",
+        trading_period: 1,
+        price: 50,
+        has_proxy_price: true,
+      },
+    ],
+  );
+  const entityPath = join(
+    silverDir,
+    "entity_points_of_connection",
+    `trading_date=${DATE}`,
+    "data.parquet",
+  );
+  await mkdir(dirname(entityPath), { recursive: true });
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    await connection.run(
+      `COPY (SELECT 'ALB0331' AS poc_id, -36.739 AS latitude, 174.69 AS longitude,
+         'NI' AS island) TO ${lit(entityPath)} (FORMAT parquet)`,
+    );
+  } finally {
+    connection.closeSync();
+  }
+
+  const day = await buildSiteDay({
+    goldDir,
+    silverDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  assertSiteDay(day);
+  expect(day.nodal_map?.state).toBe("complete");
+  expect(day.nodal_map?.pocs).toEqual([
+    {
+      point_of_connection: "ALB0331",
+      latitude: -36.739,
+      longitude: 174.69,
+      island: "NI",
+      price: [90.13, ...Array.from({ length: 47 }, () => null)],
+      proxy_periods: [],
+    },
+  ]);
+  expect(day.nodal_map?.unlocated).toEqual([
+    {
+      point_of_connection: "HAY2201",
+      island: null,
+      price: [50, ...Array.from({ length: 47 }, () => null)],
+      proxy_periods: [1],
+    },
+  ]);
+});
+
+test("nodal_map is missing when gold has no nodal_price_periods partition", async () => {
+  const day = await buildSiteDay({
+    goldDir,
+    date: DATE,
+    completeness: completenessView(),
+  });
+  expect(day.nodal_map).toMatchObject({
+    state: "missing",
+    pocs: [],
+    unlocated: [],
+    analysis_version: null,
+  });
+});
+
 test("the index records which days have a complete sankey", async () => {
   await writePrices(DATE, { periods: pricePeriods(48, (_n, p) => p) });
   await writeSankeyGold(DATE, {
@@ -1042,6 +1420,41 @@ test("the index records which days have a complete sankey", async () => {
   expect(index.latest_complete_sections.sankey).toBe(DATE);
 });
 
+test("the index records which days have complete reserves", async () => {
+  await writeReservesGold(DATE, {
+    period: [
+      {
+        trading_period: 1,
+        reserve_class: "FIR",
+        island: "NI",
+        dollars_per_megawatt_hour: 1,
+      },
+    ],
+    day: [
+      {
+        reserve_class: "FIR",
+        island: "NI",
+        mean_price: 1,
+        min_price: 1,
+        max_price: 1,
+        periods_present: 48,
+        periods_expected: 48,
+        rows_present: 10,
+      },
+    ],
+  });
+  const summary = await exportSite({
+    goldDir,
+    completeness: completenessView(),
+    registry: datasets,
+  });
+  expect(summary.failed).toEqual([]);
+  const index = await readIndex();
+  assertSiteIndex(index);
+  expect(index.days[0]?.sections.reserves).toBe("complete");
+  expect(index.latest_complete_sections.reserves).toBe(DATE);
+});
+
 test("the index gives the latest complete date for each dataset, and null when there is none", async () => {
   await writePrices(DATE, { periods: pricePeriods(48, (_n, p) => p) });
   await writePrices("2026-11-17", { periods: pricePeriods(48, (_n, p) => p) });
@@ -1068,6 +1481,11 @@ test("the index gives the latest complete date for each dataset, and null when t
     "missing",
   ]);
   expect(index.latest_complete_sections.sankey).toBeNull();
+  expect(index.days.map((d) => d.sections.reserves)).toEqual([
+    "missing",
+    "missing",
+  ]);
+  expect(index.latest_complete_sections.reserves).toBeNull();
 });
 
 test("a range never removes a day from the index, and a changed day outside the range is not rebuilt", async () => {
@@ -1286,6 +1704,9 @@ function syntheticDispatch(date: string): string {
       [date, period, published, "OTA2201", "NI", "N", 80 + period],
       [date, period, published, "HAY2201", "NI", "N", 70 + period],
       [date, period, published, "BEN2201", "SI", "N", 60 + period],
+      [date, period, published, "ALB0331", "NI", "N", 82 + period],
+      [date, period, published, "AKL0331", "NI", "N", 95 + period],
+      [date, period, published, "ABY0111", "SI", "N", 40 + period],
     ].map((row) => row.join(","));
   }).flat();
   return [
@@ -1294,18 +1715,11 @@ function syntheticDispatch(date: string): string {
   ].join("\n");
 }
 
-const siteFixtures = join(
-  import.meta.dirname,
-  "..",
-  "..",
-  "..",
-  "site",
-  "fixtures",
-);
-const FIXTURE_DAY = join(siteFixtures, "days", "2026-09-27.json");
-const FIXTURE_INDEX = join(siteFixtures, "index.json");
+const exporterFixtures = join(import.meta.dirname, "fixtures");
+const FIXTURE_DAY = join(exporterFixtures, "days", "2026-09-27.json");
+const FIXTURE_INDEX = join(exporterFixtures, "index.json");
 
-test("the committed sample day matches the exporter end to end, on real generation and synthetic prices", {
+test("the exporter lock sample matches end to end, on trimmed generation and synthetic prices", {
   timeout: 60_000,
 }, async () => {
   const bronzeDir = join(root, "bronze");
@@ -1354,7 +1768,7 @@ test("the committed sample day matches the exporter end to end, on real generati
   const index = await readFile(join(goldDir, "site", "index.json"), "utf8");
 
   if (process.env.UPDATE_SITE_FIXTURES) {
-    await mkdir(join(siteFixtures, "days"), { recursive: true });
+    await mkdir(join(exporterFixtures, "days"), { recursive: true });
     await writeFile(FIXTURE_DAY, day);
     await writeFile(FIXTURE_INDEX, index);
   }
@@ -1383,10 +1797,24 @@ test("the committed sample day matches the exporter end to end, on real generati
     state: "missing",
     items: [],
   });
+  expect(built.reserves).toMatchObject({
+    state: "missing",
+    classes: [],
+  });
   const parsedIndex: unknown = JSON.parse(index);
   assertSiteIndex(parsedIndex);
   expect(parsedIndex.days[0]?.sections.sankey).toBe("missing");
   expect(parsedIndex.latest_complete_sections.sankey).toBeNull();
   expect(parsedIndex.days[0]?.sections.episodes).toBe("missing");
   expect(parsedIndex.latest_complete_sections.episodes).toBeNull();
+  expect(parsedIndex.days[0]?.sections.reserves).toBe("missing");
+  expect(parsedIndex.latest_complete_sections.reserves).toBeNull();
+  expect(
+    built.nodal_map?.pocs.map((p) => p.point_of_connection).sort(),
+  ).toEqual(["ABY0111", "AKL0331", "ALB0331"]);
+  expect(
+    built.nodal_map?.unlocated.map((p) => p.point_of_connection).sort(),
+  ).toEqual(["BEN2201", "HAY2201", "OTA2201"]);
+  expect(built.nodal_map?.pocs[0]?.price).toHaveLength(46);
+  expect(parsedIndex.days[0]?.sections.nodal_map).toBe("complete");
 });

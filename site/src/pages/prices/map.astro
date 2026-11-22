@@ -1,0 +1,80 @@
+---
+import NodalPriceMap from "../../components/NodalPriceMap.astro";
+import Layout from "../../layouts/Layout.astro";
+import { dailyPath, mapPath } from "../../lib/daily-page";
+import {
+  formatTradingDate,
+  loadSiteDay,
+  loadSiteIndex,
+} from "../../lib/site-data";
+
+const index = loadSiteIndex();
+const date = index.latest_complete_sections.prices;
+const day = date ? loadSiteDay(date, index) : null;
+const titleDate = date ? formatTradingDate(date) : null;
+---
+
+<Layout
+  title="Price map · Gridwatch NZ"
+  description="Wholesale electricity prices at named places on the New Zealand grid, for the latest complete day."
+>
+  <p class="home">
+    <a href="/">Gridwatch NZ home</a>
+  </p>
+
+  <article class="prose">
+    <header class="lede">
+      <h1>Wholesale prices on the map</h1>
+      {
+        day && titleDate && date ? (
+          <p>
+            This is the map for {titleDate}, the latest day whose wholesale
+            prices look complete. Wholesale prices are what generators and
+            retailers paid each other in each 30-minute slice, not the rate on
+            a household bill. A named place on the grid is a point of
+            connection: a substation or similar code such as OTA2201.
+          </p>
+        ) : (
+          <p>
+            No complete wholesale-price day has been published yet, so there is
+            no map.
+          </p>
+        )
+      }
+    </header>
+
+    {
+      day && date && titleDate ? (
+        <section class="slot" aria-labelledby="nodal-map">
+          <h2 id="nodal-map">Where prices sat</h2>
+          <NodalPriceMap day={day} />
+          <p>
+            <a href={mapPath(date)}>Dated URL for {titleDate}</a>
+            {" · "}
+            <a href={dailyPath(date)}>Daily page for {titleDate}</a>
+          </p>
+        </section>
+      ) : null
+    }
+  </article>
+</Layout>
+
+<style>
+  .home {
+    margin: 0 0 var(--space-5);
+    font-size: var(--text-label);
+  }
+
+  .lede,
+  .slot {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .slot {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    padding: var(--space-5);
+  }
+</style>

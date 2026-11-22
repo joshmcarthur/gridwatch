@@ -205,11 +205,17 @@ export function generationMixSummary(mix: GenerationMix): string {
   return `${top.layer.label} made the most, about ${megawattsWhole.format(top.average)} megawatts on average, ${percentWhole.format(share)} of the day's primary generation.`;
 }
 
+function gapTitle(point: { time: string }): string {
+  return `${point.time} · No generation numbers for this period`;
+}
+
+const INCOMPLETE_NOTE = "Some plant data missing, counted as 0";
+
 /** Native hover tooltip for one period. */
 export function mixPointTitle(point: MixPoint, layers: MixLayer[]): string {
   switch (point.kind) {
     case "gap":
-      return `${point.time} · No generation numbers for this period`;
+      return gapTitle(point);
     case "complete":
     case "incomplete": {
       const parts = layers.map((layer) => {
@@ -218,7 +224,7 @@ export function mixPointTitle(point: MixPoint, layers: MixLayer[]): string {
       });
       parts.push(`Total ${megawatts1.format(point.primary)} MW`);
       if (point.kind === "incomplete") {
-        parts.push("Some plant data missing, counted as 0");
+        parts.push(INCOMPLETE_NOTE);
       }
       return [point.time, ...parts].join(" · ");
     }
@@ -233,7 +239,7 @@ export function mixPointTitle(point: MixPoint, layers: MixLayer[]): string {
 export function batteryPointTitle(point: MixPoint): string {
   switch (point.kind) {
     case "gap":
-      return `${point.time} · No generation numbers for this period`;
+      return gapTitle(point);
     case "complete":
     case "incomplete": {
       const parts = [
@@ -241,7 +247,7 @@ export function batteryPointTitle(point: MixPoint): string {
         "stored power, not in the primary total",
       ];
       if (point.kind === "incomplete") {
-        parts.push("Some plant data missing, counted as 0");
+        parts.push(INCOMPLETE_NOTE);
       }
       return [point.time, ...parts].join(" · ");
     }

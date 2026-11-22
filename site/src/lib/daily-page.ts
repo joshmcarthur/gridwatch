@@ -23,6 +23,8 @@ const APART_DOLLARS = 50;
 
 const DATASET_LABELS: Record<string, string> = {
   dispatch_energy_prices: "wholesale energy prices",
+  dispatch_reserve_prices:
+    "reserve prices (the cost of standing ready to lift or drop generation)",
   generation_md: "generation",
   entity_mappings: "plant names and locations",
 };
@@ -69,6 +71,10 @@ export function dailyPath(date: string): string {
   const month = String(parsed.month).padStart(2, "0");
   const day = String(parsed.day).padStart(2, "0");
   return `/${parsed.year}/${month}/${day}/`;
+}
+
+export function mapPath(date: string): string {
+  return `${dailyPath(date)}map/`;
 }
 
 export function dateFromParams(

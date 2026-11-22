@@ -87,6 +87,7 @@ const { title, description } = Astro.props;
       <nav class="footer-nav" aria-label="Site">
         <a href="/about/">About</a>
         <a href="/how/">How we do this</a>
+        <a href="/explainers/">Explainers</a>
         <a href="/terms/">Terms</a>
       </nav>
     </footer>
@@ -157,5 +158,8 @@ const { title, description } = Astro.props;
     padding-top: var(--space-4);
     font-size: var(--text-caption);
     line-height: 1.4;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-4);
   }
 </style>

@@ -64,10 +64,12 @@ test("period 1 has the three node prices, the spreads and the 00:00 time", () =>
   const first = chart.periods[0];
   if (!first) throw new Error("expected a first period");
   expect(first.time).toBe("00:00");
-  expect(first.title).toContain("OTA2201 $81.00");
-  expect(chart.nodes.map((node) => node.values[0])).toEqual([81, 71, 61]);
+  expect(first.title).toContain("OTA2201 $11.41");
+  expect(chart.nodes.map((node) => node.values[0])).toEqual([
+    11.41, 10.11, 9.79,
+  ]);
   expect(chart.tableSpreads.map((spread) => spread.values[0])).toEqual([
-    10, 10, 20,
+    1.3, 0.32, 1.62,
   ]);
 });
 
@@ -76,13 +78,15 @@ test("period 5 on the DST-start day is 03:00, with no NZDT suffix", () => {
   const fifth = chart.periods[4];
   if (!fifth) throw new Error("expected period 5");
   expect(fifth.time).toBe("03:00");
-  expect(chart.nodes.map((node) => node.values[4])).toEqual([85, 75, 65]);
+  expect(chart.nodes.map((node) => node.values[4])).toEqual([0.08, 0.07, 0.01]);
 });
 
-test("period 46 is the last period, with the highest prices", () => {
+test("period 46 is the last period", () => {
   const chart = chartOf(fixture);
   expect(chart.periods.length).toBe(46);
-  expect(chart.nodes.map((node) => node.values[45])).toEqual([126, 116, 106]);
+  expect(chart.nodes.map((node) => node.values[45])).toEqual([
+    60.22, 53.45, 38.73,
+  ]);
 });
 
 test("the time axis has eight ticks from 00 to 21", () => {
@@ -102,29 +106,31 @@ test("the time axis has eight ticks from 00 to 21", () => {
 test("daily figures come from the contract summary", () => {
   const chart = chartOf(fixture);
   expect(chart.nodes.map((node) => node.daily.mean)).toEqual([
-    103.5, 93.5, 83.5,
+    73.24, 63.2, 20.47,
   ]);
-  expect(chart.nodes.map((node) => node.daily.min)).toEqual([81, 71, 61]);
-  expect(chart.nodes.map((node) => node.daily.max)).toEqual([126, 116, 106]);
+  expect(chart.nodes.map((node) => node.daily.min)).toEqual([0.01, 0.01, 0.01]);
+  expect(chart.nodes.map((node) => node.daily.max)).toEqual([
+    295.32, 256.31, 50.29,
+  ]);
 });
 
 test("the price summary is one exact sentence", () => {
   expect(priceChartSummary(chartOf(fixture))).toBe(
-    "Period prices per megawatt-hour: Otahuhu from $81.00 to $126.00, Haywards from $71.00 to $116.00, Benmore from $61.00 to $106.00.",
+    "Period prices per megawatt-hour: Otahuhu from $0.01 to $284.43, Haywards from $0.01 to $245.11, Benmore from $0.01 to $50.13.",
   );
 });
 
 test("the spread summary names the drawn spreads and points to the table for Otahuhu–Benmore", () => {
   expect(priceSpreadSummary(chartOf(fixture))).toBe(
-    "Spreads in $/MWh, first place minus second: Otahuhu–Haywards from $10.00 to $10.00, Haywards–Benmore from $10.00 to $10.00. Otahuhu–Benmore is in the table.",
+    "Spreads in $/MWh, first place minus second: Otahuhu–Haywards from $0.00 to $39.42, Haywards–Benmore from $0.00 to $224.98. Otahuhu–Benmore is in the table.",
   );
 });
 
 test("the daily lines label the highest and lowest prices as single prices", () => {
   expect(priceChartDaily(chartOf(fixture))).toEqual([
-    "Average of the period prices for the day: Otahuhu $103.50, Haywards $93.50, Benmore $83.50, per megawatt-hour.",
-    "Lowest single price published (not a period average): Otahuhu $81.00, Haywards $71.00, Benmore $61.00, per megawatt-hour.",
-    "Highest single price published (not a period average): Otahuhu $126.00, Haywards $116.00, Benmore $106.00, per megawatt-hour.",
+    "Average of the period prices for the day: Otahuhu $73.24, Haywards $63.20, Benmore $20.47, per megawatt-hour.",
+    "Lowest single price published (not a period average): Otahuhu $0.01, Haywards $0.01, Benmore $0.01, per megawatt-hour.",
+    "Highest single price published (not a period average): Otahuhu $295.32, Haywards $256.31, Benmore $50.29, per megawatt-hour.",
   ]);
 });
 
@@ -142,19 +148,19 @@ test("the table has a time column, one column per node and one per spread", () =
   expect(rows.length).toBe(46);
   expect(rows[0]).toEqual([
     "00:00",
-    "$81.00",
-    "$71.00",
-    "$61.00",
-    "$10.00",
-    "$10.00",
-    "$20.00",
+    "$11.41",
+    "$10.11",
+    "$9.79",
+    "$1.30",
+    "$0.32",
+    "$1.62",
   ]);
 });
 
 test("the hover text includes OTA-BEN from the contract, not a sum", () => {
   const chart = chartOf(fixture);
   expect(chart.periods[4]?.title).toBe(
-    "03:00 · OTA2201 $85.00/MWh · HAY2201 $75.00/MWh · BEN2201 $65.00/MWh · Spread OTA-HAY $10.00/MWh · Spread HAY-BEN $10.00/MWh · Spread OTA-BEN $20.00/MWh",
+    "03:00 · OTA2201 $0.08/MWh · HAY2201 $0.07/MWh · BEN2201 $0.01/MWh · Spread OTA-HAY $0.01/MWh · Spread HAY-BEN $0.06/MWh · Spread OTA-BEN $0.07/MWh",
   );
 });
 
@@ -182,10 +188,10 @@ test("a null price breaks only that node's line, and the table says No data", ()
   expect(row).toEqual([
     "05:30 (incomplete)",
     "No data",
-    "$80.00",
-    "$70.00",
+    "$0.42",
+    "$0.34",
     "No data",
-    "$10.00",
+    "$0.09",
     "No data",
   ]);
 });
@@ -213,8 +219,8 @@ test("a proxy period gets a proxy marker in the hover text and the table", () =>
   const chart = chartOf(day);
   expect(chart.nodes[0]?.proxy[4]).toBe(true);
   expect(chart.nodes[0]?.proxy[3]).toBe(false);
-  expect(chart.periods[4]?.title).toContain("OTA2201 $85.00/MWh (proxy price)");
-  expect(priceChartTable(chart).rows[4]?.[1]).toBe("$85.00 (proxy price)");
+  expect(chart.periods[4]?.title).toContain("OTA2201 $0.08/MWh (proxy price)");
+  expect(priceChartTable(chart).rows[4]?.[1]).toBe("$0.08 (proxy price)");
 });
 
 test("a negative spread shows a minus sign and the spread axis includes zero", () => {
@@ -244,7 +250,7 @@ test("OTA-BEN is table-only, so it does not set the spread axis", () => {
     "HAY-BEN",
     "OTA-BEN",
   ]);
-  expect(chart.spreadDomain).toEqual([0, 10]);
+  expect(chart.spreadDomain).toEqual([0, 224.98]);
 });
 
 test("a period with no price at any node is a gap with a plain hover text", () => {

@@ -43,6 +43,14 @@ Gold Parquet at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. `writeGoldT
 | `price_spreads` | pair of reference nodes and trading period |
 | `price_distribution` | trading period |
 
+### Amendment (#49): `nodal_price_periods`
+
+Amended 2026-11-22. Gold already built a period price for every priced POC in the `poc_periods` temp table, then dropped it after `price_distribution`. Persist that as a fifth table, `nodal_price_periods` ([ADR-0023](0023-nodal-price-map.md)). Same module, same rule B, `ANALYSIS_VERSION` 2. No `price_region`. No coordinates: those join at export from silver `entity_points_of_connection`. Do not extend `price_periods`. The sentinel stays `price_periods`. Completeness of gold prices is still the three reference nodes.
+
+| Table | One row per |
+| --- | --- |
+| `nodal_price_periods` | every priced POC and every expected trading period (null price when silver has no row) |
+
 Every row has `trading_date`, `analysis_version`, `inputs_sha256` and `inputs_complete`. There is no `processed_at`, so a second run on the same input gives identical bytes ([ADR-0003](0003-time-column-naming.md) amendment). Period tables keep `trading_period`, `event_start_utc` and `event_end_utc`.
 
 - **`analysis_version`** is `ANALYSIS_VERSION` in `prices.ts`. Change it by hand when the logic changes.

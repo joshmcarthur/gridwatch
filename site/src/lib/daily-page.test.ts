@@ -10,6 +10,7 @@ import {
   dateFromParams,
   dayHeadline,
   type HeadlineSource,
+  mapPath,
   monthGroups,
   neighbouringDays,
 } from "./daily-page.ts";
@@ -62,6 +63,10 @@ test("dailyPath is a trailing-slash YYYY/MM/DD route", () => {
   expect(dailyPath("2026-09-27")).toBe("/2026/09/27/");
 });
 
+test("mapPath is the daily path plus map/", () => {
+  expect(mapPath("2026-09-27")).toBe("/2026/09/27/map/");
+});
+
 test("dateFromParams round-trips a padded calendar date", () => {
   expect(dateFromParams("2026", "09", "27")).toBe("2026-09-27");
 });
@@ -103,10 +108,12 @@ test("monthGroups lists days under en-NZ month headings", () => {
   ]);
 });
 
-test("fixture day builds a /2026/09/27/ path", () => {
+test("fixture days build a path for each committed sample", () => {
   const index = loadSiteIndex();
   expect(dailyStaticPaths(index)).toEqual([
+    { params: { year: "2026", month: "09", day: "26" } },
     { params: { year: "2026", month: "09", day: "27" } },
+    { params: { year: "2026", month: "10", day: "29" } },
   ]);
   const day = loadSiteDay("2026-09-27");
   expect(day.trading_date).toBe("2026-09-27");
@@ -116,7 +123,7 @@ test("fixture day builds a /2026/09/27/ path", () => {
 test("headline names the kind of day without a unit lecture", () => {
   const headline = dayHeadline(loadSiteDay("2026-09-27"));
   expect(headline.sentence).toBe(
-    "Wind made most of the power, and wholesale prices differed between the islands.",
+    "Hydro made most of the power, and wholesale prices pulled apart between the islands.",
   );
   expect(headline.sentence).not.toMatch(/kilowatt/);
   expect(headline.sentence).not.toMatch(/household bill/);
@@ -128,19 +135,19 @@ test("headline names the kind of day without a unit lecture", () => {
       id: "power",
       label: "Power made",
       href: "#word-megawatt-hour",
-      value: "3,433 MWh",
+      value: "108,910 MWh",
     },
     {
       id: "price",
       label: "Wholesale price",
       href: "#word-wholesale-price",
-      value: "$84 to $104 / MWh",
+      value: "$20 to $73 / MWh",
     },
     {
       id: "islands",
       label: "The two islands",
       href: "#word-islands",
-      value: "Differed",
+      value: "Pulled apart",
     },
   ]);
 });
@@ -170,6 +177,23 @@ test("completenessNotice names incomplete datasets in plain language", () => {
   expect(text).toMatch(/missing/i);
   expect(text).not.toMatch(/dispatch_energy_prices/);
   expect(text).not.toMatch(/household bill/);
+});
+
+test("completenessNotice labels missing reserve prices", () => {
+  const day = {
+    complete: false,
+    datasets: {
+      dispatch_reserve_prices: { status: "missing" as const },
+      dispatch_energy_prices: { status: "complete" as const },
+      generation_md: { status: "partial" as const },
+    },
+    generation: { state: "incomplete" as const },
+    prices: { state: "complete" as const },
+  };
+  const text = completenessNotice(day)?.paragraphs.join(" ");
+  expect(text).toMatch(/reserve prices/i);
+  expect(text).toMatch(/standing ready/i);
+  expect(text).not.toMatch(/dispatch_reserve_prices/);
 });
 
 test("headline falls back when generation or prices are missing", () => {

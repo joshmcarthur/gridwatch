@@ -127,15 +127,25 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **`bronze_sha256`.** A column in every silver table. It holds the SHA-256 of the bronze file the row came from. The runner uses it to find silver that is out of date. See [ADR-0009](adr/0009-runner-default-mode.md).
 
+**Candidate.** An episode that ranks in the top 3 of its trading date and scores at least 0.35. It is a proposal for explanation, not a published event. See [ADR-0024](adr/0024-episode-ranking.md).
+
 **Canonical ID.** The one Gridwatch ID for an entity, such as a POC code or `<site>/<plant>`. Tables keep the source IDs next to it. See [ADR-0008](adr/0008-entity-model.md).
 
+**Claim.** One statement in an evidence package: a value, a unit, the table and function that gave it, and a confidence level. Its id is a stable name, such as `price.OTA2201.p36`. A claim can list the claims it is built from in `depends_on`. See [ADR-0025](adr/0025-evidence-packages.md).
+
 **Complete, partial, missing and invalid.** The result of publishing a day. Complete: all expected periods have rows. Partial: some periods have no rows, and silver holds the rows that exist. Missing: no data for the date. Invalid: a check failed, and nothing is written. See [ADR-0005](adr/0005-dataset-pattern.md).
+
+**Confidence level.** How sure a claim is: confirmed, strong evidence or possible explanation ([brief §7.2](brief.md)). The evidence package builder writes only confirmed, which means the value is read from a gold or silver row, or is a plain sum or join of such values. See [ADR-0025](adr/0025-evidence-packages.md).
 
 **Entity.** A thing that appears in several datasets under different IDs, such as a POC, plant, unit or participant. See [ADR-0008](adr/0008-entity-model.md).
 
 **Energy-balance residual.** For an island and a period: generation plus HVDC import, minus grid load (modelled). Gold keeps it as a column and never adjusts it. It holds what the three sources do not explain: transmission losses, Generation_MD omission and zero-fill, definition differences, embedded generation counted twice, calibration, and the gap between RTD model load and metered generation. The plant list is the [sources 3.5 coverage table](sources.md#35-generation_md) (issue #99 / PR #101). See [ADR-0018](adr/0018-energy-balance.md).
 
+**Episode score.** A number from 0 to 1 for one episode. It adds four stored components: severity, duration, breadth and rarity. Rarity is how seldom a day with the same observation types and islands occurred in the last 90 days. See [ADR-0024](adr/0024-episode-ranking.md).
+
 **`event_start_utc` and `event_end_utc`.** The UTC start (included) and end (excluded) of a trading period or dispatch interval. They are unambiguous across the daylight saving change. See [ADR-0003](adr/0003-time-column-naming.md).
+
+**Evidence package.** One JSON file for one episode ([ADR-0021](adr/0021-episodes.md)): the episode, its observations, series of prices, reserves, generation, HVDC and load around it, reference data, the completeness of every input, a list of claims and links to the data. The builder writes no prose. It writes `<gold>/evidence/<date>/<episode_id>.json` on demand. See [ADR-0025](adr/0025-evidence-packages.md).
 
 **Gold.** Derived and presentation data: analytical tables and the site JSON. Tables are Parquet partitions at `gold/<table>/trading_date=YYYY-MM-DD/data.parquet`. The site JSON is described in [ADR-0014](adr/0014-site-json-contract.md). See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md) and [ADR-0011](adr/0011-gold-table-pattern.md).
 
@@ -150,6 +160,8 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 **Observation.** A fact that a detector found on one trading date, such as a run of high prices at a node. Each detector writes one gold table, `observations_<detector>`, with the same columns. See [ADR-0019](adr/0019-observations-and-price-anomaly-detector.md).
 
 **Partition.** One file of a silver table for one date, at `silver/<dataset>/trading_date=YYYY-MM-DD/data.parquet`. See [ADR-0001](adr/0001-typescript-monorepo-and-data-layers.md) and [ADR-0005](adr/0005-dataset-pattern.md).
+
+**Peak period.** In an evidence package, the trading period inside the episode with the highest period price at a reference node. Claims about a series are made for the first period of the episode and for the peak period. See [ADR-0025](adr/0025-evidence-packages.md).
 
 **Period axis.** The 46, 48 or 50 trading periods of a day. Every array in a site day file has one entry for each period of this axis, so a DST day has its own length. See [ADR-0014](adr/0014-site-json-contract.md).
 

@@ -269,15 +269,13 @@ class UnionFind {
   }
 }
 
+const byString = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
 const seedOf = (members: GroupingObservation[]): GroupingObservation => {
   const sorted = [...members].sort((a, b) => {
     const start = instantMs(a.event_start_utc) - instantMs(b.event_start_utc);
     if (start !== 0) return start;
-    return a.observation_id < b.observation_id
-      ? -1
-      : a.observation_id > b.observation_id
-        ? 1
-        : 0;
+    return byString(a.observation_id, b.observation_id);
   });
   const seed = sorted[0];
   if (seed === undefined) throw new Error("an episode needs a member");
@@ -394,25 +392,20 @@ export const groupObservations = (
   const forest = new UnionFind();
   for (const row of ofDate) forest.find(row.observation_id);
 
-  const edgeRules = new Map<string, string[]>();
   const ordered = [...ofDate].sort((a, b) =>
-    a.observation_id < b.observation_id
-      ? -1
-      : a.observation_id > b.observation_id
-        ? 1
-        : 0,
+    byString(a.observation_id, b.observation_id),
   );
+  const edges: { id: string; rules: string[] }[] = [];
   for (let i = 0; i < ordered.length; i++) {
     const a = ordered[i];
     if (a === undefined) continue;
     for (let j = i + 1; j < ordered.length; j++) {
       const b = ordered[j];
       if (b === undefined) continue;
-      const fired = firingRules(a, b, config);
-      if (fired.length === 0) continue;
+      const rules = firingRules(a, b, config);
+      if (rules.length === 0) continue;
       forest.union(a.observation_id, b.observation_id);
-      const key = [a.observation_id, b.observation_id].sort().join("\0");
-      edgeRules.set(key, fired);
+      edges.push({ id: a.observation_id, rules });
     }
   }
 
@@ -423,21 +416,15 @@ export const groupObservations = (
     bucket.push(row);
     buckets.set(root, bucket);
   }
+  const rulesByRoot = new Map<string, string[]>();
+  for (const edge of edges) {
+    const root = forest.find(edge.id);
+    rulesByRoot.set(root, [...(rulesByRoot.get(root) ?? []), ...edge.rules]);
+  }
 
   const episodes: GroupedEpisode[] = [];
-  for (const members of buckets.values()) {
-    const ids = new Set(members.map((m) => m.observation_id));
-    const ruleIds: string[] = [];
-    for (const [key, fired] of edgeRules) {
-      const [left, right] = key.split("\0");
-      if (
-        left !== undefined &&
-        right !== undefined &&
-        ids.has(left) &&
-        ids.has(right)
-      )
-        ruleIds.push(...fired);
-    }
+  for (const [root, members] of buckets) {
+    const ruleIds = rulesByRoot.get(root) ?? [];
     if (
       !config.singletonEpisodes &&
       members.length === 1 &&
@@ -446,7 +433,5 @@ export const groupObservations = (
       continue;
     episodes.push(toEpisode(members, ruleIds, config));
   }
-  return episodes.sort((a, b) =>
-    a.episode_id < b.episode_id ? -1 : a.episode_id > b.episode_id ? 1 : 0,
-  );
+  return episodes.sort((a, b) => byString(a.episode_id, b.episode_id));
 };
