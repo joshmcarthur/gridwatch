@@ -80,6 +80,7 @@ export interface ScoredEpisode {
   is_candidate: boolean;
   candidate_reason: CandidateReason;
   history_sample_size: number;
+  inputs_complete: boolean;
 }
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
@@ -95,12 +96,13 @@ const severityCap = (
   types: readonly string[],
   config: EpisodeRankingConfig,
 ): number =>
-  Math.max(
-    ...types.map(
-      (type) => config.severityCapByType[type] ?? config.defaultSeverityCap,
-    ),
-    types.length === 0 ? config.defaultSeverityCap : 0,
-  );
+  types.length === 0
+    ? config.defaultSeverityCap
+    : Math.max(
+        ...types.map(
+          (type) => config.severityCapByType[type] ?? config.defaultSeverityCap,
+        ),
+      );
 
 /**
  * Score the episodes of one date (ADR-0024). `history` is one set of shape keys for each prior
@@ -113,7 +115,11 @@ export function scoreEpisodes(
 ): ScoredEpisode[] {
   const { weights } = config;
   const cold = history.length < config.minPoolSize;
-  const scored = today.map((episode) => {
+  // Sorted by id first: the stable score sort below then breaks ties by episode_id.
+  const byId = [...today].sort((a, b) =>
+    a.episode_id.localeCompare(b.episode_id),
+  );
+  const scored = byId.map((episode) => {
     const typeCount = episode.observation_types.length;
     const islandCount = episode.islands.length;
     const cap = severityCap(episode.observation_types, config);
@@ -151,15 +157,7 @@ export function scoreEpisodes(
       score: round6(score),
     };
   });
-  scored.sort(
-    (a, b) =>
-      b.score - a.score ||
-      (a.episode.episode_id < b.episode.episode_id
-        ? -1
-        : a.episode.episode_id > b.episode.episode_id
-          ? 1
-          : 0),
-  );
+  scored.sort((a, b) => b.score - a.score);
   return scored.map((row, index) => {
     const dayRank = index + 1;
     const inTop = dayRank <= config.candidatesPerDay;
@@ -184,27 +182,18 @@ export function scoreEpisodes(
           ? "below_min_score"
           : "beyond_top_n",
       history_sample_size: history.length,
+      inputs_complete: row.episode.inputs_complete,
     };
   });
 }
 
-interface EpisodeRow {
-  episode_id: string;
-  trading_date: string;
-  severity: number;
-  period_count: number;
-  observation_types: string[];
-  islands: string[];
-  inputs_complete: boolean;
-}
-
-const scoreValuesSql = (row: ScoredEpisode, complete: boolean): string =>
+const scoreValuesSql = (row: ScoredEpisode): string =>
   `(${lit(row.episode_id)}, DATE ${lit(row.trading_date)}, ${row.severity}::DOUBLE,
     ${row.period_count}::INTEGER, ${row.island_count}::INTEGER, ${row.type_count}::INTEGER,
     ${row.severity_component}::DOUBLE, ${row.duration_component}::DOUBLE,
     ${row.breadth_component}::DOUBLE, ${row.rarity_component}::DOUBLE,
     ${row.score}::DOUBLE, ${row.day_rank}::INTEGER, ${row.is_candidate},
-    ${lit(row.candidate_reason)}, ${row.history_sample_size}::INTEGER, ${complete})`;
+    ${lit(row.candidate_reason)}, ${row.history_sample_size}::INTEGER, ${row.inputs_complete})`;
 
 /**
  * Publish the ranking of one trading date (ADR-0024):
@@ -254,7 +243,9 @@ export async function publishEpisodeRanking(
          WHERE trading_date = DATE ${lit(date)}`,
       )
     ).getRowObjectsJson() as Array<{ inputs_complete: boolean }>;
-    const dayComplete = dayRows.every((row) => Boolean(row.inputs_complete));
+    const dayComplete =
+      dayRows.length > 0 &&
+      dayRows.every((row) => Boolean(row.inputs_complete));
 
     const todayRows = existsSync(todayPath)
       ? ((
@@ -265,11 +256,16 @@ export async function publishEpisodeRanking(
              WHERE trading_date = DATE ${lit(date)}
              ORDER BY episode_id`,
           )
-        ).getRowObjectsJson() as unknown as EpisodeRow[])
+        ).getRowObjectsJson() as Array<
+          Record<keyof RankingEpisode, unknown> & {
+            observation_types: string[];
+            islands: string[];
+          }
+        >)
       : [];
     const today: RankingEpisode[] = todayRows.map((row) => ({
-      episode_id: row.episode_id,
-      trading_date: row.trading_date,
+      episode_id: String(row.episode_id),
+      trading_date: String(row.trading_date),
       severity: Number(row.severity),
       period_count: Number(row.period_count),
       observation_types: row.observation_types,
@@ -303,9 +299,6 @@ export async function publishEpisodeRanking(
     const scored = scoreEpisodes(today, [...byDay.values()], config);
     const inputsComplete =
       dayComplete && today.every((episode) => episode.inputs_complete);
-    const complete = new Map(
-      today.map((episode) => [episode.episode_id, episode.inputs_complete]),
-    );
     const candidateCount = scored.filter((row) => row.is_candidate).length;
     const parameters = lit(JSON.stringify(config));
 
@@ -326,11 +319,7 @@ export async function publishEpisodeRanking(
              score, day_rank, is_candidate, candidate_reason, history_sample_size,
              ${parameters} AS parameters, ${inputTablesSql} AS input_tables,
              ${stamp("member_complete")}
-           FROM (VALUES ${scored
-             .map((row) =>
-               scoreValuesSql(row, complete.get(row.episode_id) ?? false),
-             )
-             .join(", ")})
+           FROM (VALUES ${scored.map(scoreValuesSql).join(", ")})
              s(episode_id, trading_date, severity, period_count, island_count, type_count,
                severity_component, duration_component, breadth_component, rarity_component,
                score, day_rank, is_candidate, candidate_reason, history_sample_size,

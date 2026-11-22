@@ -319,7 +319,7 @@ test("episodes are scored from the prior days only, and the day itself is exclud
   for (let i = 1; i <= config.minPoolSize; i++)
     await writeEpisodeDay(
       shiftDate(DAY, -i),
-      i <= 10 ? [{ episode_id: `p${i}` }] : [],
+      i <= 5 ? [{ episode_id: `p${i}` }] : [],
     );
   await writeEpisodeDay(DAY, [
     { episode_id: "x1" },
@@ -337,7 +337,7 @@ test("episodes are scored from the prior days only, and the day itself is exclud
     "episode_id, rarity_component, history_sample_size, day_rank",
   );
   expect(rows.map((r) => r.episode_id)).toEqual(["x1", "x2"]);
-  expect(rows[0]?.rarity_component).toBeCloseTo(0.5, 6);
+  expect(rows[0]?.rarity_component).toBeCloseTo(0.75, 6);
   expect(rows[1]?.rarity_component).toBe(1);
   expect(rows[0]?.history_sample_size).toBe(config.minPoolSize);
   expect(

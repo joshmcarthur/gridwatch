@@ -45,7 +45,7 @@ Each component is in [0, 1].
 
 `score` is the weighted sum. The weights add up to 1. A test asserts it.
 
-**Severity.** Member severity is 1 at that detector's threshold and unbounded above ([ADR-0019](0019-observations-and-price-anomaly-detector.md)). The scale differs by type, so one cap would let `reserve_price_high` (a $0.5 median, so severity runs to about 170) swamp the others. The episode keeps only the maximum severity, not which member gave it, so the episode takes the largest cap among its types. That never overstates a mixed episode.
+**Severity.** Member severity is 1 at that detector's threshold and unbounded above ([ADR-0019](0019-observations-and-price-anomaly-detector.md)). The scale differs by type, so one cap would let `reserve_price_high` (a $0.5 median, so severity runs to about 170) swamp the others. The episode keeps only the maximum severity, not which member gave it, so the episode takes the largest cap among its types. It can understate a mixed episode, never overstate it.
 
 | Type | Observed range in the ADR-0019 backfill | Cap | Why |
 | --- | --- | --- | --- |
@@ -83,7 +83,7 @@ An episode is a candidate when `day_rank <= candidatesPerDay` (3) and `score >= 
 
 ### Weekly list
 
-The weekly list is a query, not a table. The week is ISO Monday to Sunday of `trading_date`. Run it with the DuckDB CLI over the gold lake.
+The weekly list is a query, not a table. The week is ISO Monday to Sunday of `trading_date`. Run it with the DuckDB CLI over the gold lake. Both queries were run once through the DuckDB Node API against three synthetic partitions, and they work as written. The ranking itself has not run over a real backfill.
 
 Top candidates for each day:
 
