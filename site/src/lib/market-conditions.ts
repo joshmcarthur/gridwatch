@@ -3,7 +3,7 @@ import type {
   SiteIndex,
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
-import { dailyPath, dayHeadline } from "./daily-page.ts";
+import { dailyPath, pageLead } from "./daily-page.ts";
 import { formatTradingDate } from "./site-data.ts";
 
 const RANK_WINDOW = 365;
@@ -157,7 +157,7 @@ export function latestMarketUpdate(
     date,
     href: dailyPath(date),
     dateLabel: formatTradingDate(date),
-    summary: leadFact(index, date, loadDay) ?? dayHeadline(day).sentence,
+    summary: pageLead(day, leadFact(index, date, loadDay)),
     generationLag,
   };
 }

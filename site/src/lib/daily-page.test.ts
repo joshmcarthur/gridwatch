@@ -1,7 +1,10 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SiteEpisode, SiteIndex } from "@gridwatch/publisher/site-contract";
+import type {
+  SiteEpisode,
+  SiteIndex,
+} from "@gridwatch/publisher/site-contract";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
   completenessNotice,
