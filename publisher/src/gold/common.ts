@@ -78,6 +78,12 @@ export interface GoldGoldInput extends GoldInputBase {
   versionColumn: "inputs_sha256";
   completenessDataset: null;
   windowDays?: number;
+  /**
+   * The date is still wanted when the subject date has no partition of this input, and the
+   * fingerprint then leaves the input out. Not allowed on the first input, which sets the dates.
+   * For an input that adds context but does not decide which dates exist (ADR-0024).
+   */
+  optional?: boolean;
 }
 
 export const shiftDate = (date: string, days: number) =>
@@ -195,7 +201,7 @@ const inputFingerprintRows = (
   for (const day of days) {
     const version = versionOf(input, day);
     if (version === undefined) {
-      if (day === date)
+      if (day === date && !(input.layer === "gold" && input.optional))
         throw new Error(`${input.table} has no version for ${date}`);
       continue;
     }
@@ -252,7 +258,13 @@ export async function wantedFingerprints(
   const wanted = new Map<string, string>();
   const [first, ...rest] = versions;
   for (const date of first?.keys() ?? []) {
-    if (!rest.every((v) => v.has(date))) continue;
+    if (
+      !rest.every((v, i) => {
+        const input = inputs[i + 1];
+        return v.has(date) || (input?.layer === "gold" && input.optional);
+      })
+    )
+      continue;
     wanted.set(
       date,
       dateFingerprint(

@@ -1,5 +1,6 @@
 import { periodsInTradingDate, periodToUtc } from "../../trading-time.ts";
 import { goldPartitionPath } from "../common.ts";
+import { CORROBORATION_RULES } from "../episodes.ts";
 import { episodeIdOf } from "../episodes-group.ts";
 import { TABLES as PRICE_ANOMALY_TABLES } from "../price-anomaly.ts";
 import { TABLES as PRICE_SEPARATION_TABLES } from "../price-separation.ts";
@@ -404,6 +405,70 @@ export async function writeEvidenceGold(options: EvidenceLakeOptions) {
   ]);
   await write(PRICE_ANOMALY_TABLES[1], observationColumns, []);
   await write(PRICE_SEPARATION_TABLES[1], observationColumns, []);
+
+  // Corroborating observations (#180). Two match the episode. Four do not: the other island,
+  // a run outside the episode, a hit with no island, and the wrong direction.
+  const related = (
+    id: string,
+    type: string,
+    subjectType: string,
+    subjectId: string,
+    island: string | null,
+    periods: [number, number],
+  ) => ({
+    observation_id: id,
+    observation_type: type,
+    trading_date: date,
+    start_trading_period: periods[0],
+    end_trading_period: periods[1],
+    event_start_utc: periodToUtc(date, periods[0]).eventStartUtc.toString(),
+    event_end_utc: periodToUtc(date, periods[1]).eventEndUtc.toString(),
+    subject_type: subjectType,
+    subject_id: subjectId,
+    island,
+    plant_id: null,
+    measured_value: 100,
+    severity: 2,
+  });
+  const [fuelRule, demandRule] = CORROBORATION_RULES;
+  await write(fuelRule.table, observationColumns, [
+    related(
+      "obs-fuel-wind-ni",
+      "generation_low",
+      "fuel_category",
+      "wind|NI",
+      "NI",
+      [38, 42],
+    ),
+    related(
+      "obs-fuel-wind-si",
+      "generation_low",
+      "fuel_category",
+      "wind|SI",
+      "SI",
+      [38, 42],
+    ),
+    related(
+      "obs-fuel-coal-high",
+      "generation_high",
+      "fuel_category",
+      "coal_gas|NI",
+      "NI",
+      [38, 42],
+    ),
+  ]);
+  await write(demandRule.table, observationColumns, [
+    related("obs-demand-ni", "demand_high", "island", "NI", "NI", [30, 35]),
+    related(
+      "obs-demand-ni-late",
+      "demand_high",
+      "island",
+      "NI",
+      "NI",
+      [41, 44],
+    ),
+    related("obs-demand-nz", "demand_high", "island", "NZ", null, [35, 40]),
+  ]);
 
   // Prices and spreads.
   const nodes = Object.keys(PRICE);

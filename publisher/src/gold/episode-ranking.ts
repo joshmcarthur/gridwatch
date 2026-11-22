@@ -13,18 +13,26 @@ import {
   windowDates,
   writeGoldTables,
 } from "./common.ts";
-import { TABLES as EPISODE_TABLES } from "./episodes.ts";
+import { TABLES as DEMAND_DEVIATION_TABLES } from "./demand-deviation.ts";
+import { CORROBORATION_RULES, TABLES as EPISODE_TABLES } from "./episodes.ts";
+import { FUEL_TABLES as FUEL_GENERATION_CHANGE_TABLES } from "./generation-change.ts";
 
 /**
  * Bump by hand when a rule or a config value changes (ADR-0011, ADR-0024).
  */
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
 
 export const TABLES = ["episode_ranking_days", "episode_scores"] as const;
 
 /** Provisional values. Reasons are in ADR-0024. */
 export const EPISODE_RANKING_CONFIG = {
-  weights: { severity: 0.35, duration: 0.2, breadth: 0.2, rarity: 0.25 },
+  weights: {
+    severity: 0.3,
+    duration: 0.2,
+    breadth: 0.15,
+    corroboration: 0.1,
+    rarity: 0.25,
+  },
   severityCapByType: {
     price_high: 30,
     reserve_price_high: 170,
@@ -32,6 +40,9 @@ export const EPISODE_RANKING_CONFIG = {
   defaultSeverityCap: 10,
   durationCapPeriods: 12,
   breadthCap: 4,
+  /** Distinct corroborating observation types that score 1. Both rules of `CORROBORATION_RULES`. */
+  corroborationCap: 2,
+  corroborationRules: CORROBORATION_RULES,
   historyDays: 90,
   minPoolSize: 20,
   candidatesPerDay: 3,
@@ -40,7 +51,7 @@ export const EPISODE_RANKING_CONFIG = {
 
 export type EpisodeRankingConfig = typeof EPISODE_RANKING_CONFIG;
 
-export const INPUTS: Array<GoldGoldInput & { windowDays: number }> = [
+export const INPUTS: GoldGoldInput[] = [
   {
     layer: "gold",
     table: EPISODE_TABLES[0],
@@ -48,6 +59,17 @@ export const INPUTS: Array<GoldGoldInput & { windowDays: number }> = [
     completenessDataset: null,
     windowDays: EPISODE_RANKING_CONFIG.historyDays,
   },
+  // Corroboration reads these observations for the episode's own date only (ADR-0024).
+  ...[FUEL_GENERATION_CHANGE_TABLES[0], DEMAND_DEVIATION_TABLES[0]].map(
+    (table) => ({
+      layer: "gold" as const,
+      table,
+      versionColumn: "inputs_sha256" as const,
+      completenessDataset: null,
+      // Optional: the baselines need history, so early days have no sentinel. Those days still rank.
+      optional: true,
+    }),
+  ),
 ];
 
 export interface RankingEpisode {
@@ -57,6 +79,8 @@ export interface RankingEpisode {
   period_count: number;
   observation_types: readonly string[];
   islands: readonly string[];
+  /** Distinct corroborating observation types that overlap the episode (not members). */
+  corroboration_count: number;
   inputs_complete: boolean;
 }
 
@@ -75,6 +99,8 @@ export interface ScoredEpisode {
   severity_component: number;
   duration_component: number;
   breadth_component: number;
+  corroboration_count: number;
+  corroboration_component: number;
   rarity_component: number;
   score: number;
   day_rank: number;
@@ -134,6 +160,9 @@ export function scoreEpisodes(
       (Math.max(typeCount - 1, 0) + Math.max(islandCount - 1, 0)) /
         config.breadthCap,
     );
+    const corroborationComponent = clamp01(
+      episode.corroboration_count / config.corroborationCap,
+    );
     let rarityComponent = 0.5;
     if (!cold) {
       const key = shapeKey(episode.observation_types, episode.islands);
@@ -144,6 +173,7 @@ export function scoreEpisodes(
       weights.severity * severityComponent +
       weights.duration * durationComponent +
       weights.breadth * breadthComponent +
+      weights.corroboration * corroborationComponent +
       weights.rarity * rarityComponent;
     return {
       episode,
@@ -152,6 +182,7 @@ export function scoreEpisodes(
       severity_component: round6(severityComponent),
       duration_component: round6(durationComponent),
       breadth_component: round6(breadthComponent),
+      corroboration_component: round6(corroborationComponent),
       rarity_component: round6(rarityComponent),
       score: round6(score),
     };
@@ -171,6 +202,8 @@ export function scoreEpisodes(
       severity_component: row.severity_component,
       duration_component: row.duration_component,
       breadth_component: row.breadth_component,
+      corroboration_count: row.episode.corroboration_count,
+      corroboration_component: row.corroboration_component,
       rarity_component: row.rarity_component,
       score: row.score,
       day_rank: dayRank,
@@ -190,7 +223,8 @@ const scoreValuesSql = (row: ScoredEpisode): string =>
   `(${lit(row.episode_id)}, DATE ${lit(row.trading_date)}, ${row.severity}::DOUBLE,
     ${row.period_count}::INTEGER, ${row.island_count}::INTEGER, ${row.type_count}::INTEGER,
     ${row.severity_component}::DOUBLE, ${row.duration_component}::DOUBLE,
-    ${row.breadth_component}::DOUBLE, ${row.rarity_component}::DOUBLE,
+    ${row.breadth_component}::DOUBLE, ${row.corroboration_count}::INTEGER,
+    ${row.corroboration_component}::DOUBLE, ${row.rarity_component}::DOUBLE,
     ${row.score}::DOUBLE, ${row.day_rank}::INTEGER, ${row.is_candidate},
     ${lit(row.candidate_reason)}, ${row.history_sample_size}::INTEGER, ${row.inputs_complete})`;
 
@@ -262,6 +296,32 @@ export async function publishEpisodeRanking(
           }
         >)
       : [];
+    // Corroborating observations: same date, overlapping span, same island (ADR-0024). Each rule
+    // counts once per episode, so the count is the number of distinct rules that matched.
+    const corroboration = new Map<string, number>();
+    if (todayRows.length > 0)
+      for (const rule of config.corroborationRules) {
+        const observationsPath = goldPartitionPath(goldDir, rule.table, date);
+        if (!existsSync(observationsPath)) continue;
+        const matched = (
+          await connection.runAndReadAll(
+            `SELECT DISTINCT e.episode_id
+             FROM read_parquet(${lit(todayPath)}) e
+             JOIN read_parquet(${lit(observationsPath)}) o
+               ON o.observation_type = ${lit(rule.observationType)}
+              AND list_contains(e.islands, o.island)
+              AND o.event_start_utc < e.event_end_utc
+              AND e.event_start_utc < o.event_end_utc
+             WHERE e.trading_date = DATE ${lit(date)}
+               AND o.trading_date = DATE ${lit(date)}`,
+          )
+        ).getRowObjectsJson() as Array<{ episode_id: string }>;
+        for (const row of matched)
+          corroboration.set(
+            row.episode_id,
+            (corroboration.get(row.episode_id) ?? 0) + 1,
+          );
+      }
     const today: RankingEpisode[] = todayRows.map((row) => ({
       episode_id: String(row.episode_id),
       trading_date: String(row.trading_date),
@@ -269,6 +329,7 @@ export async function publishEpisodeRanking(
       period_count: Number(row.period_count),
       observation_types: row.observation_types,
       islands: row.islands,
+      corroboration_count: corroboration.get(String(row.episode_id)) ?? 0,
       inputs_complete: Boolean(row.inputs_complete),
     }));
 
@@ -307,20 +368,23 @@ export async function publishEpisodeRanking(
              NULL::DOUBLE AS severity, NULL::INTEGER AS period_count,
              NULL::INTEGER AS island_count, NULL::INTEGER AS type_count,
              NULL::DOUBLE AS severity_component, NULL::DOUBLE AS duration_component,
-             NULL::DOUBLE AS breadth_component, NULL::DOUBLE AS rarity_component,
+             NULL::DOUBLE AS breadth_component, NULL::INTEGER AS corroboration_count,
+             NULL::DOUBLE AS corroboration_component, NULL::DOUBLE AS rarity_component,
              NULL::DOUBLE AS score, NULL::INTEGER AS day_rank, NULL::BOOLEAN AS is_candidate,
              NULL::VARCHAR AS candidate_reason, NULL::INTEGER AS history_sample_size,
              NULL::VARCHAR AS parameters, ${inputTablesSql} AS input_tables,
              ${stamp("false")}
            WHERE false`
         : `SELECT episode_id, trading_date, severity, period_count, island_count, type_count,
-             severity_component, duration_component, breadth_component, rarity_component,
+             severity_component, duration_component, breadth_component, corroboration_count,
+             corroboration_component, rarity_component,
              score, day_rank, is_candidate, candidate_reason, history_sample_size,
              ${parameters} AS parameters, ${inputTablesSql} AS input_tables,
              ${stamp("member_complete")}
            FROM (VALUES ${scored.map(scoreValuesSql).join(", ")})
              s(episode_id, trading_date, severity, period_count, island_count, type_count,
-               severity_component, duration_component, breadth_component, rarity_component,
+               severity_component, duration_component, breadth_component, corroboration_count,
+               corroboration_component, rarity_component,
                score, day_rank, is_candidate, candidate_reason, history_sample_size,
                member_complete)
            ORDER BY episode_id`;

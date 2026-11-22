@@ -10,6 +10,7 @@ import {
   inputFingerprint,
   writeGoldTables,
 } from "./common.ts";
+import { TABLES as DEMAND_DEVIATION_TABLES } from "./demand-deviation.ts";
 import {
   EPISODE_GROUPING_CONFIG,
   type EpisodeGroupingConfig,
@@ -17,6 +18,7 @@ import {
   type GroupingObservation,
   groupObservations,
 } from "./episodes-group.ts";
+import { FUEL_TABLES as FUEL_GENERATION_CHANGE_TABLES } from "./generation-change.ts";
 import type { SubjectType } from "./observation.ts";
 import { TABLES as PRICE_ANOMALY_TABLES } from "./price-anomaly.ts";
 import { TABLES as PRICE_SEPARATION_TABLES } from "./price-separation.ts";
@@ -46,6 +48,20 @@ const DETECTORS = [
     sentinel: RESERVE_PRICE_ANOMALY_TABLES[0],
     observations: RESERVE_PRICE_ANOMALY_TABLES[1],
   },
+] as const;
+
+/**
+ * Observations that corroborate an episode without being members of it (issue #180, ADR-0021).
+ * One matches when it is on the episode's trading date, overlaps its time span and has an island
+ * that is one of the episode's islands. A null island (national demand) never matches. Plant-level
+ * generation change is left out until its noise is cut (#179). Ranking and evidence share this list.
+ */
+export const CORROBORATION_RULES = [
+  {
+    table: FUEL_GENERATION_CHANGE_TABLES[1],
+    observationType: "generation_low",
+  },
+  { table: DEMAND_DEVIATION_TABLES[1], observationType: "demand_high" },
 ] as const;
 
 export const TABLES = ["episode_days", "episodes"] as const;

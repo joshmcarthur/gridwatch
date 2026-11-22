@@ -8,6 +8,7 @@ import {
 } from "../silver/completeness.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
 import { byString, goldPartitionPath, silverPartitionPath } from "./common.ts";
+import { CORROBORATION_RULES } from "./episodes.ts";
 import {
   type ClaimContext,
   type ClaimInput,
@@ -44,9 +45,9 @@ import { TABLES as RESERVE_PRICE_ANOMALY_TABLES } from "./reserve-price-anomaly.
  */
 
 /** Bump when the shape of the package changes. */
-export const EVIDENCE_SCHEMA_VERSION = 1;
+export const EVIDENCE_SCHEMA_VERSION = 2;
 /** Bump by hand when a claim, a rule or a config value of the builder changes. */
-export const BUILDER_VERSION = 1;
+export const BUILDER_VERSION = 2;
 
 export const EVIDENCE_CONFIG = {
   /** Periods before the episode start that the window holds (clamped to period 1). */
@@ -184,6 +185,8 @@ export interface EvidencePackage {
     periods: number[];
   };
   observations: EvidenceObservation[];
+  /** Observations that overlap the episode on its island but are not members (ADR-0021, #180). */
+  related_observations: EvidenceObservation[];
   /** Series are aligned to `window.periods`. A null is a period with no row. */
   context: {
     prices: Record<string, { price: Series; max_price: Series }>;
@@ -256,6 +259,7 @@ const GOLD_DETECTOR_TABLES = [
 const GOLD_TABLES = [
   "episodes",
   ...GOLD_DETECTOR_TABLES,
+  ...CORROBORATION_RULES.map((rule) => rule.table),
   "price_periods",
   "price_spreads",
   "price_daily_summary",
@@ -478,19 +482,18 @@ export async function buildEvidencePackage(
       episode,
     );
 
-    // Observations that are members of the episode.
-    const observations: EvidenceObservation[] = [];
-    for (const table of GOLD_DETECTOR_TABLES) {
-      if (!present(table)) continue;
+    // Members of the episode, and observations that corroborate it without being members.
+    const readObservations = async (table: string, where: string) => {
+      if (!present(table)) return [];
       const rows = await query(
         `SELECT observation_id, observation_type, start_trading_period,
            end_trading_period, event_start_utc, event_end_utc, subject_type,
            subject_id, island, plant_id, measured_value, severity, inputs_complete
          FROM ${from(table)}
-         WHERE list_contains(${listSql(episode.member_observation_ids)}, observation_id)`,
+         WHERE ${where}`,
       );
-      for (const row of rows)
-        observations.push({
+      return rows.map(
+        (row): EvidenceObservation => ({
           observation_id: String(row.observation_id),
           observation_type: String(row.observation_type),
           start_trading_period: Number(row.start_trading_period),
@@ -504,9 +507,32 @@ export async function buildEvidencePackage(
           measured_value: round(Number(row.measured_value)),
           severity: round(Number(row.severity)),
           inputs_complete: Boolean(row.inputs_complete),
-        });
-    }
-    observations.sort((a, b) => byString(a.observation_id, b.observation_id));
+        }),
+      );
+    };
+    const byId = (a: EvidenceObservation, b: EvidenceObservation) =>
+      byString(a.observation_id, b.observation_id);
+    const observations: EvidenceObservation[] = [];
+    for (const table of GOLD_DETECTOR_TABLES)
+      observations.push(
+        ...(await readObservations(
+          table,
+          `list_contains(${listSql(episode.member_observation_ids)}, observation_id)`,
+        )),
+      );
+    observations.sort(byId);
+    const relatedObservations: EvidenceObservation[] = [];
+    for (const rule of CORROBORATION_RULES)
+      relatedObservations.push(
+        ...(await readObservations(
+          rule.table,
+          `observation_type = ${lit(rule.observationType)}
+           AND island IN (${episode.islands.map(lit).join(", ") || "NULL"})
+           AND event_start_utc < ${lit(episode.event_end_utc)}::TIMESTAMPTZ
+           AND ${lit(episode.event_start_utc)}::TIMESTAMPTZ < event_end_utc`,
+        )),
+      );
+    relatedObservations.sort(byId);
 
     const claims: Claim[] = [];
     const claim = (input: ClaimInput) => {
@@ -619,6 +645,7 @@ export async function buildEvidencePackage(
         periods,
       },
       observations,
+      related_observations: relatedObservations,
       context: {
         prices,
         spreads,

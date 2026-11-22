@@ -28,6 +28,7 @@ One object. Types are in `evidence.ts`; `schema_version` and `builder_version` a
 | `episode` | The `episodes` row. |
 | `window` | The trading date, first and last period, and the peak period. |
 | `observations` | The member observations of the episode. |
+| `related_observations` | Observations that corroborate the episode without being members: fuel-level `generation_low` and NI/SI `demand_high` that overlap the episode span on one of its islands ([ADR-0021](0021-episodes.md), `CORROBORATION_RULES`). Same fields as `observations`. |
 | `context` | Series aligned to `window.periods`: reference-node prices (period mean and highest publish), spreads, reserve by class and island, generation by fuel and island, the top plants of the peak period, HVDC, modelled load, modelled energy-balance residual, and the dispatch publishes of the peak period. A period with no row is `null`. |
 | `reference` | Plants (name, fuel, island, operator, points of connection, place) and points of connection (description, island, region, place). A field is `null` when no source row matches. |
 | `completeness` | One entry for every table that the builder reads: `complete`, `partial`, `missing` or `invalid`. An absent table is `missing`. It is never skipped. |

@@ -15,11 +15,13 @@ import {
   shapeKey,
   TABLES,
 } from "./episode-ranking.ts";
-import { TABLES as EPISODE_TABLES } from "./episodes.ts";
+import { CORROBORATION_RULES, TABLES as EPISODE_TABLES } from "./episodes.ts";
 import { completenessView } from "./fixtures/completeness.ts";
 
 const DAY = "2026-11-11";
 const config = EPISODE_RANKING_CONFIG;
+/** The span of every episode written by `writeEpisodeDay`. */
+const SPAN = ["2026-11-11 06:00:00+00", "2026-11-11 08:00:00+00"] as const;
 
 const episode = (
   id: string,
@@ -31,6 +33,7 @@ const episode = (
   period_count: 1,
   observation_types: ["price_high"],
   islands: ["NI"],
+  corroboration_count: 0,
   inputs_complete: true,
   ...overrides,
 });
@@ -49,14 +52,17 @@ const warm = (shapes: string[][]): Array<Set<string>> =>
   );
 
 test("the weights add up to 1", () => {
-  const { severity, duration, breadth, rarity } = config.weights;
-  expect(severity + duration + breadth + rarity).toBeCloseTo(1, 12);
+  const { severity, duration, breadth, corroboration, rarity } = config.weights;
+  expect(severity + duration + breadth + corroboration + rarity).toBeCloseTo(
+    1,
+    12,
+  );
 });
 
 test("the default config is pinned: a changed value without an ANALYSIS_VERSION bump fails here", () => {
   expect(
     createHash("sha256").update(JSON.stringify(config)).digest("hex"),
-  ).toBe("1787c74970ad943cdac559b858bfb16d484003c4b87df97f161bcf5bdc261e32");
+  ).toBe("72592e308eb49bcf1fef72ffe342691caefd76c5ae28b81086ce457fac6551ee");
 });
 
 test("components are 0 at the threshold and 1 at the caps, and they clamp", () => {
@@ -252,21 +258,29 @@ async function writeEpisodeDay(
        ${complete} AS inputs_complete`,
     goldPartitionPath(goldDir, EPISODE_TABLES[0], date),
   );
+  // The corroboration detectors' sentinels, which the fingerprint reads.
+  for (const input of INPUTS.slice(1))
+    await copySql(
+      `SELECT DATE ${lit(date)} AS trading_date, 'd1' AS inputs_sha256, true AS inputs_complete`,
+      goldPartitionPath(goldDir, input.table, date),
+    );
   const values =
     episodes.length === 0
       ? `SELECT NULL::VARCHAR AS episode_id, NULL::DATE AS trading_date,
            NULL::DOUBLE AS severity, NULL::INTEGER AS period_count,
            NULL::VARCHAR[] AS observation_types, NULL::VARCHAR[] AS islands,
+           NULL::TIMESTAMPTZ AS event_start_utc, NULL::TIMESTAMPTZ AS event_end_utc,
            NULL::BOOLEAN AS inputs_complete WHERE false`
       : `SELECT * FROM (VALUES ${episodes
           .map((e) => {
             const full = episode(e.episode_id, e);
             return `(${lit(full.episode_id)}, DATE ${lit(date)}, ${full.severity}::DOUBLE,
               ${full.period_count}::INTEGER, ${arraySql(full.observation_types)},
-              ${arraySql(full.islands)}, ${full.inputs_complete})`;
+              ${arraySql(full.islands)}, TIMESTAMPTZ '${SPAN[0]}', TIMESTAMPTZ '${SPAN[1]}',
+              ${full.inputs_complete})`;
           })
           .join(", ")}) t(episode_id, trading_date, severity, period_count,
-            observation_types, islands, inputs_complete)`;
+            observation_types, islands, event_start_utc, event_end_utc, inputs_complete)`;
   await copySql(values, goldPartitionPath(goldDir, EPISODE_TABLES[1], date));
 }
 
@@ -298,6 +312,8 @@ test("a date with no episode_days partition is missing", async () => {
 test("INPUTS are episode_days with a 90 day window", () => {
   expect(INPUTS.map((input) => [input.table, input.windowDays])).toEqual([
     ["episode_days", 90],
+    ["fuel_generation_change_baselines", undefined],
+    ["demand_deviation_baselines", undefined],
   ]);
 });
 
@@ -389,4 +405,79 @@ test("a rebuilt episode day inside the window changes the fingerprint", async ()
   await writeEpisodeDay(shiftDate(DAY, -40), [{ episode_id: "p" }], "v2");
   await publish(DAY);
   expect(await sha()).not.toBe(first);
+});
+
+// Catches: corroboration that is not scored, or one that does not stop at the cap.
+test("corroboration scores 0 with no observation, 0.5 with one type and 1 with both", () => {
+  const score = (count: number) =>
+    only([episode("a", { corroboration_count: count })]);
+  expect(score(0).corroboration_component).toBe(0);
+  expect(score(1).corroboration_component).toBe(0.5);
+  expect(score(2).corroboration_component).toBe(1);
+  expect(score(3).corroboration_component).toBe(1);
+  expect(score(2).score - score(0).score).toBeCloseTo(
+    config.weights.corroboration,
+    6,
+  );
+});
+
+async function writeObservations(
+  table: string,
+  date: string,
+  rows: Array<{
+    type: string;
+    island: string | null;
+    start: string;
+    end: string;
+  }>,
+) {
+  await copySql(
+    `SELECT * FROM (VALUES ${rows
+      .map(
+        (r) =>
+          `(${lit(r.type)}, ${r.island === null ? "NULL::VARCHAR" : lit(r.island)}, DATE ${lit(date)}, TIMESTAMPTZ ${lit(r.start)}, TIMESTAMPTZ ${lit(r.end)})`,
+      )
+      .join(
+        ", ",
+      )}) t(observation_type, island, trading_date, event_start_utc, event_end_utc)`,
+    goldPartitionPath(goldDir, table, date),
+  );
+}
+
+// Catches: a wrong-island, out-of-span, null-island or wrong-type observation counted as
+// corroboration, or one rule counted twice for the same episode.
+test("corroboration counts each matching rule once and ignores non-matches", async () => {
+  await writeEpisodeDay(DAY, [
+    { episode_id: "ni", islands: ["NI"] },
+    { episode_id: "si", islands: ["SI"] },
+  ]);
+  const [fuel, demand] = CORROBORATION_RULES;
+  const inside = {
+    start: "2026-11-11 07:00:00+00",
+    end: "2026-11-11 09:00:00+00",
+  };
+  await writeObservations(fuel.table, DAY, [
+    { type: "generation_low", island: "NI", ...inside },
+    { type: "generation_low", island: "NI", ...inside },
+    { type: "generation_high", island: "SI", ...inside },
+  ]);
+  await writeObservations(demand.table, DAY, [
+    { type: "demand_high", island: "NI", ...inside },
+    {
+      type: "demand_high",
+      island: "NI",
+      start: "2026-11-11 08:00:00+00",
+      end: "2026-11-11 09:00:00+00",
+    },
+    { type: "demand_high", island: null, ...inside },
+  ]);
+  await publish(DAY);
+  expect(
+    await query(TABLES[1], DAY, "episode_id, corroboration_count"),
+  ).toEqual(
+    expect.arrayContaining([
+      { episode_id: "ni", corroboration_count: 2 },
+      { episode_id: "si", corroboration_count: 0 },
+    ]),
+  );
 });

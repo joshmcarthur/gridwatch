@@ -299,3 +299,17 @@ test("North Island thermal plants are listed beyond the top ten", async () => {
     "SFD/stratford",
   );
 });
+
+// Catches: a corroborating observation leaking into the members, or a wrong-island, out-of-span,
+// null-island or wrong-direction row being listed as related.
+test("related observations overlap the episode on its island and are not members", async () => {
+  await lake();
+  const pkg = await build();
+  expect(pkg.related_observations.map((o) => o.observation_id)).toEqual([
+    "obs-demand-ni",
+    "obs-fuel-wind-ni",
+  ]);
+  expect(pkg.observations.map((o) => o.observation_id)).toEqual([
+    "obs-reserve-sir-ni-0727",
+  ]);
+});
