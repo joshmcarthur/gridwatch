@@ -46,7 +46,7 @@ The invariant of ADR-0002 holds. `collector` and `publisher` know only `DATA_ROO
 - A restart resumes from the data held. The fill repeats at most the one range that was running.
 - Host cron is no longer needed. It is still possible: stop the `updater`, and run the `jobs` services from cron as ADR-0002 describes, with `--profile jobs`.
 - Run a job by hand only with the `updater` stopped. Two runs on one data folder would write the same files.
-- The published image must be public for a pull without a login. Otherwise the host must run `docker login ghcr.io` first. The package setting is in GitHub and outside this repository.
+- The stack depends on `ghcr.io/joshmcarthur/gridwatch` being public. It is public today (an anonymous pull of `latest` works). A fork that publishes its own image must make its package public, or the host must run `docker login ghcr.io` first. That setting is in GitHub and outside this repository.
 - A host folder for `GRIDWATCH_SITE_OUT` on Docker Desktop for Mac returned 400 for about 3 seconds after each swap. A named volume does not. The README recommends named volumes.
 - Caddy serves no compression, the same as the nginx default. A `Caddyfile` would be needed to add it.
 - The updater's constants (7 seed days, 30 fill days, a 6-hour cycle, a 10-minute retry) are not settings. A setting is added when a second user needs one.

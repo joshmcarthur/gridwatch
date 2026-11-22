@@ -123,7 +123,7 @@ ghcr.io/joshmcarthur/gridwatch:latest
 ghcr.io/joshmcarthur/gridwatch:sha-<7-char>
 ```
 
-The package is private by default. For a pull with no login, change the package visibility to public: in GitHub, open **Packages → gridwatch → Package settings**. While it is private, log in on the host first, with a token that has `read:packages`:
+The package is public, so `docker compose pull` needs no login. GitHub creates a new package as private. If you fork the repository and publish your own image, either make the package public (**Packages → gridwatch → Package settings**) or log in on the host first, with a token that has `read:packages`:
 
 ```bash
 echo <github-token-with-read:packages> | docker login ghcr.io -u USERNAME --password-stdin
