@@ -55,6 +55,14 @@ Amended 2026-11-22. The nodal price map ([ADR-0023](0023-nodal-price-map.md)) is
 
 Daily-page charts stay under the original rule: no client JavaScript.
 
+## Amendment (#199): daily mix compare may insert a second day's SVG
+
+Amended 2026-11-23. Day compare is a small island on the daily mix section. These points extend the decisions above for that control only.
+
+- **Static first.** The build still writes this day's mix SVG and table. Scripts off, that is the figure.
+- **Client insert.** JavaScript on the daily page may fetch `/YYYY/MM/DD/mix.json` for another published day and insert that day's mix SVGs next to this one. The JSON is build output. It must not fetch EMI, silver or gold. It must not run Plot in the browser.
+- **Daily-page charts stay Plot at build time.** Price, reserve, Sankey, and this day's mix stay under the original rule.
+
 ## Amendment (#92): battery panel
 
 Amended 2026-11-21. The generation mix figure now has two SVGs: the primary stack (`generation-mix-chart-*`) and battery (`generation-battery-chart-*`). Battery stays out of `STACK_ORDER` and out of the primary total. The battery SVG is shorter (120 units high against the 260-unit stack). Hover text and the table column still name it stored power. This closes the v1 departure from the Landscape rule.

@@ -1,0 +1,123 @@
+---
+import type { SiteDay, SiteIndex } from "@gridwatch/publisher/site-contract";
+import GenerationMixChart from "./GenerationMixChart.astro";
+import {
+  dailyPath,
+  defaultMixCompareDay,
+  mixCompareDays,
+} from "../lib/daily-page";
+import { generationMix } from "../lib/generation-mix";
+import { formatTradingDate } from "../lib/site-data";
+
+interface Props {
+  day: SiteDay;
+  date: string;
+  index: SiteIndex;
+}
+
+const { day, date, index } = Astro.props;
+const thisMix = generationMix(day);
+const options = mixCompareDays(index, date);
+const other = defaultMixCompareDay(index, date);
+const showCompare = thisMix !== null && other !== null && options.length > 0;
+---
+
+{
+  showCompare && other ? (
+    <div class="compare" data-compare-root>
+      <div class="pair">
+        <div data-compare-this>
+          <GenerationMixChart day={day} />
+        </div>
+        <div data-day-compare hidden>
+          <form>
+            <label for="compare-day">Compare with</label>
+            <select id="compare-day">
+              {
+                options.map((entry) => (
+                  <option
+                    value={entry.date}
+                    selected={entry.date === other.date}
+                  >
+                    {formatTradingDate(entry.date)}
+                  </option>
+                ))
+              }
+            </select>
+          </form>
+          <h3 id="compare-heading">{formatTradingDate(other.date)}</h3>
+          <p id="compare-summary" aria-live="polite"></p>
+          <div data-compare-other></div>
+        </div>
+      </div>
+      <noscript>
+        <p>
+          This page shows {formatTradingDate(date)}. Open{" "}
+          <a href={dailyPath(other.date)}>{formatTradingDate(other.date)}</a> for
+          that day's mix.
+        </p>
+      </noscript>
+    </div>
+  ) : (
+    <GenerationMixChart day={day} />
+  )
+}
+
+<script>
+  import { bindDayCompare } from "../lib/day-compare-client";
+  bindDayCompare();
+</script>
+
+<style>
+  .compare,
+  .pair,
+  [data-day-compare],
+  [data-compare-this],
+  [data-compare-other] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  @media (min-width: 50rem) {
+    .compare[data-paired] .pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-5);
+      align-items: start;
+    }
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  select {
+    font: inherit;
+    max-width: 24rem;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: var(--text-heading);
+  }
+
+  #compare-summary {
+    margin: 0;
+    font-size: var(--text-label);
+    color: var(--color-ink-muted);
+  }
+
+  [data-compare-other] :global(svg) {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .pair :global(svg) {
+    max-width: 100%;
+  }
+</style>
