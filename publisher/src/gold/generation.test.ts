@@ -25,6 +25,7 @@ import {
   writeGoldTables,
 } from "./common.ts";
 import { completenessView } from "./fixtures/completeness.ts";
+import { writeParquet } from "./fixtures/parquet.ts";
 import {
   ANALYSIS_VERSION,
   generation,
@@ -505,4 +506,273 @@ test("an invalid Generation_MD day gives incomplete rows in the same run", async
   expect(
     await publish(completenessView([["entity_mappings", date, "invalid"]])),
   ).toMatchObject({ status: "partial", missingPeriods: [] });
+});
+
+const DISPATCH_DATE = "2026-11-18";
+const dispatchStart = (period: number, interval: number) =>
+  new Date(
+    Date.UTC(2026, 10, 17, 11, 0) + ((period - 1) * 30 + interval * 5) * 60_000,
+  ).toISOString();
+
+async function writeDispatchSilver(options: {
+  mw: number;
+  extraUnits?: Array<{
+    poc: string;
+    unit: string;
+    mw: number;
+    plantId: string | null;
+    fuel: string | null;
+    name: string;
+  }>;
+  cases?: Array<{
+    period: number;
+    interval: number;
+    sourceRunAt: string;
+    caseId: string;
+    mw: number;
+  }>;
+}) {
+  const date = DISPATCH_DATE;
+  const units = [
+    {
+      poc: "AAA0331",
+      unit: "HYD0",
+      mw: options.mw,
+      plantId: "AAA/hydro1",
+      fuel: "hydro",
+      name: "hydro1",
+    },
+    ...(options.extraUnits ?? []),
+  ];
+  const periods = Array.from({ length: 48 }, (_, i) => i + 1);
+  const [unit] = units;
+  if (!unit) throw new Error("writeDispatchSilver needs a unit");
+  const nodalRows = options.cases
+    ? options.cases.map((c) => ({
+        trading_date: date,
+        trading_period: c.period,
+        event_start_utc: dispatchStart(c.period, c.interval),
+        source_run_at: c.sourceRunAt,
+        case_type: "RTD",
+        case_id: c.caseId,
+        point_of_connection: unit.poc,
+        unit_code: unit.unit,
+        plant_name: unit.name,
+        generation_megawatts: c.mw,
+        bronze_sha256: "nodal-sha",
+      }))
+    : periods.flatMap((period) =>
+        Array.from({ length: 6 }, (_, interval) =>
+          units.map((u) => ({
+            trading_date: date,
+            trading_period: period,
+            event_start_utc: dispatchStart(period, interval),
+            source_run_at: "2026-11-17T10:59:00.000Z",
+            case_type: "RTD",
+            case_id: `case-${period}-${interval}`,
+            point_of_connection: u.poc,
+            unit_code: u.unit,
+            plant_name: u.name,
+            generation_megawatts: u.mw,
+            bronze_sha256: "nodal-sha",
+          })),
+        ).flat(),
+      );
+  await writeParquet(
+    join(
+      silverDir,
+      "nodal_prices_and_volumes",
+      `trading_date=${date}`,
+      "data.parquet",
+    ),
+    {
+      trading_date: "DATE",
+      trading_period: "INTEGER",
+      event_start_utc: "TIMESTAMPTZ",
+      source_run_at: "TIMESTAMPTZ",
+      case_type: "VARCHAR",
+      case_id: "VARCHAR",
+      point_of_connection: "VARCHAR",
+      unit_code: "VARCHAR",
+      plant_name: "VARCHAR",
+      generation_megawatts: "DOUBLE",
+      bronze_sha256: "VARCHAR",
+    },
+    nodalRows,
+  );
+  await writeParquet(
+    join(silverDir, "entity_units", `trading_date=${date}`, "data.parquet"),
+    {
+      unit_id: "VARCHAR",
+      plant_id: "VARCHAR",
+      plant_name: "VARCHAR",
+      fuel_category: "VARCHAR",
+      point_of_connection: "VARCHAR",
+      unit_code: "VARCHAR",
+      inputs_sha256: "VARCHAR",
+    },
+    units
+      .filter((u) => u.fuel !== null)
+      .map((u) => ({
+        unit_id: `${u.poc}:${u.unit}`,
+        plant_id: u.plantId,
+        plant_name: u.name,
+        fuel_category: u.fuel,
+        point_of_connection: u.poc,
+        unit_code: u.unit,
+        inputs_sha256: "sha-e",
+      })),
+  );
+  await writeParquet(
+    join(
+      silverDir,
+      "entity_points_of_connection",
+      `trading_date=${date}`,
+      "data.parquet",
+    ),
+    {
+      poc_id: "VARCHAR",
+      island: "VARCHAR",
+      inputs_sha256: "VARCHAR",
+    },
+    [{ poc_id: "AAA0331", island: "NI", inputs_sha256: "sha-e" }],
+  );
+}
+
+test("without Generation_MD, gold generation is dispatch from nodal units", async () => {
+  await writeDispatchSilver({ mw: 10 });
+  expect(
+    await publishGeneration({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date: DISPATCH_DATE,
+    }),
+  ).toMatchObject({ status: "complete" });
+  expect(
+    await query(
+      `SELECT fuel_category, island, megawatt_hours, source FROM ${gold("generation_by_fuel_day", DISPATCH_DATE)}`,
+    ),
+  ).toEqual([
+    {
+      fuel_category: "hydro",
+      island: "NI",
+      megawatt_hours: 240,
+      source: "dispatch",
+    },
+  ]);
+  expect(
+    await query(
+      `SELECT plant_id, megawatt_hours, source FROM ${gold("generation_by_plant_day", DISPATCH_DATE)}`,
+    ),
+  ).toEqual([
+    { plant_id: "AAA/hydro1", megawatt_hours: 240, source: "dispatch" },
+  ]);
+});
+
+test("Generation_MD wins over nodal on the same date", async () => {
+  const date = DISPATCH_DATE;
+  const rows: Array<[number, string, string, string, number]> = Array.from(
+    { length: 48 },
+    (_, i) => [i + 1, "AAA", "AAA0331", "hydro1", 1000],
+  );
+  await writeDispatchSilver({ mw: 10 });
+  await silver("generation_md", date, generationRows(rows));
+  await silver(
+    "entity_plants",
+    date,
+    "SELECT 'AAA/hydro1' AS plant_id, 'hydro1' AS plant_name, 'hydro' AS fuel_category, 'sha-e' AS inputs_sha256",
+  );
+  expect(
+    await publishGeneration({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date,
+    }),
+  ).toMatchObject({ status: "complete" });
+  expect(
+    await query(
+      `SELECT megawatt_hours, source FROM ${gold("generation_by_fuel_day", date)}`,
+    ),
+  ).toEqual([{ megawatt_hours: 48, source: "metered" }]);
+});
+
+test("an unmapped dispatch unit is in the fuel total and not in the plant table", async () => {
+  await writeDispatchSilver({
+    mw: 10,
+    extraUnits: [
+      {
+        poc: "AAA0331",
+        unit: "XXX0",
+        mw: 10,
+        plantId: null,
+        fuel: null,
+        name: "unknown",
+      },
+    ],
+  });
+  expect(
+    await publishGeneration({
+      silverDir,
+      goldDir,
+      completeness: completenessView(),
+      date: DISPATCH_DATE,
+    }),
+  ).toMatchObject({ status: "complete" });
+  expect(
+    await query(
+      `SELECT fuel_category, megawatt_hours FROM ${gold("generation_by_fuel_day", DISPATCH_DATE)} ORDER BY fuel_category`,
+    ),
+  ).toEqual([
+    { fuel_category: "hydro", megawatt_hours: 240 },
+    { fuel_category: "unmapped", megawatt_hours: 240 },
+  ]);
+  expect(
+    await query(
+      `SELECT plant_id FROM ${gold("generation_by_plant_day", DISPATCH_DATE)}`,
+    ),
+  ).toEqual([{ plant_id: "AAA/hydro1" }]);
+});
+
+test("wantedVersions includes a nodal day that has no Generation_MD", async () => {
+  await writeDispatchSilver({ mw: 10 });
+  const wanted = await generation.wantedVersions?.(
+    silverDir,
+    completenessView(),
+    goldDir,
+  );
+  expect(wanted?.has(DISPATCH_DATE)).toBe(true);
+});
+
+test("dispatch gold keeps the latest RTD case of an interval", async () => {
+  await writeDispatchSilver({
+    mw: 10,
+    cases: [
+      {
+        period: 1,
+        interval: 0,
+        sourceRunAt: "2026-11-17T10:58:00.000Z",
+        caseId: "old",
+        mw: 10,
+      },
+      {
+        period: 1,
+        interval: 0,
+        sourceRunAt: "2026-11-17T10:59:00.000Z",
+        caseId: "new",
+        mw: 20,
+      },
+    ],
+  });
+  await publishGeneration({
+    silverDir,
+    goldDir,
+    completeness: completenessView(),
+    date: DISPATCH_DATE,
+  });
+  const [row] = await query(
+    `SELECT megawatt_hours FROM ${gold("generation_by_fuel_period", DISPATCH_DATE)} WHERE trading_period = 1`,
+  );
+  expect(Number(row?.megawatt_hours)).toBeCloseTo(10, 6);
 });

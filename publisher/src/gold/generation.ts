@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import type { DuckDBConnection } from "@duckdb/node-api";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { lit, type PublishResult } from "../silver/common.ts";
 import { periodsInTradingDate } from "../trading-time.ts";
@@ -10,6 +11,7 @@ import {
   goldStamp,
   inputFingerprint,
   inputStatusesComplete,
+  latestRtdCaseSql,
   periodsComplete,
   silverPartitionPath,
   writeGoldTables,
@@ -19,7 +21,7 @@ import {
  * Bump by hand when the logic of any table in this file changes. The runner then rebuilds every
  * date (ADR-0011).
  */
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
 
 /** The gold tables of this module. The first is the sentinel: the runner reads it and it is written last. */
 export const TABLES = [
@@ -29,106 +31,100 @@ export const TABLES = [
   "generation_by_fuel_day",
 ] as const;
 
-const GENERATION: GoldInput = {
+type GenerationSource = "metered" | "dispatch";
+
+const GENERATION_MD: GoldInput = {
   table: "generation_md",
   layer: "silver",
   versionColumn: "bronze_sha256",
   completenessDataset: "generation_md",
 };
-// Both entity tables carry the same `inputs_sha256`. Listing both keeps the rule simple:
-// every silver table that the SQL reads is a fingerprint input. The runner records one
-// `_completeness` row for each date under the dataset ID `entity_mappings` (ADR-0010).
-export const INPUTS: GoldInput[] = [
-  GENERATION,
-  {
-    table: "entity_plants",
-    layer: "silver",
-    versionColumn: "inputs_sha256",
-    completenessDataset: "entity_mappings",
-  },
-  {
-    table: "entity_points_of_connection",
-    layer: "silver",
-    versionColumn: "inputs_sha256",
-    completenessDataset: "entity_mappings",
-  },
+const NODAL: GoldInput = {
+  table: "nodal_prices_and_volumes",
+  layer: "silver",
+  versionColumn: "bronze_sha256",
+  completenessDataset: "nodal_prices_and_volumes",
+};
+const PLANTS: GoldInput = {
+  table: "entity_plants",
+  layer: "silver",
+  versionColumn: "inputs_sha256",
+  completenessDataset: "entity_mappings",
+};
+const UNITS: GoldInput = {
+  table: "entity_units",
+  layer: "silver",
+  versionColumn: "inputs_sha256",
+  completenessDataset: "entity_mappings",
+};
+const POINTS_OF_CONNECTION: GoldInput = {
+  table: "entity_points_of_connection",
+  layer: "silver",
+  versionColumn: "inputs_sha256",
+  completenessDataset: "entity_mappings",
+};
+
+/** Metered Generation_MD path. */
+export const METERED_INPUTS: GoldInput[] = [
+  GENERATION_MD,
+  PLANTS,
+  POINTS_OF_CONNECTION,
 ];
+export const DISPATCH_INPUTS: GoldInput[] = [
+  NODAL,
+  UNITS,
+  POINTS_OF_CONNECTION,
+];
+/** Metered path. The exporter lists these until the site-contract slice. */
+export const INPUTS: GoldInput[] = METERED_INPUTS;
 
 /**
  * Publish the generation gold tables for one trading date, one partition for each table in
- * `TABLES`: `<goldDir>/<table>/trading_date=<date>/data.parquet` (ADR-0011).
+ * `TABLES`: `<goldDir>/<table>/trading_date=<date>/data.parquet` (ADR-0011, ADR-0028).
  *
- * Inputs: Generation_MD silver for the date (kWh for each unit and trading period) and the
- * entity mapping tables for the date: `entity_plants` (plant and fuel category) and
- * `entity_points_of_connection` (island) (ADR-0008).
+ * Prefer silver Generation_MD when that partition exists. Otherwise use nodal unit dispatch
+ * megawatts. Each row has `source` `metered` or `dispatch`.
  *
- * - Plant: `<site code>/<lower-case Gen_Code>`, as in `entity_plants`. One plant can have several
- *   Generation_MD units, and the plant row is their sum.
- * - Fuel category: from `entity_plants`. A plant that has no category, or that is not in
- *   `entity_plants`, has the category `unmapped`. No row is dropped.
- * - Plant island: `min(island)` over the plant's rows. A plant whose units are on two islands
- *   (not seen in the data) takes `NI` before `SI`. If some units are on an unmapped POC, the
- *   plant takes the island of the mapped units. The fuel tables split by the unit's own island.
- * - Island: from the unit's point of connection in `entity_points_of_connection`, `NI` or `SI`.
- *   It is null when the point of connection is not mapped. The fuel tables have one row for
- *   each island value, so a national total is a sum over all rows of a fuel. A fuel table has
- *   no row that already sums islands.
- * - Units: `megawatt_hours` is kWh / 1000. `average_megawatts` is the energy divided by the hours
- *   in the period (MWh x 2), or by the hours of the trading day (24, 23 or 25) for a day table.
- * - Battery is storage and keeps its own category `battery`. These tables have no total, so
- *   nothing counts it in a primary total.
- * - Completeness: every row has `inputs_complete`. It is true only when the `_completeness`
- *   status of Generation_MD is `complete` for the date (this run's rows, ADR-0010), the entity
- *   partitions exist, and Generation_MD has rows in every trading period of the day. A day that
- *   fails any check is written, flagged, and the result is `partial`. `missingPeriods` lists the
- *   periods that the data check found, and is empty when only the status failed.
+ * Metered path: Generation_MD kWh, `entity_plants` (plant, fuel), `entity_points_of_connection`
+ * (island). Plant id is `<site code>/<lower-case Gen_Code>`. Energy is kWh / 1000.
  *
- * Missing (nothing written): the date has no Generation_MD or entity silver.
- * Repeatable: no `processed_at`. A total `ORDER BY` and one thread make the same inputs give the
- * same bytes (floating-point sums depend on the order of addition).
+ * Dispatch path: unit rows of the latest RTD case per 5-minute interval, mean MW times 0.5 hours
+ * (the same case rule as gold load). Fuel and plant come from `entity_units`. A unit with no
+ * `plant_id` stays in the fuel tables and is omitted from the plant tables.
+ *
+ * - Plant island: `min(island)` over the plant's rows.
+ * - Fuel tables split by the unit's own island. A national total is a sum over fuel rows.
+ * - Battery keeps the category `battery`. These tables have no total.
+ * - Completeness: `inputs_complete` is true when the path's inputs are complete and every
+ *   expected trading period has rows in the path's period file (Generation_MD or nodal).
+ *
+ * Missing: Generation_MD exists but an entity file is absent, or Generation_MD is absent and a
+ * dispatch input is absent.
  */
 export async function publishGeneration(
   options: GoldPublishOptions,
 ): Promise<PublishResult> {
-  const { silverDir, goldDir, completeness: view, date } = options;
-  const generationMd = silverPartitionPath(silverDir, GENERATION.table, date);
-  const plants = silverPartitionPath(silverDir, "entity_plants", date);
-  const pointsOfConnection = silverPartitionPath(
+  const { silverDir, date } = options;
+  const generationMd = silverPartitionPath(
     silverDir,
-    "entity_points_of_connection",
+    GENERATION_MD.table,
     date,
   );
-  if (
-    ![generationMd, plants, pointsOfConnection].every((file) =>
-      existsSync(file),
-    )
-  )
-    return { date, status: "missing" };
-
-  const periods = periodsInTradingDate(date);
-  const connection = await (await DuckDBInstance.create(":memory:")).connect();
-  try {
-    await connection.run("SET TimeZone = 'UTC'");
-    await connection.run("SET threads = 1");
-    const periodCheck = await periodsComplete(connection, date, [generationMd]);
-    const complete =
-      periodCheck.complete && inputStatusesComplete(view, INPUTS, date);
-    const stamp = goldStamp(
-      ANALYSIS_VERSION,
-      await inputFingerprint(
-        silverDir,
-        goldDir,
-        ANALYSIS_VERSION,
-        INPUTS,
-        view,
-        date,
-      ),
-      complete ? "true" : "false",
-    );
-
-    // One row for each Generation_MD unit and period, with its plant, category and island.
-    await connection.run(
-      `CREATE TEMP TABLE generation AS
+  const plants = silverPartitionPath(silverDir, PLANTS.table, date);
+  const units = silverPartitionPath(silverDir, UNITS.table, date);
+  const nodal = silverPartitionPath(silverDir, NODAL.table, date);
+  const pointsOfConnection = silverPartitionPath(
+    silverDir,
+    POINTS_OF_CONNECTION.table,
+    date,
+  );
+  if (existsSync(generationMd))
+    return publishPath(options, {
+      source: "metered",
+      inputs: METERED_INPUTS,
+      files: [generationMd, plants, pointsOfConnection],
+      periodFile: generationMd,
+      createSql: `CREATE TEMP TABLE generation AS
        SELECT g.trading_date, g.trading_period, g.event_start_utc, g.event_end_utc,
          g.site_code || '/' || lower(g.gen_code) AS plant_id,
          p.plant_name,
@@ -140,72 +136,156 @@ export async function publishGeneration(
          ON p.plant_id = g.site_code || '/' || lower(g.gen_code)
        LEFT JOIN read_parquet(${lit(pointsOfConnection)}) poc
          ON poc.poc_id = g.point_of_connection`,
+    });
+  return publishPath(options, {
+    source: "dispatch",
+    inputs: DISPATCH_INPUTS,
+    files: [nodal, units, pointsOfConnection],
+    periodFile: nodal,
+    createSql: `CREATE TEMP TABLE generation AS
+       SELECT DATE ${lit(date)} AS trading_date, trading_period,
+         min(event_start_utc) AS event_start_utc,
+         min(event_start_utc) + INTERVAL 30 MINUTE AS event_end_utc,
+         plant_id, min(plant_name) AS plant_name, fuel_category, island,
+         avg(mw) * 0.5 AS megawatt_hours
+       FROM (
+         SELECT n.trading_period, n.event_start_utc, u.plant_id,
+           coalesce(u.plant_name, n.plant_name) AS plant_name,
+           coalesce(u.fuel_category, 'unmapped') AS fuel_category,
+           poc.island, sum(n.generation_megawatts) AS mw
+         FROM read_parquet(${lit(nodal)}) n
+         JOIN (${latestRtdCaseSql(nodal)}) latest
+           ON latest.event_start_utc = n.event_start_utc AND latest.case_id = n.case_id
+         LEFT JOIN read_parquet(${lit(units)}) u
+           ON u.unit_id = n.point_of_connection || ':' || n.unit_code
+         LEFT JOIN read_parquet(${lit(pointsOfConnection)}) poc
+           ON poc.poc_id = n.point_of_connection
+         WHERE n.case_type = 'RTD' AND n.unit_code IS NOT NULL
+         GROUP BY n.trading_period, n.event_start_utc, u.plant_id,
+           coalesce(u.plant_name, n.plant_name),
+           coalesce(u.fuel_category, 'unmapped'), poc.island)
+       GROUP BY trading_period, plant_id, fuel_category, island`,
+  });
+}
+
+async function publishPath(
+  options: GoldPublishOptions,
+  path: {
+    source: GenerationSource;
+    inputs: readonly GoldInput[];
+    files: readonly string[];
+    periodFile: string;
+    createSql: string;
+  },
+): Promise<PublishResult> {
+  const { silverDir, goldDir, completeness: view, date } = options;
+  if (!path.files.every((file) => existsSync(file)))
+    return { date, status: "missing" };
+
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    await connection.run("SET TimeZone = 'UTC'");
+    await connection.run("SET threads = 1");
+    const periodCheck = await periodsComplete(connection, date, [
+      path.periodFile,
+    ]);
+    const complete =
+      periodCheck.complete && inputStatusesComplete(view, path.inputs, date);
+    const stamp = goldStamp(
+      ANALYSIS_VERSION,
+      await inputFingerprint(
+        silverDir,
+        goldDir,
+        ANALYSIS_VERSION,
+        path.inputs,
+        view,
+        date,
+      ),
+      complete ? "true" : "false",
     );
-
-    const hours = `(${periods} / 2.0)`;
-    const selects: Record<(typeof TABLES)[number], string> = {
-      generation_by_plant_period: `SELECT trading_date, trading_period,
-          min(event_start_utc) AS event_start_utc, min(event_end_utc) AS event_end_utc,
-          plant_id, min(plant_name) AS plant_name, min(fuel_category) AS fuel_category,
-          min(island) AS island,
-          sum(megawatt_hours) AS megawatt_hours, sum(megawatt_hours) * 2 AS average_megawatts,
-          ${stamp}
-        FROM generation GROUP BY trading_date, trading_period, plant_id
-        ORDER BY trading_period, plant_id`,
-      generation_by_plant_day: `SELECT trading_date,
-          plant_id, min(plant_name) AS plant_name, min(fuel_category) AS fuel_category,
-          min(island) AS island,
-          sum(megawatt_hours) AS megawatt_hours,
-          sum(megawatt_hours) / ${hours} AS average_megawatts,
-          ${stamp}
-        FROM generation GROUP BY trading_date, plant_id
-        ORDER BY plant_id`,
-      generation_by_fuel_period: `SELECT trading_date, trading_period,
-          min(event_start_utc) AS event_start_utc, min(event_end_utc) AS event_end_utc,
-          fuel_category, island,
-          sum(megawatt_hours) AS megawatt_hours, sum(megawatt_hours) * 2 AS average_megawatts,
-          ${stamp}
-        FROM generation GROUP BY trading_date, trading_period, fuel_category, island
-        ORDER BY trading_period, fuel_category, island NULLS LAST`,
-      generation_by_fuel_day: `SELECT trading_date, fuel_category, island,
-          sum(megawatt_hours) AS megawatt_hours,
-          sum(megawatt_hours) / ${hours} AS average_megawatts,
-          ${stamp}
-        FROM generation GROUP BY trading_date, fuel_category, island
-        ORDER BY fuel_category, island NULLS LAST`,
-    };
-
-    await writeGoldTables(
+    await connection.run(path.createSql);
+    return await writeGenerationTables(
       connection,
-      TABLES.map((table) => [table, selects[table]] as const),
-      goldDir,
-      date,
+      options,
+      stamp,
+      path.source,
+      complete,
+      periodCheck.missingPeriods,
     );
-    const path = goldPartitionPath(goldDir, TABLES[0], date);
-    const reader = await connection.runAndReadAll(
-      `SELECT count(*) AS n FROM read_parquet(${lit(path)})`,
-    );
-    const rows = Number(
-      (reader.getRowObjectsJson() as Array<{ n: string }>)[0]?.n,
-    );
-    return complete
-      ? { date, status: "complete", rows, path }
-      : {
-          date,
-          status: "partial",
-          rows,
-          path,
-          missingPeriods: periodCheck.missingPeriods,
-        };
   } finally {
     connection.closeSync();
   }
 }
 
+async function writeGenerationTables(
+  connection: DuckDBConnection,
+  options: GoldPublishOptions,
+  stamp: string,
+  source: GenerationSource,
+  complete: boolean,
+  missingPeriods: number[],
+): Promise<PublishResult> {
+  const { goldDir, date } = options;
+  const periods = periodsInTradingDate(date);
+  const hours = `(${periods} / 2.0)`;
+  const sourceSql = lit(source);
+  const selects: Record<(typeof TABLES)[number], string> = {
+    generation_by_plant_period: `SELECT trading_date, trading_period,
+        min(event_start_utc) AS event_start_utc, min(event_end_utc) AS event_end_utc,
+        plant_id, min(plant_name) AS plant_name, min(fuel_category) AS fuel_category,
+        min(island) AS island,
+        sum(megawatt_hours) AS megawatt_hours, sum(megawatt_hours) * 2 AS average_megawatts,
+        ${sourceSql} AS source, ${stamp}
+      FROM generation WHERE plant_id IS NOT NULL
+      GROUP BY trading_date, trading_period, plant_id
+      ORDER BY trading_period, plant_id`,
+    generation_by_plant_day: `SELECT trading_date,
+        plant_id, min(plant_name) AS plant_name, min(fuel_category) AS fuel_category,
+        min(island) AS island,
+        sum(megawatt_hours) AS megawatt_hours,
+        sum(megawatt_hours) / ${hours} AS average_megawatts,
+        ${sourceSql} AS source, ${stamp}
+      FROM generation WHERE plant_id IS NOT NULL
+      GROUP BY trading_date, plant_id
+      ORDER BY plant_id`,
+    generation_by_fuel_period: `SELECT trading_date, trading_period,
+        min(event_start_utc) AS event_start_utc, min(event_end_utc) AS event_end_utc,
+        fuel_category, island,
+        sum(megawatt_hours) AS megawatt_hours, sum(megawatt_hours) * 2 AS average_megawatts,
+        ${sourceSql} AS source, ${stamp}
+      FROM generation GROUP BY trading_date, trading_period, fuel_category, island
+      ORDER BY trading_period, fuel_category, island NULLS LAST`,
+    generation_by_fuel_day: `SELECT trading_date, fuel_category, island,
+        sum(megawatt_hours) AS megawatt_hours,
+        sum(megawatt_hours) / ${hours} AS average_megawatts,
+        ${sourceSql} AS source, ${stamp}
+      FROM generation GROUP BY trading_date, fuel_category, island
+      ORDER BY fuel_category, island NULLS LAST`,
+  };
+
+  await writeGoldTables(
+    connection,
+    TABLES.map((table) => [table, selects[table]] as const),
+    goldDir,
+    date,
+  );
+  const path = goldPartitionPath(goldDir, TABLES[0], date);
+  const reader = await connection.runAndReadAll(
+    `SELECT count(*) AS n FROM read_parquet(${lit(path)})`,
+  );
+  const rows = Number(
+    (reader.getRowObjectsJson() as Array<{ n: string }>)[0]?.n,
+  );
+  return complete
+    ? { date, status: "complete", rows, path }
+    : { date, status: "partial", rows, path, missingPeriods };
+}
+
 export const generation = goldDataset({
   id: "gold_generation",
   tables: TABLES,
-  inputs: INPUTS,
+  inputs: METERED_INPUTS,
+  fallbackInputs: DISPATCH_INPUTS,
   analysisVersion: ANALYSIS_VERSION,
   publish: publishGeneration,
 });
