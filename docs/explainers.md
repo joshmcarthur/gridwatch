@@ -44,10 +44,10 @@ Later topics from brief §10 (marginal generator, hydro scarcity, transmission c
 
 ## Fixture-day sample
 
-[`site/fixtures/`](../site/fixtures/) includes Monday 27 July 2026 as a copy of a real publish. The nodal-pricing explainer injects `PriceChart` for that date. Do not substitute 2026-09-27 (DST start, synthetic reference-node prices) for this example.
+[`site/fixtures/`](../site/fixtures/) includes Monday 27 July 2026 as a copy of a real publish, plus the Unreviewed event from #42. The nodal-pricing explainer injects `PriceChart` for that date. Do not substitute 2026-09-27 (DST start, synthetic reference-node prices) for this example.
 
 - Do **not** commit a 12-month lake so the explainer can chart.
-- Do **not** invent a 27 July day file. Refresh it by copying a gold export, the same way as the other sample days.
+- Do **not** invent a 27 July day file. Refresh the charts by copying a gold export, then keep the event object from this sample.
 - Do **not** fail the fixture build when some other `example_date` is absent from the index.
 - Quote the evening figures in the Markdown so the page still reads if that day's file is missing.
 
@@ -73,7 +73,7 @@ Every number quoted from that evening must match the reconstruction (period 36, 
 
 Do not copy the whole reconstruction into the explainer. Huntly outages, the 85-second $21,000 publish, reserve prices, and SPD cases belong on an event page, not here.
 
-When #42 later publishes an event that covers the same day, add that URL in section 5 of the same Markdown file.
+Section 5 of the nodal-pricing page links `/2026/07/27/events/394f75a3bfa948a3/`.
 
 ## Out of scope
 
