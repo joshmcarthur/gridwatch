@@ -99,3 +99,11 @@ Amended 2026-11-23. The exporter writes an `events` section on every day. The co
 - **`complete` on the day.** Still generation and prices only.
 - **Index.** `sections.events` and `latest_complete_sections.events` are optional so older files still validate.
 - **Rebuild.** The day hash includes the ranking parquet bytes and the narrative JSON files for the date, so a later narrative rebuilds the day.
+
+### Amendment: generation.source (ADR-0028)
+
+Amended 2026-11-23. `generation.source` is optional: `metered` or `dispatch`. The contract version stays 1. `EXPORT_VERSION` is 11 so published days rebuild.
+
+- **Absence.** An older day file omits the field. The site treats that as metered Generation_MD.
+- **Dispatch.** Gold built the mix from nodal unit megawatts because that day's Generation_MD partition was absent. The exporter lists the dispatch inputs (`nodal_prices_and_volumes`, `entity_units`, `entity_points_of_connection`) so a complete nodal day is a complete generation section. Energy balance and the Sankey stay on the HVDC month lag.
+- **`complete` on the day.** Still generation and prices only.

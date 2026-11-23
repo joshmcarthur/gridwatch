@@ -174,6 +174,33 @@ test("a valid day passes, with and without the optional extensions", () => {
   ).not.toThrow();
 });
 
+test("the validator accepts generation.source metered or dispatch, and omits it", () => {
+  const day = sampleDay();
+  expect(() => assertSiteDay(day)).not.toThrow();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      generation: { ...day.generation, source: "metered" },
+    }),
+  ).not.toThrow();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      generation: { ...day.generation, source: "dispatch" },
+    }),
+  ).not.toThrow();
+});
+
+test("the validator rejects an unknown generation.source", () => {
+  const day = sampleDay();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      generation: { ...day.generation, source: "live" },
+    } as unknown),
+  ).toThrow("generation.source: expected one of metered, dispatch");
+});
+
 test("the validator rejects a missing generation section that carries plants", () => {
   const day = sampleDay();
   expect(() =>
@@ -474,18 +501,20 @@ async function writeGeneration(
     day = [],
     plants = null,
     stamp = {},
+    source = "metered",
   }: {
     period?: Row[];
     day?: Row[];
     plants?: Row[] | null;
     stamp?: Row;
+    source?: "metered" | "dispatch";
   } = {},
 ) {
   await writeGold(
     "generation_by_plant_period",
     date,
-    { trading_period: "INTEGER" },
-    [{ trading_period: 1, ...stamp }],
+    { trading_period: "INTEGER", source: "VARCHAR" },
+    [{ trading_period: 1, source, ...stamp }],
   );
   if (plants !== null) {
     await writeGold(
@@ -817,6 +846,44 @@ test("generation pivots by fuel and island, and the totals split battery from pr
     day.generation.series.find((s) => s.fuel === "unmapped")?.island,
   ).toBeNull();
   expect(day.generation.plants).toEqual([]);
+  expect(day.generation.source).toBe("metered");
+});
+
+test("dispatch generation is complete when nodal is complete and Generation_MD is missing", async () => {
+  await writeGeneration(DATE, {
+    source: "dispatch",
+    period: [
+      {
+        trading_period: 1,
+        fuel_category: "hydro",
+        island: "NI",
+        megawatt_hours: 10,
+      },
+    ],
+    day: [
+      {
+        fuel_category: "hydro",
+        island: "NI",
+        megawatt_hours: 10,
+        average_megawatts: 0.4,
+      },
+    ],
+  });
+  const completeness = completenessView([["generation_md", DATE, "missing"]]);
+  const day = await buildSiteDay({ goldDir, date: DATE, completeness });
+  expect(day.generation.source).toBe("dispatch");
+  expect(day.generation.state).toBe("complete");
+  expect(day.generation.silver_tables).toEqual([
+    "nodal_prices_and_volumes",
+    "entity_units",
+    "entity_points_of_connection",
+  ]);
+  expect(day.generation.datasets).toEqual([
+    "nodal_prices_and_volumes",
+    "entity_mappings",
+  ]);
+  expect(day.datasets.generation_md?.status).toBe("missing");
+  expect(day.datasets.nodal_prices_and_volumes?.status).toBe("complete");
 });
 
 test("generation.plants lists gold plant-day rows, largest first", async () => {

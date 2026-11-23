@@ -10,6 +10,7 @@ import {
 import {
   generationMix,
   generationMixBatterySummary,
+  generationMixSourceNote,
   generationMixSummary,
   generationMixTable,
 } from "../lib/generation-mix";
@@ -36,6 +37,7 @@ const batteryPlot = mix
     })
   : null;
 const table = mix ? generationMixTable(mix) : null;
+const sourceNote = generationMixSourceNote(day.generation);
 ---
 
 {
@@ -91,6 +93,7 @@ const table = mix ? generationMixTable(mix) : null;
           Source: Electricity Authority generation data, one row per power
           station, grouped by fuel.
         </p>
+        {sourceNote ? <p>{sourceNote}</p> : null}
         <p>
           Batteries are not in the stack and not in the primary total. Their
           power is the panel under the stack, and the last column of the table.

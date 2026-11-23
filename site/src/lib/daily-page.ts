@@ -28,6 +28,7 @@ const DATASET_LABELS: Record<string, string> = {
   dispatch_reserve_prices:
     "reserve prices (the cost of standing ready to lift or drop generation)",
   generation_md: "generation",
+  nodal_prices_and_volumes: "dispatch generation",
   entity_mappings: "plant names and locations",
 };
 

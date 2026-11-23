@@ -28,4 +28,4 @@ Generation-change detectors read gold generation as the day's mix. A 28-day base
 - A finished trading day can have a generation mix the next morning.
 - Dispatch megawatts are the model, not meters. Totals move when the monthly file lands. The site must label `source`.
 - `ANALYSIS_VERSION` is 2. Every generation date rebuilds.
-- The exporter still lists metered inputs until the site-contract slice, so a dispatch day can be gold-complete and still `incomplete` on the site until that slice.
+- The site JSON has optional `generation.source`. A dispatch day with complete nodal is a complete generation section. Energy balance and the Sankey stay missing until the HVDC month lands.

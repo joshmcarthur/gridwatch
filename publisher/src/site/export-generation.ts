@@ -2,13 +2,17 @@ import { existsSync } from "node:fs";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { goldPartitionPath } from "../gold/common.ts";
 import {
+  DISPATCH_INPUTS,
   INPUTS as GENERATION_INPUTS,
   TABLES as GENERATION_TABLES,
+  METERED_INPUTS,
 } from "../gold/generation.ts";
+import { lit } from "../silver/common.ts";
 import type { CompletenessView } from "../silver/completeness.ts";
 import type {
   FuelCategory,
   GenerationSection,
+  GenerationSource,
   Island,
   SiteDay,
 } from "./contract.ts";
@@ -38,17 +42,23 @@ export async function buildGeneration(
   completeness: CompletenessView,
   axis: SiteDay["periods"],
 ): Promise<GenerationSection> {
-  const section = GENERATION_SECTION;
-  const base = {
-    silver_tables: section.inputs.map((input) => input.table),
-    gold_tables: [...GENERATION_TABLES],
-    datasets: sectionDatasets(section),
-  };
-  const stamp = await readStamp(
-    connection,
-    goldPartitionPath(goldDir, section.sentinel, date),
+  const sentinel = goldPartitionPath(
+    goldDir,
+    GENERATION_SECTION.sentinel,
+    date,
   );
-  const state = sectionState(stamp, section, completeness, date);
+  const stamp = await readStamp(connection, sentinel);
+  const source = stamp ? await readSource(connection, sentinel) : undefined;
+  const path = {
+    ...GENERATION_SECTION,
+    inputs: source === "dispatch" ? DISPATCH_INPUTS : METERED_INPUTS,
+  };
+  const base = {
+    silver_tables: path.inputs.map((input) => input.table),
+    gold_tables: [...GENERATION_TABLES],
+    datasets: [...new Set(sectionDatasets(path))],
+  };
+  const state = sectionState(stamp, path, completeness, date);
   if (!stamp)
     return {
       ...base,
@@ -158,5 +168,17 @@ export async function buildGeneration(
       primary_megawatt_hours: round(primary, 3),
       battery_megawatt_hours: round(battery, 3),
     },
+    source,
   };
+}
+
+async function readSource(
+  connection: DuckDBConnection,
+  path: string,
+): Promise<GenerationSource> {
+  const reader = await connection.runAndReadAll(
+    `SELECT any_value(source) AS source FROM read_parquet(${lit(path)})`,
+  );
+  const [row] = reader.getRowObjectsJson() as Array<{ source: unknown }>;
+  return row?.source === "dispatch" ? "dispatch" : "metered";
 }
