@@ -1,6 +1,7 @@
 ---
 title: Nodal pricing
 description: Why Auckland, Wellington and the South Island can have different wholesale prices in the same half-hour.
+chart: price
 example_date: "2026-07-27"
 ---
 

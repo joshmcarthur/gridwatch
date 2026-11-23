@@ -10,12 +10,13 @@ const explainers = (await getCollection("explainers")).toSorted((a, b) =>
 
 <Layout
   title="Explainers"
-  description="Short pages that tie a market idea to a real trading day."
+  description="Short pages that explain how parts of the electricity market work."
 >
   <article class="prose">
     <h1>Explainers</h1>
     <p>
-      Short pages that tie a market idea to a real trading day on this site.
+      Short pages that explain how a part of the market works. Some tie the
+      idea to a real trading day on this site.
     </p>
     <ul class="topics">
       {
@@ -23,9 +24,13 @@ const explainers = (await getCollection("explainers")).toSorted((a, b) =>
           <li>
             <a href={`/explainers/${entry.id}/`}>{entry.data.title}</a>
             <p>{entry.data.description}</p>
-            <p class="example">
-              Example: {formatTradingDate(entry.data.example_date)}
-            </p>
+            {
+              entry.data.example_date && (
+                <p class="example">
+                  Example: {formatTradingDate(entry.data.example_date)}
+                </p>
+              )
+            }
           </li>
         ))
       }
