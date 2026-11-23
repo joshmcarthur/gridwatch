@@ -3,7 +3,11 @@ import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { lit, writeParquetAtomically } from "./common.ts";
-import { FUEL_MAP, FUEL_PLANT_OVERRIDES } from "./fuel-map.ts";
+import {
+  FUEL_MAP,
+  FUEL_PLANT_OVERRIDES,
+  UNIT_PLANT_OVERRIDES,
+} from "./fuel-map.ts";
 
 export const TABLES = [
   "entity_points_of_connection",
@@ -113,6 +117,9 @@ function fingerprint(
     ),
     ...Object.entries(FUEL_PLANT_OVERRIDES).map(
       ([plantId, category]) => `plant ${plantId} ${category}`,
+    ),
+    ...Object.entries(UNIT_PLANT_OVERRIDES).map(
+      ([unitId, plantId]) => `unit ${unitId} ${plantId}`,
     ),
   ]
     .sort()
@@ -239,6 +246,18 @@ export async function publishEntityMappings(options: {
                  ([plantId, category]) => `(${lit(plantId)}, ${lit(category)})`,
                )
                .join(", ")}) t(plant_id, fuel_category)`,
+    );
+    const unitOverrides = Object.entries(UNIT_PLANT_OVERRIDES);
+    await run(
+      unitOverrides.length === 0
+        ? `CREATE TEMP TABLE unit_plant_overrides AS
+           SELECT NULL::VARCHAR AS unit_id, NULL::VARCHAR AS plant_id WHERE false`
+        : `CREATE TEMP TABLE unit_plant_overrides AS SELECT * FROM (VALUES
+             ${unitOverrides
+               .map(
+                 ([unitId, plantId]) => `(${lit(unitId)}, ${lit(plantId)})`,
+               )
+               .join(", ")}) t(unit_id, plant_id)`,
     );
 
     // NSP rows for the day. A row is in force when start_date <= day <= end_date (inclusive,
@@ -421,12 +440,12 @@ export async function publishEntityMappings(options: {
        FROM plant_keys GROUP BY plant_id`,
     );
 
-    // Units: fleet rows in force. A unit links to a plant when its POC has exactly one plant
-    // and the fuel category agrees.
+    // Units: fleet rows in force. A unit links to a plant when (POC, fuel category) has exactly
+    // one Generation_MD plant, or when UNIT_PLANT_OVERRIDES names the plant (ADR-0008).
     await run(
       `CREATE TEMP TABLE units AS
        SELECT f.point_of_connection || ':' || f.unit_code AS unit_id,
-         f.point_of_connection AS poc_id, p.plant_id,
+         f.point_of_connection AS poc_id, coalesce(o.plant_id, p.plant_id) AS plant_id,
          f.point_of_connection, f.unit_code, f.plant_name, f.technology_code, f.fuel_code,
          m.fuel_category, f.plant_operator_code,
          nullif(f.plant_operator_code, 'N/A') AS operator_participant_id,
@@ -434,11 +453,14 @@ export async function publishEntityMappings(options: {
        FROM fleet f
        LEFT JOIN fuel_map m ON m.fuel_code = f.fuel_code
        LEFT JOIN (
-         SELECT point_of_connection, any_value(plant_id) AS plant_id,
-           any_value(fuel_category) AS fuel_category
-         FROM plant_keys GROUP BY point_of_connection
-         HAVING count(DISTINCT plant_id) = 1 AND count(DISTINCT fuel_category) = 1) p
-         ON p.point_of_connection = f.point_of_connection AND p.fuel_category = m.fuel_category`,
+         SELECT point_of_connection, fuel_category, any_value(plant_id) AS plant_id
+         FROM plant_keys
+         WHERE fuel_category IS NOT NULL
+         GROUP BY point_of_connection, fuel_category
+         HAVING count(DISTINCT plant_id) = 1) p
+         ON p.point_of_connection = f.point_of_connection AND p.fuel_category = m.fuel_category
+       LEFT JOIN unit_plant_overrides o
+         ON o.unit_id = f.point_of_connection || ':' || f.unit_code`,
     );
 
     // The unmapped report.
