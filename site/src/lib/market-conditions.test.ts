@@ -1,5 +1,6 @@
 import type { SiteDay, SiteIndex } from "@gridwatch/publisher/site-contract";
 import { expect, test } from "vitest";
+import { pageLead } from "./daily-page.ts";
 import {
   dayContext,
   gasCoalShare,
@@ -14,6 +15,15 @@ import {
   recentDays,
 } from "./market-conditions.ts";
 import { loadSiteDay, loadSiteIndex } from "./site-data.ts";
+
+const CLOCK_PERIODS = [
+  { period: 1, start_utc: "2026-05-31T12:00:00Z" },
+  { period: 2, start_utc: "2026-05-31T12:30:00Z" },
+  { period: 33, start_utc: "2026-06-01T04:00:00Z" },
+  { period: 38, start_utc: "2026-06-01T06:30:00Z" },
+  { period: 41, start_utc: "2026-06-02T20:00:00Z" },
+  { period: 45, start_utc: "2026-06-02T22:00:00Z" },
+];
 
 const previousDataRoot = process.env.DATA_ROOT;
 
@@ -627,6 +637,58 @@ test("the latest update leads with the same fact as the daily page, and falls ba
     (date) => short.byDate[date] as SiteDay,
   );
   expect(fallback.summary).toMatch(/made most of the power/);
+});
+
+test("the latest update leads with the episode line when that day has one", () => {
+  const long = daySeries(41, { primary: 1020, meanPrices: [200, 200, 200] });
+  const last = long.byDate[long.lastDate] as SiteDay;
+  last.periods = CLOCK_PERIODS;
+  last.episodes = {
+    state: "complete",
+    missing_periods: [],
+    analysis_version: 1,
+    inputs_sha256: "a",
+    silver_tables: [],
+    gold_tables: [],
+    datasets: [],
+    items: [
+      {
+        episode_id: "e1",
+        seed_observation_id: "o1",
+        start_utc: "2026-06-01T04:00:00Z",
+        end_utc: "2026-06-01T06:30:00Z",
+        start_trading_period: 33,
+        end_trading_period: 38,
+        member_count: 1,
+        observation_types: ["price_high"],
+        islands: ["NI"],
+        severity: 1,
+        highlights: [
+          {
+            observation_type: "price_high",
+            point_of_connection: "OTA2201",
+            pair_from: null,
+            pair_to: null,
+            island: "NI",
+            measured_value: 410,
+            baseline_value: 80,
+          },
+        ],
+      },
+    ],
+  };
+  const quietLead = leadFact(
+    long.index,
+    long.lastDate,
+    (date) => long.byDate[date] as SiteDay,
+  );
+  const update = latestMarketUpdate(
+    long.index,
+    (date) => long.byDate[date] as SiteDay,
+  );
+  expect(update.summary).toBe(pageLead(last, quietLead));
+  expect(update.summary).toMatch(/Ōtāhuhu reached \$410/);
+  expect(update.summary).not.toMatch(/because|caused|due to/i);
 });
 
 test("a finding has a short form built from the same ranking", () => {

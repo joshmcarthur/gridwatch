@@ -2,9 +2,11 @@ import type {
   DatasetState,
   FuelCategory,
   SectionState,
+  SiteEpisode,
   SiteIndex,
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
+import { episodeHeadline } from "./episode-copy.ts";
 import { FUEL_LABELS, type StackFuel } from "./generation-mix.ts";
 
 const energyFormat = new Intl.NumberFormat("en-NZ", {
@@ -143,6 +145,23 @@ export function dayHeadline(day: HeadlineSource): DayHeadline {
       islandsStat(day, agreement),
     ],
   };
+}
+
+/**
+ * Opening sentence for a daily page and the homepage latest update.
+ * An episode line leads when the day has one. Quiet days use the history
+ * lead, then the kind-of-day sentence.
+ */
+export function pageLead(
+  day: HeadlineSource & {
+    periods: Array<{ period: number; start_utc: string }>;
+    episodes?: { items: SiteEpisode[] };
+  },
+  quietLead: string | null,
+): string {
+  const first = day.episodes?.items[0];
+  if (first !== undefined) return episodeHeadline(first, day);
+  return quietLead ?? dayHeadline(day).sentence;
 }
 
 export function completenessNotice(day: CompletenessSource): {

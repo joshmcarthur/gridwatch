@@ -13,6 +13,7 @@ import {
   mapPath,
   monthGroups,
   neighbouringDays,
+  pageLead,
 } from "../../../../lib/daily-page";
 import {
   episodeEvidenceLinks,
@@ -40,6 +41,7 @@ const headline = dayHeadline(day);
 const loadEarlier = (earlier: string) => loadSiteDayCached(earlier, index);
 const context = dayContext(index, date, loadEarlier);
 const lead = leadFact(index, date, loadEarlier);
+const opening = pageLead(day, lead);
 const notice = completenessNotice(day);
 const neighbours = neighbouringDays(index, date);
 const months = monthGroups(index);
@@ -56,7 +58,7 @@ const months = monthGroups(index);
   <article class="prose">
     <header class="lede">
       <h1>{titleDate}</h1>
-      <p>{headline.sentence}</p>
+      <p>{opening}</p>
       <p class="places">
         Prices here come from three places: Ōtāhuhu in Auckland, Haywards near
         Wellington, and Benmore in the South Island.
@@ -101,7 +103,6 @@ const months = monthGroups(index);
 
     <section class="slot" aria-labelledby="detected-episodes">
       <h2 id="detected-episodes">What stood out</h2>
-      {lead ? <p>{lead}</p> : null}
       <p>
         Stretches of the day that looked unusual in the public files. Not a
         written-up public event yet.
