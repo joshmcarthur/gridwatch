@@ -20,6 +20,11 @@ import {
   episodeEvidenceLinks,
   episodeHeadline,
 } from "../../../../lib/episode-copy";
+import {
+  eventHeadline,
+  eventPath,
+  eventsOnDay,
+} from "../../../../lib/event-page";
 import { dayContext, leadFact } from "../../../../lib/market-conditions";
 import {
   formatTradingDate,
@@ -46,6 +51,7 @@ const opening = pageLead(day, lead);
 const notice = completenessNotice(day);
 const neighbours = neighbouringDays(index, date);
 const months = monthGroups(index);
+const publishedEvents = eventsOnDay(day);
 ---
 
 <Layout
@@ -100,6 +106,25 @@ const months = monthGroups(index);
           ))}
         </section>
       )
+    }
+
+    {
+      publishedEvents.length > 0 ? (
+        <section class="slot" aria-labelledby="day-events">
+          <h2 id="day-events">Events on this day</h2>
+          <ol class="episodes">
+            {publishedEvents.map((event) => (
+              <li>
+                <p>
+                  <a href={eventPath(date, event.episode_id)}>
+                    {eventHeadline(event, day)}
+                  </a>
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null
     }
 
     <section class="slot" aria-labelledby="detected-episodes">

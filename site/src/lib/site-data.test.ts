@@ -105,6 +105,7 @@ test("loadSiteDayIfPresent returns null for a date that is not in the index", ()
 
 test("loadSiteDayIfPresent loads 2026-07-27 from the fixture, not 2026-09-27", () => {
   process.env.DATA_ROOT = dataRoot;
+  expect(loadSiteDayIfPresent("2026-08-04")).toBeNull();
   expect(loadSiteDayIfPresent("2026-07-27")?.trading_date).toBe("2026-07-27");
   expect(loadSiteDayIfPresent("2026-09-27")?.trading_date).toBe("2026-09-27");
 });

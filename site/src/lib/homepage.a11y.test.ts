@@ -48,7 +48,10 @@ test.skipIf(!existsSync(builtPage))(
     expect(new Set(ids).size).toBe(ids.length);
     expect(html).toMatch(/backup generation/);
     expect(html).toMatch(/Recently detected/);
-    expect(html).not.toMatch(/recent events/i);
+    expect(html).toMatch(
+      /<h2 id="recent-events-heading"[^>]*>Recent events<\/h2>/,
+    );
+    expect(html).toContain("/2026/07/27/events/394f75a3bfa948a3/");
     expect(html).not.toMatch(/overlapped|grid load|regional price gap/i);
   },
 );

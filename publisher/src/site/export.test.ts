@@ -160,6 +160,16 @@ test("a valid day passes, with and without the optional extensions", () => {
         pocs: [],
         unlocated: [],
       },
+      events: {
+        state: "missing",
+        missing_periods: [],
+        analysis_version: null,
+        inputs_sha256: null,
+        silver_tables: [],
+        gold_tables: [],
+        datasets: [],
+        items: [],
+      },
     }),
   ).not.toThrow();
 });
@@ -2017,6 +2027,10 @@ test("the exporter lock sample matches end to end, on trimmed generation and syn
     state: "missing",
     classes: [],
   });
+  expect(built.events).toMatchObject({
+    state: "missing",
+    items: [],
+  });
   const parsedIndex: unknown = JSON.parse(index);
   assertSiteIndex(parsedIndex);
   expect(parsedIndex.days[0]?.sections.sankey).toBe("missing");
@@ -2025,6 +2039,8 @@ test("the exporter lock sample matches end to end, on trimmed generation and syn
   expect(parsedIndex.latest_complete_sections.episodes).toBeNull();
   expect(parsedIndex.days[0]?.sections.reserves).toBe("missing");
   expect(parsedIndex.latest_complete_sections.reserves).toBeNull();
+  expect(parsedIndex.days[0]?.sections.events).toBe("missing");
+  expect(parsedIndex.latest_complete_sections.events).toBeNull();
   expect(
     built.nodal_map?.pocs.map((p) => p.point_of_connection).sort(),
   ).toEqual(["ABY0111", "AKL0331", "ALB0331"]);

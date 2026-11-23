@@ -42,6 +42,7 @@ test.skipIf(!existsSync(explainerPage))(
     expect(html).toContain("$2,853.43");
     expect(html).toContain("$571.46");
     expect(html).toContain('href="/2026/07/27/"');
+    expect(html).toContain('href="/2026/07/27/events/394f75a3bfa948a3/"');
     expect(html).toContain('href="/explainers/"');
     expect(html).toMatch(/household bill/);
     expect(html).toMatch(/megawatt-hour/);
