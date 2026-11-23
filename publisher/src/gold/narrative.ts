@@ -6,7 +6,7 @@ import type { ClaimValue, Confidence, InputStatus } from "./evidence.ts";
 
 export const NARRATIVE_SCHEMA_VERSION = 1;
 export const PROMPT_VERSION = 1;
-export const DEFAULT_MODEL = "anthropic/claude-haiku-4.5";
+export const DEFAULT_MODEL = "openai/gpt-6-luna";
 
 export interface PromptClaim {
   id: string;
