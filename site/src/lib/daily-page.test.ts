@@ -118,6 +118,7 @@ test("monthGroups lists days under en-NZ month headings", () => {
 test("fixture days build a path for each committed sample", () => {
   const index = loadSiteIndex();
   expect(dailyStaticPaths(index)).toEqual([
+    { params: { year: "2026", month: "07", day: "27" } },
     { params: { year: "2026", month: "09", day: "26" } },
     { params: { year: "2026", month: "09", day: "27" } },
     { params: { year: "2026", month: "10", day: "29" } },

@@ -59,6 +59,7 @@ test("loadSiteIndex uses the fixture when gold is absent", () => {
   process.env.DATA_ROOT = dataRoot;
   const index = loadSiteIndex();
   expect(index.days.map((day) => day.date)).toEqual([
+    "2026-07-27",
     "2026-09-26",
     "2026-09-27",
     "2026-10-29",
@@ -99,14 +100,26 @@ test("loadSiteDay throws when the date is not in the index", () => {
 
 test("loadSiteDayIfPresent returns null for a date that is not in the index", () => {
   process.env.DATA_ROOT = dataRoot;
-  expect(loadSiteDayIfPresent("2026-07-27")).toBeNull();
   expect(loadSiteDayIfPresent("1999-01-01")).toBeNull();
 });
 
-test("loadSiteDayIfPresent does not fall back from 2026-07-27 to the fixture day", () => {
+test("loadSiteDayIfPresent loads 2026-07-27 from the fixture, not 2026-09-27", () => {
   process.env.DATA_ROOT = dataRoot;
-  expect(loadSiteDayIfPresent("2026-07-27")).toBeNull();
+  expect(loadSiteDayIfPresent("2026-07-27")?.trading_date).toBe("2026-07-27");
   expect(loadSiteDayIfPresent("2026-09-27")?.trading_date).toBe("2026-09-27");
+});
+
+test("fixture 2026-07-27 is a complete generation and prices day", () => {
+  process.env.DATA_ROOT = dataRoot;
+  const day = loadSiteDay("2026-07-27");
+  expect(day.complete).toBe(true);
+  expect(day.generation.state).toBe("complete");
+  expect(day.prices.state).toBe("complete");
+  expect(day.periods).toHaveLength(48);
+  const otahuhu = day.prices.nodes.find(
+    (node) => node.point_of_connection === "OTA2201",
+  );
+  expect(otahuhu?.price[35]).toBe(3296.04);
 });
 
 test("loadSiteDay reads a gold day when DATA_ROOT has a matching file", async () => {
