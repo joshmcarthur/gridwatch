@@ -430,17 +430,19 @@ test("every observation records the parameters, and the table has the columns of
 });
 
 test("the default configs are pinned: a changed value without an ANALYSIS_VERSION bump fails here", () => {
-  expect(ANALYSIS_VERSION).toBe(1);
+  expect(ANALYSIS_VERSION).toBe(2);
+  expect(PLANT_GENERATION_CHANGE_CONFIG.minDeviationFromMedian).toBe(200);
+  expect(FUEL_GENERATION_CHANGE_CONFIG.minDeviationFromMedian).toBe(200);
   expect(
     createHash("sha256")
       .update(JSON.stringify(PLANT_GENERATION_CHANGE_CONFIG))
       .digest("hex"),
-  ).toBe("54ac98ca4511c6135962545392d03139e9d20baf0895437ad6b1823257560b17");
+  ).toBe("ef6b6126cdba3997e0c77a94df5fbe9d6f3e378f9321392ace495c0fc9d012e5");
   expect(
     createHash("sha256")
       .update(JSON.stringify(FUEL_GENERATION_CHANGE_CONFIG))
       .digest("hex"),
-  ).toBe("92d52785dab47a150f27a19f3a41a9747f9611cfff6f30b10be805d6f91c0429");
+  ).toBe("996e8a8945ff4769676e93a57ee13efbf0cf75a9534375903d365c53821f2cc2");
 });
 
 test("the registry entries and the TABLES order: the runner reads the first table, the sentinel", () => {

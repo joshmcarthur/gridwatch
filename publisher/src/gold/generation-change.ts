@@ -18,7 +18,7 @@ import {
  * Battery is not a subject (ADR-0008 / ADR-0017). Bump `ANALYSIS_VERSION` by hand with any
  * change to the logic or to a config value (ADR-0011). Tests pin the config hashes.
  */
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
 
 const MEASURED_UNIT = "MW";
 const BATTERY = "battery";
@@ -32,25 +32,25 @@ export type PlantGenerationChangeConfig = RunDetectorConfig & {
 
 export type FuelGenerationChangeConfig = RunDetectorConfig;
 
-/** Provisional. Checked against the backfill and changed by a version bump. */
+/** Floor 200 MW after the #179 backfill. Bump `ANALYSIS_VERSION` with any further change. */
 export const PLANT_GENERATION_CHANGE_CONFIG: PlantGenerationChangeConfig = {
   baselineWindowDays: 28,
   minBaselinePeriods: 14,
   highPercentile: 0.99,
   lowPercentile: 0.01,
-  minDeviationFromMedian: 30,
+  minDeviationFromMedian: 200,
   minPeriods: 2,
   baselineByTradingPeriod: true,
   minPlantAverageMw: 30,
 };
 
-/** Provisional. Island-fuel series have no size cutoff. */
+/** Floor 200 MW after the #179 backfill. Island-fuel series have no size cutoff. */
 export const FUEL_GENERATION_CHANGE_CONFIG: FuelGenerationChangeConfig = {
   baselineWindowDays: 28,
   minBaselinePeriods: 14,
   highPercentile: 0.99,
   lowPercentile: 0.01,
-  minDeviationFromMedian: 100,
+  minDeviationFromMedian: 200,
   minPeriods: 2,
   baselineByTradingPeriod: true,
 };
