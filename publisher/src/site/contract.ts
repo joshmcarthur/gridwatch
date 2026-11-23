@@ -214,6 +214,11 @@ export interface ReservesClassDay {
   periods_expected: number;
   rows_present: number;
   inputs_complete: boolean;
+  /**
+   * $/MWh. Aligned to `SiteDay.periods`. Null when silver has no row.
+   * Optional so older site files still validate (ADR-0014).
+   */
+  price?: Array<number | null>;
 }
 
 /**
@@ -703,6 +708,8 @@ function checkReserves(
     integer(row.periods_expected, `${at}.periods_expected`);
     integer(row.rows_present, `${at}.rows_present`);
     flag(row.inputs_complete, `${at}.inputs_complete`);
+    if (row.price !== undefined)
+      nullableNumbers(row.price, base.length, `${at}.price`);
   });
   return base.datasets;
 }

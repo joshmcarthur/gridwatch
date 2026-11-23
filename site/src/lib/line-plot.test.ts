@@ -71,6 +71,22 @@ test("a proxy period is drawn as an open circle", () => {
   expect(svg.match(/<circle/g)?.length).toBe(1);
 });
 
+test("a band is drawn under the line", () => {
+  const svg = svgOf(
+    plot([{ id: "NI", values: [10, 20, 30], colour: "#111", dashed: false }], {
+      bands: [
+        {
+          start: periods[0]?.start ?? new Date(),
+          end: periods[2]?.start ?? new Date(),
+          title: "High backup prices, 00:00–01:00",
+        },
+      ],
+    }),
+  );
+  expect(svg).toContain("High backup prices, 00:00–01:00");
+  expect(svg).toMatch(/<rect/i);
+});
+
 test("a zero line is drawn when asked", () => {
   const withZero = svgOf(
     plot(

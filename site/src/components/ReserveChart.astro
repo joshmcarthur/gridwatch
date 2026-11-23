@@ -4,8 +4,10 @@ import {
   RESERVE_MISSING,
   RESERVE_NOTICE,
   reserveChart,
-  reserveChartSvg,
   reserveChartTable,
+  reserveHasEpisodeBand,
+  reservePlots,
+  usesReserveLinePlots,
 } from "../lib/reserve-chart";
 import ChartFigure from "./ChartFigure.astro";
 
@@ -16,6 +18,9 @@ interface Props {
 const { day } = Astro.props;
 const chart = reserveChart(day);
 const table = chart ? reserveChartTable(chart) : null;
+const plots = chart ? reservePlots(day, chart) : [];
+const lineMode = usesReserveLinePlots(day);
+const band = reserveHasEpisodeBand(day);
 ---
 
 {
@@ -23,12 +28,14 @@ const table = chart ? reserveChartTable(chart) : null;
     <p class="chart-missing">{RESERVE_MISSING}</p>
   ) : (
     <ChartFigure
-      plots={[reserveChartSvg(chart)]}
+      plots={plots}
       tableCaptionId="reserve-prices-table-caption"
       tableCaption="Reserve prices for the day in $/MWh, by island and kind of reserve."
       headers={table.headers}
       rows={table.rows}
-      legendLabel="Islands and the average marker"
+      legendLabel={
+        lineMode ? "Islands" : "Islands and the average marker"
+      }
       notice={chart.partial ? RESERVE_NOTICE : undefined}
     >
       <Fragment slot="legend">
@@ -48,7 +55,13 @@ const table = chart ? reserveChartTable(chart) : null;
           />
           South Island
         </li>
-        <li>Dot: the day's average</li>
+        {
+          lineMode ? (
+            band && <li>Shaded band: a stretch of unusual backup prices</li>
+          ) : (
+            <li>Dot: the day's average</li>
+          )
+        }
       </Fragment>
       <Fragment slot="caption">
         <p>
@@ -62,18 +75,23 @@ const table = chart ? reserveChartTable(chart) : null;
           There are two kinds. Fast reserve must act within 6 seconds. Slow
           reserve must act within 60 seconds.
         </p>
-        <p>
-          Each bar runs from the lowest to the highest price that day. The dot
-          is the average. Prices are in dollars per megawatt-hour.
-        </p>
+        {
+          lineMode ? (
+            <p>
+              Each line is one island through the day. A gap is a period with
+              no price.
+            </p>
+          ) : (
+            <p>
+              Each bar runs from the lowest to the highest price that day. The
+              dot is the average. Prices are in dollars per megawatt-hour.
+            </p>
+          )
+        }
         <p>
           A reserve price is not a measure of security. A high one means backup
           was dear. It does not mean the lights nearly went out. This page does
           not say whether the grid was secure.
-        </p>
-        <p>
-          This is one summary for the day. It does not show when in the day
-          prices rose.
         </p>
         <p>
           Source: Electricity Authority reserve prices. These are

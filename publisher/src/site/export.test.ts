@@ -177,6 +177,69 @@ test("the validator rejects a missing reserves section that carries classes", ()
   ).toThrow("reserves.classes: a missing section has no entries");
 });
 
+test("a reserves class may omit price", () => {
+  const day = sampleDay();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      reserves: {
+        state: "complete",
+        missing_periods: [],
+        analysis_version: 1,
+        inputs_sha256: "abc",
+        silver_tables: ["dispatch_reserve_prices"],
+        gold_tables: ["reserve_by_class_island_period"],
+        datasets: [],
+        classes: [
+          {
+            reserve_class: "FIR",
+            island: "NI",
+            mean_price: 1,
+            min_price: 0,
+            max_price: 2,
+            periods_present: 46,
+            periods_expected: 46,
+            rows_present: 46,
+            inputs_complete: true,
+          },
+        ],
+      },
+    }),
+  ).not.toThrow();
+});
+
+test("a reserves class price must match the period axis", () => {
+  const day = sampleDay();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      reserves: {
+        state: "complete",
+        missing_periods: [],
+        analysis_version: 1,
+        inputs_sha256: "abc",
+        silver_tables: ["dispatch_reserve_prices"],
+        gold_tables: ["reserve_by_class_island_period"],
+        datasets: [],
+        classes: [
+          {
+            reserve_class: "FIR",
+            island: "NI",
+            mean_price: 1,
+            min_price: 0,
+            max_price: 2,
+            periods_present: 46,
+            periods_expected: 46,
+            rows_present: 46,
+            inputs_complete: true,
+            price: [1],
+          },
+        ],
+      },
+    }),
+  ).toThrow("reserves.classes[0].price: expected 46 entries");
+});
+
 test("the validator rejects a missing sankey that carries zeros", () => {
   const day = sampleDay();
   expect(() =>
@@ -885,7 +948,7 @@ test("reserves carries the gold day table, FIR then SIR, islands north to south"
     datasets: ["dispatch_reserve_prices"],
     missing_periods: [],
   });
-  expect(day.reserves?.classes).toEqual([
+  expect(day.reserves?.classes).toMatchObject([
     {
       reserve_class: "FIR",
       island: "NI",
@@ -931,6 +994,10 @@ test("reserves carries the gold day table, FIR then SIR, islands north to south"
       inputs_complete: true,
     },
   ]);
+  const firNi = day.reserves?.classes[0];
+  expect(firNi?.price).toHaveLength(48);
+  expect(firNi?.price?.[0]).toBe(1.25);
+  expect(firNi?.price?.slice(1).every((value) => value === null)).toBe(true);
   expect(day.complete).toBe(false);
   expect(() => assertSiteDay(day)).not.toThrow();
 });
@@ -992,6 +1059,8 @@ test("reserves is incomplete when a class-island period has no price", async () 
     mean_price: 1,
     inputs_complete: false,
   });
+  expect(day.reserves?.classes[0]?.price?.[0]).toBe(1);
+  expect(day.reserves?.classes[0]?.price?.[1]).toBeNull();
 });
 
 test("sankey carries the gold day table, with residual sign and percent of load", async () => {

@@ -6,7 +6,12 @@ import {
   TABLES as RESERVE_TABLES,
 } from "../gold/reserves.ts";
 import type { CompletenessView } from "../silver/completeness.ts";
-import type { Island, ReserveClass, ReservesSection } from "./contract.ts";
+import type {
+  Island,
+  ReserveClass,
+  ReservesSection,
+  SiteDay,
+} from "./contract.ts";
 import {
   type Section,
   sectionDatasets,
@@ -38,6 +43,7 @@ export async function buildReserves(
   goldDir: string,
   date: string,
   completeness: CompletenessView,
+  axis: SiteDay["periods"],
 ): Promise<ReservesSection> {
   const section = RESERVES_SECTION;
   const base = {
@@ -61,26 +67,52 @@ export async function buildReserves(
     "reserve_class, island, mean_price, min_price, max_price, periods_present, periods_expected, rows_present, inputs_complete",
     "reserve_class, island NULLS LAST",
   );
-  const classes = dayRows.map((row) => ({
-    reserve_class: String(row.reserve_class) as ReserveClass,
-    island: (row.island ?? null) as Island | null,
-    mean_price: roundOrNull(numberOrNull(row.mean_price), 2),
-    min_price: roundOrNull(numberOrNull(row.min_price), 2),
-    max_price: roundOrNull(numberOrNull(row.max_price), 2),
-    periods_present: Number(row.periods_present ?? 0),
-    periods_expected: Number(row.periods_expected ?? 0),
-    rows_present: Number(row.rows_present ?? 0),
-    inputs_complete: row.inputs_complete === true,
-  }));
+  const count = axis.length;
+  const keyOf = (reserveClass: string, island: Island | null) =>
+    `${reserveClass}\0${island ?? ""}`;
+  const byClass = new Map<string, Array<number | null>>();
+  const classes = dayRows.map((row) => {
+    const reserve_class = String(row.reserve_class) as ReserveClass;
+    const island = (row.island ?? null) as Island | null;
+    const price: Array<number | null> = Array.from(
+      { length: count },
+      () => null,
+    );
+    byClass.set(keyOf(reserve_class, island), price);
+    return {
+      reserve_class,
+      island,
+      mean_price: roundOrNull(numberOrNull(row.mean_price), 2),
+      min_price: roundOrNull(numberOrNull(row.min_price), 2),
+      max_price: roundOrNull(numberOrNull(row.max_price), 2),
+      periods_present: Number(row.periods_present ?? 0),
+      periods_expected: Number(row.periods_expected ?? 0),
+      rows_present: Number(row.rows_present ?? 0),
+      inputs_complete: row.inputs_complete === true,
+      price,
+    };
+  });
 
   const periodRows = await rowsOf(
     connection,
     goldDir,
     RESERVE_TABLES[0],
     date,
-    "trading_period, dollars_per_megawatt_hour",
+    "trading_period, reserve_class, island, dollars_per_megawatt_hour",
     "trading_period, reserve_class, island NULLS LAST",
   );
+  for (const row of periodRows) {
+    const price = byClass.get(
+      keyOf(String(row.reserve_class), (row.island ?? null) as Island | null),
+    );
+    if (price === undefined) continue;
+    const period = Number(row.trading_period);
+    if (period < 1 || period > count) continue;
+    price[period - 1] = roundOrNull(
+      numberOrNull(row.dollars_per_megawatt_hour),
+      2,
+    );
+  }
   const missingPeriods = [
     ...new Set(
       periodRows

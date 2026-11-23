@@ -10,6 +10,12 @@ export interface PlotLine {
   proxy?: boolean[];
 }
 
+export interface PlotBand {
+  start: Date;
+  end: Date;
+  title: string;
+}
+
 export interface LinePlot {
   id: string;
   title: string;
@@ -17,6 +23,8 @@ export interface LinePlot {
   domain: [number, number];
   lines: PlotLine[];
   zeroLine?: boolean;
+  /** Shaded clock windows drawn under the lines. */
+  bands?: PlotBand[];
 }
 
 export function renderLinePlot(
@@ -54,6 +62,17 @@ export function renderLinePlot(
         ...(plot.zeroLine
           ? [Plot.ruleY([0], { stroke: "var(--color-ink-muted)" })]
           : []),
+        ...(plot.bands ?? []).map((band) =>
+          Plot.rect([{ start: band.start, end: band.end, title: band.title }], {
+            x1: "start",
+            x2: "end",
+            y1: plot.domain[0],
+            y2: plot.domain[1],
+            fill: "var(--color-ink-muted)",
+            fillOpacity: 0.12,
+            title: "title",
+          }),
+        ),
         ...lines.flatMap((line) => lineMarks(line, data.periods)),
         Plot.ruleX(data.periods, {
           x: "start",
