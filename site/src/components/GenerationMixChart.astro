@@ -1,18 +1,17 @@
 ---
-import * as Plot from "@observablehq/plot";
 import type { SiteDay } from "@gridwatch/publisher/site-contract";
 import ChartFigure from "./ChartFigure.astro";
-import { renderPlot } from "../lib/chart-svg";
 import {
-  type GenerationMix,
-  type MixPoint,
-  type StackFuel,
-  batteryPointTitle,
+  BATTERY_COLOUR,
+  FUEL_COLOUR,
+  mixBatterySvg,
+  mixStackSvg,
+} from "../lib/generation-mix-chart";
+import {
   generationMix,
   generationMixBatterySummary,
   generationMixSummary,
   generationMixTable,
-  mixPointTitle,
 } from "../lib/generation-mix";
 
 interface Props {
@@ -20,102 +19,22 @@ interface Props {
 }
 
 const { day } = Astro.props;
-
-/** Fuel colours come from the Landscape tokens in tokens.css (ADR-0015). */
-const FUEL_COLOUR: Record<StackFuel, string> = {
-  hydro: "var(--color-fuel-hydro)",
-  geothermal: "var(--color-fuel-geothermal)",
-  wind: "var(--color-fuel-wind)",
-  solar: "var(--color-fuel-solar)",
-  gas: "var(--color-fuel-gas)",
-  coal_gas: "var(--color-fuel-coal-gas)",
-  other: "var(--color-fuel-other)",
-  unmapped: "var(--color-fuel-unmapped)",
-};
-
 const mix = generationMix(day);
-const BATTERY_COLOUR = "var(--color-fuel-battery)";
 const BATTERY_LABEL = "Battery (stored power)";
-
-function timeAxis(data: GenerationMix) {
-  const labelAt = new Map(
-    data.ticks.map((tick) => [tick.at.getTime(), tick.label]),
-  );
-  return {
-    label: "Hour (New Zealand time)",
-    domain: [data.points[0]?.start, data.points.at(-1)?.start],
-    nice: false as const,
-    ticks: data.ticks.map((tick) => tick.at),
-    tickFormat: (value: Date) => labelAt.get(value.getTime()) ?? "",
-  };
-}
-
-function hoverRules(data: GenerationMix, titleOf: (point: MixPoint) => string) {
-  return Plot.ruleX(
-    data.points.map((point) => ({
-      start: point.start,
-      title: titleOf(point),
-    })),
-    { x: "start", stroke: "transparent", strokeWidth: 8, title: "title" },
-  );
-}
-
-function chartSvg(data: GenerationMix): string {
-  return renderPlot(
-    {
-      x: timeAxis(data),
-      y: { label: "Average megawatts (MW)", grid: true },
-      color: {
-        domain: data.layers.map((layer) => layer.fuel),
-        range: data.layers.map((layer) => FUEL_COLOUR[layer.fuel]),
-      },
-      marks: [
-        Plot.areaY(data.areas, {
-          x: "start",
-          y1: "base",
-          y2: "top",
-          fill: "fuel",
-          stroke: "var(--color-card)",
-          strokeWidth: 1,
-        }),
-        hoverRules(data, (point) => mixPointTitle(point, data.layers)),
-      ],
-    },
-    {
+const svg = mix
+  ? mixStackSvg(mix, {
       id: "generation-mix-chart",
       title: "Generation mix by fuel",
-      summary: generationMixSummary(data),
-    },
-  );
-}
-
-function batterySvg(data: GenerationMix): string {
-  return renderPlot(
-    {
-      height: 120,
-      x: timeAxis(data),
-      y: { label: "Battery (MW)", grid: true },
-      marks: [
-        Plot.areaY(data.battery, {
-          x: "start",
-          y: "megawatts",
-          fill: BATTERY_COLOUR,
-          stroke: "var(--color-card)",
-          strokeWidth: 1,
-        }),
-        hoverRules(data, batteryPointTitle),
-      ],
-    },
-    {
+      summary: generationMixSummary(mix),
+    })
+  : null;
+const batteryPlot = mix
+  ? mixBatterySvg(mix, {
       id: "generation-battery-chart",
       title: "Battery (stored power)",
-      summary: generationMixBatterySummary(data),
-    },
-  );
-}
-
-const svg = mix ? chartSvg(mix) : null;
-const batteryPlot = mix ? batterySvg(mix) : null;
+      summary: generationMixBatterySummary(mix),
+    })
+  : null;
 const table = mix ? generationMixTable(mix) : null;
 ---
 

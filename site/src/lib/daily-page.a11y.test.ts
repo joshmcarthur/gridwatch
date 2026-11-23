@@ -5,6 +5,9 @@ import { expect, test } from "vitest";
 const builtPage = fileURLToPath(
   new URL("../../dist/2026/09/27/index.html", import.meta.url),
 );
+const builtMix = fileURLToPath(
+  new URL("../../dist/2026/09/26/mix.json", import.meta.url),
+);
 
 test.skipIf(!existsSync(builtPage))(
   "built daily page has landmarks and no unlabeled jargon",
@@ -71,6 +74,17 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(/Average megawatts \(MW\)/);
     expect(html).toMatch(/Electricity Authority generation data/);
     expect(html).toContain("Show the numbers as a table");
+    expect(html).toContain("Compare with");
+    expect(html).toContain("Saturday, 26 September 2026");
+    expect(html).toContain('href="/2026/09/26/"');
+    expect(html).not.toContain("generation-mix-compare");
+    expect(existsSync(builtMix)).toBe(true);
+    const mix = JSON.parse(readFileSync(builtMix, "utf8")) as {
+      missing: boolean;
+      stackSvg?: string;
+    };
+    expect(mix.missing).toBe(false);
+    expect(mix.stackSvg).toContain("generation-mix-compare-title");
   },
 );
 

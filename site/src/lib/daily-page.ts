@@ -111,6 +111,42 @@ export function neighbouringDays(
   };
 }
 
+export function mixJsonPath(date: string): string {
+  return `${dailyPath(date)}mix.json`;
+}
+
+function hasPublishedMix(state: SectionState): boolean {
+  switch (state) {
+    case "complete":
+    case "incomplete":
+      return true;
+    case "missing":
+      return false;
+    default: {
+      const _exhaustive: never = state;
+      return _exhaustive;
+    }
+  }
+}
+
+/** Other index days whose generation mix can be drawn. */
+export function mixCompareDays(index: SiteIndex, date: string): SiteIndexDay[] {
+  return index.days.filter(
+    (entry) =>
+      entry.date !== date && hasPublishedMix(entry.sections.generation),
+  );
+}
+
+/** Previous mix day if there is one, otherwise the next mix day. */
+export function defaultMixCompareDay(
+  index: SiteIndex,
+  date: string,
+): SiteIndexDay | null {
+  const options = mixCompareDays(index, date);
+  const earlier = options.filter((entry) => entry.date < date);
+  return earlier.at(-1) ?? options[0] ?? null;
+}
+
 export function monthGroups(
   index: SiteIndex,
 ): Array<{ key: string; label: string; days: SiteIndexDay[] }> {

@@ -1,6 +1,6 @@
 ---
+import DayCompare from "../../../../components/DayCompare.astro";
 import EnergySankeyChart from "../../../../components/EnergySankeyChart.astro";
-import GenerationMixChart from "../../../../components/GenerationMixChart.astro";
 import PriceChart from "../../../../components/PriceChart.astro";
 import ReserveChart from "../../../../components/ReserveChart.astro";
 import Layout from "../../../../layouts/Layout.astro";
@@ -131,7 +131,7 @@ const months = monthGroups(index);
 
     <section class="slot" aria-labelledby="generation-mix">
       <h2 id="generation-mix">What made the power</h2>
-      <GenerationMixChart day={day} />
+      <DayCompare day={day} date={date} index={index} />
     </section>
 
     <section class="slot" aria-labelledby="wholesale-prices">
