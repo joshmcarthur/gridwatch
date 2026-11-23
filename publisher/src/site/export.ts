@@ -39,7 +39,7 @@ export { round };
  * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
  * rebuilt (ADR-0014).
  */
-export const EXPORT_VERSION = 7;
+export const EXPORT_VERSION = 9;
 
 const SECTIONS: readonly Section[] = [
   GENERATION_SECTION,

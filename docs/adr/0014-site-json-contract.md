@@ -80,3 +80,11 @@ Amended 2026-11-23. Each `ReservesClassDay` may carry `price`, an array of $/MWh
 - **Optional.** Older files omit `price` and still validate. New exports always write it.
 - **Supersedes** the #29 note that the site file carries the daily row only. Daily min/mean/max stay. Period prices are now on the class as well as in gold.
 - **Missing.** A day with no gold partition is still `missing` with empty `classes`. It is never zeros.
+
+### Amendment (#198): plants on the generation section
+
+Amended 2026-11-23. `generation.plants` is optional. The contract version stays 1. `EXPORT_VERSION` is 9 so published days rebuild with plant rows.
+
+- **Shape.** One row per plant for the day: id, name, fuel, island, megawatt-hours, average megawatts. From gold `generation_by_plant_day`. Sorted by fuel, then megawatt-hours descending, then plant id.
+- **Absence.** An older day file omits the field. The site treats that as missing-data. The exporter writes an empty array when the generation section is missing or the gold plant-day table is absent.
+- **`complete` on the day.** Still generation and prices only. Plants do not take part.

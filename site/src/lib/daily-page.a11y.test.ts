@@ -58,6 +58,9 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(/household bill/);
     expect(html).toMatch(/kilowatt-hours/);
     expect(html).toContain("How to read this");
+    expect(html).toContain('id="word-plant"');
+    expect(html).toContain("Which plants made it");
+    expect(html).toContain('id="fuel-plants"');
     expect(html).toContain('aria-labelledby="generation-mix"');
     expect(html).toMatch(/<figure[\s>]/);
     expect(html).toContain('role="img"');
