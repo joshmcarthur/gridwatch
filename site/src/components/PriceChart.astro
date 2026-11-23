@@ -76,7 +76,11 @@ function pricePlot(data: PriceChart): LinePlot {
     yLabel: "Wholesale price ($ per megawatt-hour, $/MWh)",
     domain: data.priceDomain,
     lines: data.nodes.map(nodeLine),
-    bands: data.bands,
+    bands: data.bands.map((band) => ({
+      start: band.x1,
+      end: band.x2,
+      title: band.title,
+    })),
   };
 }
 
@@ -88,7 +92,11 @@ function spreadPlot(data: PriceChart): LinePlot {
     domain: data.spreadDomain,
     lines: data.plottedSpreads.map(spreadLine),
     zeroLine: true,
-    bands: data.bands,
+    bands: data.bands.map((band) => ({
+      start: band.x1,
+      end: band.x2,
+      title: band.title,
+    })),
   };
 }
 
