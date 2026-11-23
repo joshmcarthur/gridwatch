@@ -50,7 +50,7 @@ const packageId = "file-bytes-sha256";
 test("the system prompt is pinned: a changed prompt without a PROMPT_VERSION bump fails here", () => {
   expect(PROMPT_VERSION).toBe(1);
   expect(NARRATIVE_SCHEMA_VERSION).toBe(1);
-  expect(DEFAULT_MODEL).toBe("anthropic/claude-haiku-4.5");
+  expect(DEFAULT_MODEL).toBe("openai/gpt-6-luna");
   expect(createHash("sha256").update(systemPrompt()).digest("hex")).toBe(
     "207d1dc7af2b246442416c7cfec792c1fd9535ade1362122ccc106186895b3a2",
   );

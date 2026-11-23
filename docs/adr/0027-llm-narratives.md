@@ -1,6 +1,6 @@
 # ADR-0027: LLM narratives from evidence packages
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 
 ## Context
@@ -9,7 +9,7 @@
 
 The package is already a JSON file ([ADR-0025](0025-evidence-packages.md)). This ADR is the provider, the default model, where the API key lives, the prompt, and where the generated text is stored.
 
-Owner comment on #39, 2026-11-23: use a provider-neutral library (TanStack AI) so providers can be swapped by config. The owner still picks the default model from the comparison below. A light number-and-link check is required before text is stored or published; that checker is [#40](https://github.com/joshmcarthur/gridwatch/issues/40). The first narrative is the 27 July 2026 event ([#21](https://github.com/joshmcarthur/gridwatch/issues/21)).
+Owner comment on #39, 2026-11-23: use a provider-neutral library (TanStack AI) so providers can be swapped by config. The owner picked `openai/gpt-6-luna` after live 27 July drafts. A light number-and-link check is required before text is stored or published; that checker is [#40](https://github.com/joshmcarthur/gridwatch/issues/40). The first narrative is the 27 July 2026 event ([#21](https://github.com/joshmcarthur/gridwatch/issues/21)).
 
 [#3](https://github.com/joshmcarthur/gridwatch/issues/3) / [ADR-0002](0002-daily-run-data-and-site-hosting.md) already placed secrets in files on the home server, readable only by the user that runs the jobs, and named the LLM key as the later secret.
 
@@ -29,17 +29,18 @@ or `--package path/to/evidence.json`. The command reads an evidence file that `b
 
 ### Default model
 
-Until the owner picks, the default is `anthropic/claude-haiku-4.5`. Override with `GRIDWATCH_LLM_MODEL`. Prices below are OpenRouter list prices on 2026-11-23. Cost per event assumes about 8,000 input tokens (claims plus prompt) and 1,000 output tokens. Monthly cost assumes one narrative a day, the ranking target on [#181](https://github.com/joshmcarthur/gridwatch/issues/181).
+The default is `openai/gpt-6-luna`. Override with `GRIDWATCH_LLM_MODEL`. Prices below are OpenRouter list prices on 2026-11-23. Cost per event assumes about 8,000 input tokens (claims plus prompt) and 1,000 output tokens. Monthly cost assumes one narrative a day, the ranking target on [#181](https://github.com/joshmcarthur/gridwatch/issues/181).
 
 | Model | Input / output per 1M tokens | About one event | About 30 events |
 | --- | ---: | ---: | ---: |
-| `anthropic/claude-haiku-4.5` (default) | $1 / $5 | $0.013 | $0.39 |
+| `openai/gpt-6-luna` (default) | $0.10 / $0.50 | $0.0013 | $0.04 |
 | `anthropic/claude-haiku-5.5` | $0.10 / $0.50 | $0.0013 | $0.04 |
+| `anthropic/claude-haiku-4.5` | $1 / $5 | $0.013 | $0.39 |
 | `openai/gpt-4.1-mini` | $0.40 / $1.60 | $0.0048 | $0.14 |
 | `google/gemini-2.5-flash` | $0.30 / $2.50 | $0.0049 | $0.15 |
 | `anthropic/claude-sonnet-5.5` | $3 / $15 | $0.039 | $1.17 |
 
-Haiku 4.5 is the default because it follows the prompt well enough for a first narrative, and the monthly cost is still cents. Haiku 5.5 is cheaper if the owner prefers it. Sonnet is the prose upgrade if Haiku invents or reads stiff.
+Luna is the default because live 27 July drafts used clocks and place names, did not print confidence labels, and cost the same as Haiku 5.5. Haiku 4.5 is the earlier first-narrative pick. Sonnet is the prose upgrade if Luna invents or reads stiff.
 
 ### API key
 
@@ -74,7 +75,7 @@ The file holds `schema_version`, `prompt_version`, `package_id`, `episode_id`, `
 
 Each has a default. The default is what the code does now.
 
-1. Default model `anthropic/claude-haiku-4.5`? **[yes, until you pick]**
+1. Default model `openai/gpt-6-luna`? **[yes]**
 2. OpenRouter rather than a direct Anthropic or OpenAI key? **[yes]**
 3. On-demand CLI, not the daily runner? **[yes]**
 4. Store three JSON fields, not one markdown blob? **[yes]**
@@ -92,4 +93,4 @@ Each has a default. The default is what the code does now.
 - [#40](https://github.com/joshmcarthur/gridwatch/issues/40) is this checker. It walks the prompt payload and warns when a number, date, clock, or link is missing. It does not block the write or the publish.
 - [#42](https://github.com/joshmcarthur/gridwatch/issues/42) still writes event pages. This CLI does not publish. Event pages call `checkNarrative` and warn. They do not fail the build.
 - The Docker image gains `@tanstack/ai` and `@tanstack/ai-openrouter`. They are production dependencies because the CLI runs in the image. The key stays out of the image.
-- The 27 July 2026 narrative for owner review needs a live key and the owner's model pick. If a PR ships the pipeline without that file, a follow-up issue holds the live run ([#206](https://github.com/joshmcarthur/gridwatch/issues/206)).
+- The 27 July 2026 narrative for owner review needs a live key. If a PR ships the pipeline without that file, a follow-up issue holds the live run ([#206](https://github.com/joshmcarthur/gridwatch/issues/206)).
