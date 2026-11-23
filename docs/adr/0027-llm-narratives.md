@@ -64,9 +64,9 @@ The model replies with JSON: `what_happened`, `why`, `what_it_means`. The CLI re
 
 The CLI writes `<gold>/narratives/<date>/<episode_id>.json`. The site does not read it. The site contract ([ADR-0014](0014-site-json-contract.md)) is unchanged. Event pages stay on [#42](https://github.com/joshmcarthur/gridwatch/issues/42).
 
-The file holds `schema_version`, `prompt_version`, `package_id`, `episode_id`, `trading_date`, `model`, `generated_at`, and the three section strings. `package_id` is the SHA-256 of the evidence JSON bytes, so a later checker ([#40](https://github.com/joshmcarthur/gridwatch/issues/40)) can tell which package produced the text. `generated_at` is the run time in UTC. The same package can yield different prose on a second run; the claims must still match.
+The file holds `schema_version`, `prompt_version`, `package_id`, `episode_id`, `trading_date`, `model`, `generated_at`, and the three section strings. `package_id` is the SHA-256 of the evidence JSON bytes, so a checker can tell which package produced the text. `generated_at` is the run time in UTC. The same package can yield different prose on a second run; the claims must still match.
 
-`generateNarrative` returns the record. The CLI writes the file. [#40](https://github.com/joshmcarthur/gridwatch/issues/40) sits between those two steps and must reject before the write. This ADR does not build that checker.
+`generateNarrative` returns the record. `checkNarrative` walks the evidence JSON for numbers, ISO dates, and links, then scans `what_happened`, `why`, and `what_it_means`. A number may use `$`, thousands separators, fewer decimal places, or integer rounding of a package value. If a figure, date, or URL is missing from the package, the process prints the mismatches and exits 1. It does not write the file. It does not check plant names, place names, or inference. The CLI writes only after the check passes. [#42](https://github.com/joshmcarthur/gridwatch/issues/42) must call the same function and must not publish a narrative that skipped it.
 
 ## Owner questions
 
@@ -87,7 +87,7 @@ Each has a default. The default is what the code does now.
 
 ## Consequences
 
-- [#40](https://github.com/joshmcarthur/gridwatch/issues/40) can read `gold/narratives/<date>/<id>.json` and the matching evidence file. It does not need a new table.
-- [#42](https://github.com/joshmcarthur/gridwatch/issues/42) still writes event pages. This CLI does not publish.
+- [#40](https://github.com/joshmcarthur/gridwatch/issues/40) is this checker. It walks the evidence JSON and rejects the write when a number, date, or link is missing.
+- [#42](https://github.com/joshmcarthur/gridwatch/issues/42) still writes event pages. This CLI does not publish. Event pages must call `checkNarrative`.
 - The Docker image gains `@tanstack/ai` and `@tanstack/ai-openrouter`. They are production dependencies because the CLI runs in the image. The key stays out of the image.
-- The 27 July 2026 narrative for owner review needs a live key and the owner's model pick. If a PR ships the pipeline without that file, a follow-up issue holds the live run.
+- The 27 July 2026 narrative for owner review needs a live key and the owner's model pick. If a PR ships the pipeline without that file, a follow-up issue holds the live run ([#206](https://github.com/joshmcarthur/gridwatch/issues/206)).
