@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-20
+- Amended: 2026-11-23 ([ADR-0028](0028-dispatch-generation.md): dispatch overlay)
 
 ## Context
 
@@ -72,7 +73,7 @@ The runner shows an incomplete gold day as `PARTIAL` in the run summary, with th
 - `island` is `NI` or `SI` from the unit's point of connection. It is null when the point of connection is not mapped. A national total is the sum of all rows of a fuel. No fuel row already sums the islands, so the sum does not count twice.
 - `battery` is storage. It has its own rows. No table has a total, so nothing adds it to primary generation. A consumer that makes a primary total must leave out `battery`.
 - `coal_gas` is the category of the Huntly Rankine units ([ADR-0008](0008-entity-model.md)).
-- Silver Generation_MD is the only source of generation here, so the tables have no RTD case. Gold tables that read RTD data keep only the latest case for each interval (owner decision on [#9](https://github.com/joshmcarthur/gridwatch/issues/9)).
+- Silver Generation_MD is the preferred source. When that partition is absent, the same four tables are built from nodal unit dispatch ([ADR-0028](0028-dispatch-generation.md)). Each row has `source` `metered` or `dispatch`. Gold tables that read RTD data keep only the latest case for each interval (owner decision on [#9](https://github.com/joshmcarthur/gridwatch/issues/9)).
 
 ### Gold inputs
 
