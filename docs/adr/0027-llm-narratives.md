@@ -39,7 +39,7 @@ Until the owner picks, the default is `anthropic/claude-haiku-4.5`. Override wit
 | `google/gemini-2.5-flash` | $0.30 / $2.50 | $0.0049 | $0.15 |
 | `anthropic/claude-sonnet-5.5` | $3 / $15 | $0.039 | $1.17 |
 
-Haiku 4.5 is the default because it follows "use only these facts" well enough for a first narrative, and the monthly cost is still cents. Haiku 5.5 is cheaper if the owner prefers it. Sonnet is the prose upgrade if Haiku invents or reads stiff.
+Haiku 4.5 is the default because it follows the prompt well enough for a first narrative, and the monthly cost is still cents. Haiku 5.5 is cheaper if the owner prefers it. Sonnet is the prose upgrade if Haiku invents or reads stiff.
 
 ### API key
 
@@ -54,9 +54,11 @@ npm run build:narrative -- --date 2026-07-27 --episode <episode_id>
 
 ### Prompt
 
-The user message is a reduced package: episode fields, claims (id, label, value, unit, confidence, note), limits, the daily-page link, and completeness. It does not send `context` series. Claims are the facts. The model may only use those facts. Where a claim is not `confirmed`, the sentence must use the confidence label from brief §7.2.
+The user message is a reduced package: episode fields, NZ clock labels (`clock`, `clock_by_period`) from `periodToUtc`, claims (id, label, value, unit, confidence, note), limits, the daily-page link, and completeness. It does not send `context` series. Claims are the source material. The model may only use that JSON. Published prose must not mention facts, evidence, claims, files, confirmation, or the brief §7.2 labels. Where a claim is not `confirmed`, hedge in ordinary English (`may`, `likely`).
 
-The system prompt is `SYSTEM_PROMPT` in `publisher/src/gold/narrative.ts`. A change to that string bumps `PROMPT_VERSION`. A test pins the SHA-256 of the string.
+The system prompt is `SYSTEM_PROMPT` in `publisher/src/gold/narrative.ts`. It is the narrative instructions (two or three sentences per section, plus a 27 July style sample), then the full text of [`site-copy.md`](../site-copy.md) and [`glossary.md`](../glossary.md). Site copy wins for published sentences (clock times, place names). The glossary is meaning, not voice. A test pins the SHA-256 of the composed string. `PROMPT_VERSION` is the stored record field. It does not bump when the voice files change.
+
+The CLI sends that system prompt with OpenRouter `cache_control` (`ephemeral`, 1 hour TTL) and a stable `threadId` (`gridwatch-narrative`) plus `promptCache: "long"`. The marker is on the system prompt only, so the per-episode user JSON is not cached. Routes that ignore `cache_control` still get a sticky session for implicit prefix cache.
 
 The model replies with JSON: `what_happened`, `why`, `what_it_means`. The CLI rejects a reply that is not JSON or that omits a field.
 
@@ -66,7 +68,7 @@ The CLI writes `<gold>/narratives/<date>/<episode_id>.json`. The site does not r
 
 The file holds `schema_version`, `prompt_version`, `package_id`, `episode_id`, `trading_date`, `model`, `generated_at`, and the three section strings. `package_id` is the SHA-256 of the evidence JSON bytes, so a checker can tell which package produced the text. `generated_at` is the run time in UTC. The same package can yield different prose on a second run; the claims must still match.
 
-`generateNarrative` returns the record. `checkNarrative` walks the evidence JSON for numbers, ISO dates, and links, then scans `what_happened`, `why`, and `what_it_means`. A number may use `$`, thousands separators, fewer decimal places, or integer rounding of a package value. If a figure, date, or URL is missing from the package, the process prints the mismatches as a warning. It still writes the file. It does not check plant names, place names, or inference. [#42](https://github.com/joshmcarthur/gridwatch/issues/42) calls the same function and still publishes. Editorial review ([ADR-0022](0022-editorial-review-and-publish-flow.md)) is the remaining gate.
+`generateNarrative` returns the record. `checkNarrative` walks the prompt payload for numbers, ISO dates, clock times, and links, then scans `what_happened`, `why`, and `what_it_means`. A number may use `$`, thousands separators, fewer decimal places, or integer rounding of a package value. Number tokens do not match inside codes (`OTA2201` is not `2201`). Clock times in the payload (`5:30pm`) are allowed. If a figure, date, clock, or URL is missing from the payload, the process prints the mismatches as a warning. It still writes the file. It does not check plant names, place names, or inference. [#42](https://github.com/joshmcarthur/gridwatch/issues/42) calls the same function and still publishes. Editorial review ([ADR-0022](0022-editorial-review-and-publish-flow.md)) is the remaining gate.
 
 ## Owner questions
 
@@ -87,7 +89,7 @@ Each has a default. The default is what the code does now.
 
 ## Consequences
 
-- [#40](https://github.com/joshmcarthur/gridwatch/issues/40) is this checker. It walks the evidence JSON and warns when a number, date, or link is missing. It does not block the write or the publish.
+- [#40](https://github.com/joshmcarthur/gridwatch/issues/40) is this checker. It walks the prompt payload and warns when a number, date, clock, or link is missing. It does not block the write or the publish.
 - [#42](https://github.com/joshmcarthur/gridwatch/issues/42) still writes event pages. This CLI does not publish. Event pages call `checkNarrative` and warn. They do not fail the build.
 - The Docker image gains `@tanstack/ai` and `@tanstack/ai-openrouter`. They are production dependencies because the CLI runs in the image. The key stays out of the image.
 - The 27 July 2026 narrative for owner review needs a live key and the owner's model pick. If a PR ships the pipeline without that file, a follow-up issue holds the live run ([#206](https://github.com/joshmcarthur/gridwatch/issues/206)).

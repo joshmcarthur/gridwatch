@@ -45,6 +45,27 @@ function periodsPerDay(start: Temporal.ZonedDateTime): number {
   return (start.hoursInDay * 60) / PERIOD_MINUTES;
 }
 
+/** 12-hour NZ clock for public sentences, for example `5:30pm`. */
+export function clockText12(instant: Temporal.Instant): string {
+  const zoned = instant.toZonedDateTimeISO(TRADING_ZONE);
+  const hour12 = zoned.hour % 12 === 0 ? 12 : zoned.hour % 12;
+  const minute = String(zoned.minute).padStart(2, "0");
+  const suffix = zoned.hour < 12 ? "am" : "pm";
+  return `${hour12}:${minute}${suffix}`;
+}
+
+/** Inclusive start to exclusive end of a trading period, as `5:30pm–6:00pm`. */
+export function periodClockRange(
+  tradingDate: string,
+  tradingPeriod: number,
+): string {
+  const { eventStartUtc, eventEndUtc } = periodToUtc(
+    tradingDate,
+    tradingPeriod,
+  );
+  return `${clockText12(eventStartUtc)}–${clockText12(eventEndUtc)}`;
+}
+
 /** UTC start and end of a trading period. Throws if the period is not on that date. */
 export function periodToUtc(
   tradingDate: string,

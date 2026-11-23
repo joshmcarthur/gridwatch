@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { clockText12, periodClockRange, periodToUtc } from "../trading-time.ts";
 import type { ClaimValue, Confidence, InputStatus } from "./evidence.ts";
 
 export const NARRATIVE_SCHEMA_VERSION = 1;
@@ -75,22 +79,80 @@ const confidenceLabel = (level: Confidence): string => {
   }
 };
 
-export const SYSTEM_PROMPT = `You write Gridwatch event narratives for a curious non-specialist.
+const docsDir = join(dirname(fileURLToPath(import.meta.url)), "../../../docs");
 
-You receive one evidence package as JSON. Use only facts in that JSON. Do not invent numbers, dates, places, plants, or links. If a fact is not in the package, omit it.
+const NARRATIVE_INSTRUCTIONS = `You write Gridwatch event narratives for a curious non-specialist.
 
-Write three sections:
-- what_happened: observable facts.
-- why: the likely mechanism. Separate established facts from inference. When a claim is not confirmed, say so in the sentence using the package confidence label (confirmed / strong evidence / possible explanation).
-- what_it_means: why the evening matters, without new facts.
+The narrative is published prose. Site copy wins for sentences: clock times and place names, not trading-period numbers or point-of-connection codes in body copy. The glossary is meaning, not voice.
 
-Plain language. No jargon unless the package uses it, then explain it once.
+You receive one evidence package as JSON. Use only what that JSON contains. Do not invent numbers, dates, places, plants, or links. If something is not in the package, omit it. Use the clock labels in the JSON, with the same digits. Do not round figures.
+
+The JSON informs the story. Do not mention facts, evidence, claims, files, packages, confirmation, or confidence. Do not write "confirmed", "strong evidence", or "possible explanation". When the JSON marks something as less than confirmed, hedge in ordinary English (may, likely). Write as a reporter, not as an analyst checking a list.
+
+Write three sections. Two or three sentences each. The page already has a headline, a clock, charts, and a claims list. Do not restate every figure. Do not puff significance. Do not explain how a household bill is calculated.
+
+- what_happened: what a reader would have seen. Name the stretch and the main prices or quantities.
+- why: the likely mechanism. State what happened as known. Hedge only the mechanism that the JSON does not fully establish.
+- what_it_means: why the evening matters. One idea. Stop. Do not add numbers that were not already in the other sections.
+
+Plain language. No jargon unless Site copy or the glossary gives a public word for it.
+
+This sample is style only. Copy a figure from it only when the same figure is in this JSON:
+
+{"what_happened":"From 5:30pm to 7:30pm on 27 July 2026, wholesale prices in the North Island jumped. In the 5:30pm–6:00pm half-hour Ōtāhuhu averaged $3,296.04/MWh and Haywards $2,853.43, while Benmore was $571.46.","why":"North Island coal and gas rose 484 MW into that half-hour, and North Island slow reserve cost $2,154.45/MWh while the South Island paid $0. The North Island may have been short of backup while the HVDC link was already carrying 966 MW north.","what_it_means":"The two islands paid very different wholesale prices in the same half-hour, even with the Cook Strait link running north."}
 
 Reply with JSON only, no markdown, in this shape:
 {"what_happened":"...","why":"...","what_it_means":"..."}`;
 
+export const SYSTEM_PROMPT = `${NARRATIVE_INSTRUCTIONS}
+
+# Site copy
+
+${readFileSync(join(docsDir, "site-copy.md"), "utf8")}
+
+# Glossary
+
+${readFileSync(join(docsDir, "glossary.md"), "utf8")}`;
+
+/** Stable OpenRouter session so system-prompt cache hits across episodes. */
+export const NARRATIVE_CACHE_THREAD_ID = "gridwatch-narrative";
+
+const episodeClock = (
+  date: string,
+  startPeriod: number,
+  endPeriod: number,
+): string => {
+  const start = clockText12(periodToUtc(date, startPeriod).eventStartUtc);
+  const end = clockText12(periodToUtc(date, endPeriod).eventEndUtc);
+  return `${start}–${end}`;
+};
+
+const clocksByPeriod = (
+  date: string,
+  startPeriod: number,
+  endPeriod: number,
+): Record<string, string> => {
+  const clocks: Record<string, string> = {};
+  for (let period = startPeriod; period <= endPeriod; period++) {
+    clocks[String(period)] = periodClockRange(date, period);
+  }
+  return clocks;
+};
+
 export const promptPayload = (pkg: PromptPackage) => ({
-  episode: pkg.episode,
+  episode: {
+    ...pkg.episode,
+    clock: episodeClock(
+      pkg.episode.trading_date,
+      pkg.episode.start_trading_period,
+      pkg.episode.end_trading_period,
+    ),
+    clock_by_period: clocksByPeriod(
+      pkg.episode.trading_date,
+      pkg.episode.start_trading_period,
+      pkg.episode.end_trading_period,
+    ),
+  },
   claims: pkg.claims.map((claim) => ({
     id: claim.id,
     label: claim.label,
@@ -159,7 +221,7 @@ export const generateNarrative = async (
 export const serializeNarrative = (record: NarrativeRecord): string =>
   `${JSON.stringify(record, null, 2)}\n`;
 
-export type MismatchKind = "number" | "date" | "link";
+export type MismatchKind = "number" | "date" | "link" | "time";
 
 export interface NarrativeMismatch {
   kind: MismatchKind;
@@ -193,7 +255,8 @@ const NAMED_DATE = String.raw`\b(\d{1,2})\s+(${MONTH})\s+(\d{4})\b`;
 const MONTH_FIRST_DATE = String.raw`\b(${MONTH})\s+(\d{1,2}),?\s+(\d{4})\b`;
 const WEB_LINK = String.raw`\bhttps?://[^\s)>\]]+`;
 const DAILY_PATH = String.raw`/\d{4}/\d{2}/\d{2}/?`;
-const NUMBER_TOKEN = String.raw`\$?\d{1,3}(?:,\d{3})+(?:\.\d+)?|\$?\d+(?:\.\d+)?`;
+const CLOCK_TOKEN = String.raw`\b\d{1,2}:\d{2}(?:am|pm)?\b`;
+const NUMBER_TOKEN = String.raw`(?<![A-Za-z0-9])\$?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?![A-Za-z0-9])`;
 
 const globalRe = (source: string, flags = "g"): RegExp =>
   new RegExp(source, flags);
@@ -202,6 +265,7 @@ interface AllowedFacts {
   numbers: Set<number>;
   dates: Set<string>;
   links: Set<string>;
+  clocks: Set<string>;
 }
 
 type NamedDateOrder = "day-month" | "month-day";
@@ -272,6 +336,9 @@ const collectAllowed = (value: unknown, allowed: AllowedFacts): void => {
     eachMatch(value, DAILY_PATH, "g", (link) =>
       allowed.links.add(normalizeLink(link)),
     );
+    eachMatch(value, CLOCK_TOKEN, "gi", (clock) =>
+      allowed.clocks.add(clock.toLowerCase()),
+    );
     return;
   }
   if (Array.isArray(value)) {
@@ -315,6 +382,46 @@ const pushUnique = (
 const mask = (text: string, source: string, flags = "g"): string =>
   text.replace(globalRe(source, flags), (span) => " ".repeat(span.length));
 
+const addEpisodeClocks = (value: unknown, allowed: AllowedFacts): void => {
+  if (value === null || typeof value !== "object") return;
+  const episode = (value as { episode?: unknown }).episode;
+  if (episode === null || typeof episode !== "object") return;
+  const fields = episode as {
+    trading_date?: unknown;
+    start_trading_period?: unknown;
+    end_trading_period?: unknown;
+  };
+  if (
+    typeof fields.trading_date !== "string" ||
+    typeof fields.start_trading_period !== "number" ||
+    typeof fields.end_trading_period !== "number"
+  ) {
+    return;
+  }
+  const remember = (label: string): void => {
+    allowed.clocks.add(label.toLowerCase());
+    eachMatch(label, CLOCK_TOKEN, "gi", (part) =>
+      allowed.clocks.add(part.toLowerCase()),
+    );
+  };
+  remember(
+    episodeClock(
+      fields.trading_date,
+      fields.start_trading_period,
+      fields.end_trading_period,
+    ),
+  );
+  for (const clock of Object.values(
+    clocksByPeriod(
+      fields.trading_date,
+      fields.start_trading_period,
+      fields.end_trading_period,
+    ),
+  )) {
+    remember(clock);
+  }
+};
+
 export const checkNarrative = (
   sections: NarrativeSections,
   evidence: unknown,
@@ -323,8 +430,10 @@ export const checkNarrative = (
     numbers: new Set(),
     dates: new Set(),
     links: new Set(),
+    clocks: new Set(),
   };
   collectAllowed(evidence, allowed);
+  addEpisodeClocks(evidence, allowed);
   const text = `${sections.what_happened}\n${sections.why}\n${sections.what_it_means}`;
   const mismatches: NarrativeMismatch[] = [];
 
@@ -358,6 +467,9 @@ export const checkNarrative = (
   rejectUnless(DAILY_PATH, "g", "link", (raw) =>
     allowed.links.has(normalizeLink(raw)),
   );
+  rejectUnless(CLOCK_TOKEN, "gi", "time", (raw) =>
+    allowed.clocks.has(raw.toLowerCase()),
+  );
 
   let remainder = text;
   remainder = mask(remainder, ISO_DATE);
@@ -365,6 +477,7 @@ export const checkNarrative = (
   remainder = mask(remainder, MONTH_FIRST_DATE, "gi");
   remainder = mask(remainder, WEB_LINK);
   remainder = mask(remainder, DAILY_PATH);
+  remainder = mask(remainder, CLOCK_TOKEN, "gi");
   eachMatch(remainder, NUMBER_TOKEN, "g", (raw) => {
     const stripped = raw.replace(/[$,]/g, "");
     const dot = stripped.indexOf(".");
