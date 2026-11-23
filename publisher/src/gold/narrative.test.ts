@@ -10,8 +10,8 @@ import {
   type PromptPackage,
   parseNarrativeText,
   promptPayload,
-  systemPrompt,
   serializeNarrative,
+  systemPrompt,
 } from "./narrative.ts";
 
 const pkg: PromptPackage = {

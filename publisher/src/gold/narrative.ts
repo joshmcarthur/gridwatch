@@ -107,7 +107,10 @@ let cachedSystemPrompt: string | undefined;
 /** Site copy and glossary. Load only when generating, not when the site imports the checker. */
 export const systemPrompt = (): string => {
   if (cachedSystemPrompt !== undefined) return cachedSystemPrompt;
-  const docsDir = join(dirname(fileURLToPath(import.meta.url)), "../../../docs");
+  const docsDir = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../docs",
+  );
   cachedSystemPrompt = `${NARRATIVE_INSTRUCTIONS}
 
 # Site copy
