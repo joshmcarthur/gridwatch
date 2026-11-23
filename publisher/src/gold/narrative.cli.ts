@@ -2,19 +2,17 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
-import { chat } from "@tanstack/ai";
-import { createOpenRouterText } from "@tanstack/ai-openrouter";
 import { dataPaths } from "../data-root.ts";
 import {
   checkNarrative,
   DEFAULT_MODEL,
   generateNarrative,
-  NARRATIVE_CACHE_THREAD_ID,
   type PromptPackage,
   promptPayload,
   serializeNarrative,
   warnNarrativeCheck,
 } from "./narrative.ts";
+import { openRouterComplete } from "./narrative-openrouter.ts";
 
 // npm run build:narrative -- --date YYYY-MM-DD --episode <id>
 // or --package path/to/evidence.json
@@ -48,30 +46,11 @@ if (key === undefined || key === "") {
   process.exit(2);
 }
 
-const model = (process.env.GRIDWATCH_LLM_MODEL ?? DEFAULT_MODEL) as Parameters<
-  typeof createOpenRouterText
->[0];
+const model = process.env.GRIDWATCH_LLM_MODEL ?? DEFAULT_MODEL;
 const bytes = await readFile(evidencePath);
 const pkg = JSON.parse(bytes.toString("utf8")) as PromptPackage;
 const record = await generateNarrative(pkg, {
-  complete: async ({ system, user }) => {
-    const result = await chat({
-      adapter: createOpenRouterText(model, key),
-      messages: [{ role: "user", content: user }],
-      systemPrompts: [
-        {
-          content: system,
-          metadata: {
-            cache_control: { type: "ephemeral", ttl: "1h" },
-          },
-        },
-      ],
-      threadId: NARRATIVE_CACHE_THREAD_ID,
-      promptCache: "long",
-      stream: false,
-    });
-    return result.text;
-  },
+  complete: openRouterComplete(key, model),
   model,
   now: new Date(),
   packageId: createHash("sha256").update(bytes).digest("hex"),

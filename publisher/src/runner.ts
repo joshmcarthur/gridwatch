@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { datasets, type PublisherDataset } from "./datasets.ts";
 import { bronzeVersions, partitionVersions } from "./silver/common.ts";
 import {
+  type CompletenessView,
   completenessKey,
   fillHeldCompleteness,
   loadCompleteness,
@@ -23,6 +24,17 @@ export interface RunOptions {
   /** Dataset IDs to run. Default: all. */
   only?: string[];
   registry?: PublisherDataset[];
+  /**
+   * After gold tables, before the site export (ADR-0027). The publisher and updater pass
+   * narrative generation. Tests omit it, so they do not load the LLM adapter.
+   */
+  afterGold?: (ctx: {
+    goldDir: string;
+    silverDir: string;
+    completeness: CompletenessView;
+    range?: { from: string; to: string };
+    force: boolean;
+  }) => Promise<void>;
 }
 
 export interface DatasetSummary {
@@ -167,6 +179,19 @@ export async function runPublish(
     if (dirty) {
       await saveCompleteness(silverDir, completeness);
       dirty = false;
+    }
+  }
+  if (options.afterGold) {
+    try {
+      await options.afterGold({
+        goldDir,
+        silverDir,
+        completeness,
+        ...(range && { range }),
+        force: options.force === true,
+      });
+    } catch (error) {
+      console.warn(`narratives: ${(error as Error).message}`);
     }
   }
   // The site export runs last, on the gold of this run and its completeness rows (ADR-0014).
