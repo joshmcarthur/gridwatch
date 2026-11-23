@@ -13,6 +13,7 @@ import {
   inputStatusesComplete,
   islandLiterals,
   islandsValuesSql,
+  latestRtdCaseSql,
   silverPartitionPath,
   writeGoldTables,
 } from "./common.ts";
@@ -104,12 +105,7 @@ export async function publishGridLoad(
        SELECT n.trading_period, n.event_start_utc, n.load_megawatts, poc.island AS island
        FROM read_parquet(${lit(files.nodal)}) n
        JOIN (
-         SELECT event_start_utc, case_id FROM (
-           SELECT DISTINCT event_start_utc, source_run_at, case_id
-           FROM read_parquet(${lit(files.nodal)}) WHERE case_type = 'RTD')
-         QUALIFY row_number() OVER (
-           PARTITION BY event_start_utc
-           ORDER BY source_run_at DESC NULLS LAST, case_id DESC) = 1
+         ${latestRtdCaseSql(files.nodal)}
        ) latest ON latest.event_start_utc = n.event_start_utc AND latest.case_id = n.case_id
        LEFT JOIN read_parquet(${lit(files.poc)}) poc ON poc.poc_id = n.point_of_connection
        WHERE n.case_type = 'RTD'`,

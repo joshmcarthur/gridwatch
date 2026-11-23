@@ -68,6 +68,19 @@ export const listSql = (values: readonly string[]): string =>
     : `[${values.map(lit).join(", ")}]::VARCHAR[]`;
 
 /**
+ * Latest RTD case of each 5-minute interval (owner decision on #9). Load and dispatch
+ * generation both join this.
+ */
+export function latestRtdCaseSql(nodalPath: string): string {
+  return `SELECT event_start_utc, case_id FROM (
+           SELECT DISTINCT event_start_utc, source_run_at, case_id
+           FROM read_parquet(${lit(nodalPath)}) WHERE case_type = 'RTD')
+         QUALIFY row_number() OVER (
+           PARTITION BY event_start_utc
+           ORDER BY source_run_at DESC NULLS LAST, case_id DESC) = 1`;
+}
+
+/**
  * An input table of a gold module (ADR-0011). `layer` is required. A `gold` input is read from
  * `goldDir`; its `versionColumn` and `completenessDataset` are fixed because gold has no
  * `_completeness` row and its `inputs_sha256` already holds the status of its own inputs. Registry
@@ -381,6 +394,11 @@ export function goldDataset(options: {
   id: string;
   tables: readonly [string, ...string[]];
   inputs: readonly GoldInput[];
+  /**
+   * Dates that have these inputs but not `inputs` are still wanted. A date in both maps
+   * keeps the `inputs` fingerprint (preferred overwrites).
+   */
+  fallbackInputs?: readonly GoldInput[];
   analysisVersion: number;
   publish: (options: GoldPublishOptions) => Promise<PublishResult>;
 }): PublisherDataset {
@@ -390,14 +408,27 @@ export function goldDataset(options: {
     partitionKey: "trading_date",
     versionColumn: "inputs_sha256",
     partitionRoot: ({ goldDir }) => goldDir,
-    wantedVersions: (silverDir, completeness, goldDir) =>
-      wantedFingerprints(
+    wantedVersions: async (silverDir, completeness, goldDir) => {
+      const preferred = wantedFingerprints(
         silverDir,
         goldDir,
         options.analysisVersion,
         options.inputs,
         completeness,
-      ),
+      );
+      if (!options.fallbackInputs) return preferred;
+      const fallback = await wantedFingerprints(
+        silverDir,
+        goldDir,
+        options.analysisVersion,
+        options.fallbackInputs,
+        completeness,
+      );
+      const wanted = new Map(fallback);
+      for (const [date, fingerprint] of await preferred)
+        wanted.set(date, fingerprint);
+      return wanted;
+    },
     publish: options.publish,
   };
 }

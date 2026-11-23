@@ -11,9 +11,9 @@ import {
   goldStamp,
   inputFingerprint,
   inputStatusesComplete,
+  latestRtdCaseSql,
   periodsComplete,
   silverPartitionPath,
-  wantedFingerprints,
   writeGoldTables,
 } from "./common.ts";
 
@@ -31,7 +31,7 @@ export const TABLES = [
   "generation_by_fuel_day",
 ] as const;
 
-export type GenerationSource = "metered" | "dispatch";
+type GenerationSource = "metered" | "dispatch";
 
 const GENERATION_MD: GoldInput = {
   table: "generation_md",
@@ -64,7 +64,7 @@ const POINTS_OF_CONNECTION: GoldInput = {
   completenessDataset: "entity_mappings",
 };
 
-/** Metered Generation_MD path. The exporter still lists these until the site contract slice. */
+/** Metered Generation_MD path. */
 export const METERED_INPUTS: GoldInput[] = [
   GENERATION_MD,
   PLANTS,
@@ -75,8 +75,31 @@ export const DISPATCH_INPUTS: GoldInput[] = [
   UNITS,
   POINTS_OF_CONNECTION,
 ];
-/** Metered inputs. The exporter reads this list until the site-contract slice. */
-export const INPUTS: GoldInput[] = METERED_INPUTS;
+export const INPUTS_BY_SOURCE = {
+  metered: METERED_INPUTS,
+  dispatch: DISPATCH_INPUTS,
+} as const;
+
+function uniqueByTable(
+  ...lists: ReadonlyArray<readonly GoldInput[]>
+): GoldInput[] {
+  const seen = new Set<string>();
+  const out: GoldInput[] = [];
+  for (const list of lists) {
+    for (const input of list) {
+      if (seen.has(input.table)) continue;
+      seen.add(input.table);
+      out.push(input);
+    }
+  }
+  return out;
+}
+
+/** Unique-by-table of both paths. The exporter lists these on the day file. */
+export const INPUTS: GoldInput[] = uniqueByTable(
+  METERED_INPUTS,
+  DISPATCH_INPUTS,
+);
 
 /**
  * Publish the generation gold tables for one trading date, one partition for each table in
@@ -110,45 +133,21 @@ export async function publishGeneration(
     GENERATION_MD.table,
     date,
   );
-  if (existsSync(generationMd)) return publishMetered(options, generationMd);
-  return publishDispatch(options);
-}
-
-async function publishMetered(
-  options: GoldPublishOptions,
-  generationMd: string,
-): Promise<PublishResult> {
-  const { silverDir, goldDir, completeness: view, date } = options;
   const plants = silverPartitionPath(silverDir, PLANTS.table, date);
+  const units = silverPartitionPath(silverDir, UNITS.table, date);
+  const nodal = silverPartitionPath(silverDir, NODAL.table, date);
   const pointsOfConnection = silverPartitionPath(
     silverDir,
     POINTS_OF_CONNECTION.table,
     date,
   );
-  if (![plants, pointsOfConnection].every((file) => existsSync(file)))
-    return { date, status: "missing" };
-
-  const connection = await (await DuckDBInstance.create(":memory:")).connect();
-  try {
-    await connection.run("SET TimeZone = 'UTC'");
-    await connection.run("SET threads = 1");
-    const periodCheck = await periodsComplete(connection, date, [generationMd]);
-    const complete =
-      periodCheck.complete && inputStatusesComplete(view, METERED_INPUTS, date);
-    const stamp = goldStamp(
-      ANALYSIS_VERSION,
-      await inputFingerprint(
-        silverDir,
-        goldDir,
-        ANALYSIS_VERSION,
-        METERED_INPUTS,
-        view,
-        date,
-      ),
-      complete ? "true" : "false",
-    );
-    await connection.run(
-      `CREATE TEMP TABLE generation AS
+  if (existsSync(generationMd))
+    return publishPath(options, {
+      source: "metered",
+      inputs: METERED_INPUTS,
+      files: [generationMd, plants, pointsOfConnection],
+      periodFile: generationMd,
+      createSql: `CREATE TEMP TABLE generation AS
        SELECT g.trading_date, g.trading_period, g.event_start_utc, g.event_end_utc,
          g.site_code || '/' || lower(g.gen_code) AS plant_id,
          p.plant_name,
@@ -160,56 +159,13 @@ async function publishMetered(
          ON p.plant_id = g.site_code || '/' || lower(g.gen_code)
        LEFT JOIN read_parquet(${lit(pointsOfConnection)}) poc
          ON poc.poc_id = g.point_of_connection`,
-    );
-    return await writeGenerationTables(
-      connection,
-      options,
-      stamp,
-      "metered",
-      complete,
-      periodCheck.missingPeriods,
-    );
-  } finally {
-    connection.closeSync();
-  }
-}
-
-async function publishDispatch(
-  options: GoldPublishOptions,
-): Promise<PublishResult> {
-  const { silverDir, goldDir, completeness: view, date } = options;
-  const nodal = silverPartitionPath(silverDir, NODAL.table, date);
-  const units = silverPartitionPath(silverDir, UNITS.table, date);
-  const pointsOfConnection = silverPartitionPath(
-    silverDir,
-    POINTS_OF_CONNECTION.table,
-    date,
-  );
-  if (![nodal, units, pointsOfConnection].every((file) => existsSync(file)))
-    return { date, status: "missing" };
-
-  const connection = await (await DuckDBInstance.create(":memory:")).connect();
-  try {
-    await connection.run("SET TimeZone = 'UTC'");
-    await connection.run("SET threads = 1");
-    const periodCheck = await periodsComplete(connection, date, [nodal]);
-    const complete =
-      periodCheck.complete &&
-      inputStatusesComplete(view, DISPATCH_INPUTS, date);
-    const stamp = goldStamp(
-      ANALYSIS_VERSION,
-      await inputFingerprint(
-        silverDir,
-        goldDir,
-        ANALYSIS_VERSION,
-        DISPATCH_INPUTS,
-        view,
-        date,
-      ),
-      complete ? "true" : "false",
-    );
-    await connection.run(
-      `CREATE TEMP TABLE generation AS
+    });
+  return publishPath(options, {
+    source: "dispatch",
+    inputs: DISPATCH_INPUTS,
+    files: [nodal, units, pointsOfConnection],
+    periodFile: nodal,
+    createSql: `CREATE TEMP TABLE generation AS
        SELECT DATE ${lit(date)} AS trading_date, trading_period,
          min(event_start_utc) AS event_start_utc,
          min(event_start_utc) + INTERVAL 30 MINUTE AS event_end_utc,
@@ -221,15 +177,8 @@ async function publishDispatch(
            coalesce(u.fuel_category, 'unmapped') AS fuel_category,
            poc.island, sum(n.generation_megawatts) AS mw
          FROM read_parquet(${lit(nodal)}) n
-         JOIN (
-           SELECT event_start_utc, case_id FROM (
-             SELECT DISTINCT event_start_utc, source_run_at, case_id
-             FROM read_parquet(${lit(nodal)}) WHERE case_type = 'RTD')
-           QUALIFY row_number() OVER (
-             PARTITION BY event_start_utc
-             ORDER BY source_run_at DESC NULLS LAST, case_id DESC) = 1
-         ) latest ON latest.event_start_utc = n.event_start_utc
-           AND latest.case_id = n.case_id
+         JOIN (${latestRtdCaseSql(nodal)}) latest
+           ON latest.event_start_utc = n.event_start_utc AND latest.case_id = n.case_id
          LEFT JOIN read_parquet(${lit(units)}) u
            ON u.unit_id = n.point_of_connection || ':' || n.unit_code
          LEFT JOIN read_parquet(${lit(pointsOfConnection)}) poc
@@ -239,12 +188,50 @@ async function publishDispatch(
            coalesce(u.plant_name, n.plant_name),
            coalesce(u.fuel_category, 'unmapped'), poc.island)
        GROUP BY trading_period, plant_id, fuel_category, island`,
+  });
+}
+
+async function publishPath(
+  options: GoldPublishOptions,
+  path: {
+    source: GenerationSource;
+    inputs: readonly GoldInput[];
+    files: readonly string[];
+    periodFile: string;
+    createSql: string;
+  },
+): Promise<PublishResult> {
+  const { silverDir, goldDir, completeness: view, date } = options;
+  if (!path.files.every((file) => existsSync(file)))
+    return { date, status: "missing" };
+
+  const connection = await (await DuckDBInstance.create(":memory:")).connect();
+  try {
+    await connection.run("SET TimeZone = 'UTC'");
+    await connection.run("SET threads = 1");
+    const periodCheck = await periodsComplete(connection, date, [
+      path.periodFile,
+    ]);
+    const complete =
+      periodCheck.complete && inputStatusesComplete(view, path.inputs, date);
+    const stamp = goldStamp(
+      ANALYSIS_VERSION,
+      await inputFingerprint(
+        silverDir,
+        goldDir,
+        ANALYSIS_VERSION,
+        path.inputs,
+        view,
+        date,
+      ),
+      complete ? "true" : "false",
     );
+    await connection.run(path.createSql);
     return await writeGenerationTables(
       connection,
       options,
       stamp,
-      "dispatch",
+      path.source,
       complete,
       periodCheck.missingPeriods,
     );
@@ -317,37 +304,11 @@ async function writeGenerationTables(
     : { date, status: "partial", rows, path, missingPeriods };
 }
 
-async function generationWantedVersions(
-  silverDir: string,
-  completeness: GoldPublishOptions["completeness"],
-  goldDir: string,
-) {
-  const dispatch = await wantedFingerprints(
-    silverDir,
-    goldDir,
-    ANALYSIS_VERSION,
-    DISPATCH_INPUTS,
-    completeness,
-  );
-  const metered = await wantedFingerprints(
-    silverDir,
-    goldDir,
-    ANALYSIS_VERSION,
-    METERED_INPUTS,
-    completeness,
-  );
-  const wanted = new Map(dispatch);
-  for (const [date, fingerprint] of metered) wanted.set(date, fingerprint);
-  return wanted;
-}
-
-export const generation = {
-  ...goldDataset({
-    id: "gold_generation",
-    tables: TABLES,
-    inputs: METERED_INPUTS,
-    analysisVersion: ANALYSIS_VERSION,
-    publish: publishGeneration,
-  }),
-  wantedVersions: generationWantedVersions,
-};
+export const generation = goldDataset({
+  id: "gold_generation",
+  tables: TABLES,
+  inputs: METERED_INPUTS,
+  fallbackInputs: DISPATCH_INPUTS,
+  analysisVersion: ANALYSIS_VERSION,
+  publish: publishGeneration,
+});

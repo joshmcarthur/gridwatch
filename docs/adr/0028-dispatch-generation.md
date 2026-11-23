@@ -21,6 +21,8 @@ The runner wants a date when the metered inputs exist, or when the dispatch inpu
 
 Energy balance and the Sankey stay on metered Generation_MD and metered HVDC. They do not read dispatch generation. HVDC shares the Generation_MD month lag, so those days have no energy-balance partition.
 
+Generation-change detectors read gold generation as the day's mix. A 28-day baseline can mix dispatch days and metered days. They do not filter to `source = metered`. Filtering would hide recent days.
+
 ## Consequences
 
 - A finished trading day can have a generation mix the next morning.

@@ -524,6 +524,13 @@ async function writeDispatchSilver(options: {
     fuel: string | null;
     name: string;
   }>;
+  cases?: Array<{
+    period: number;
+    interval: number;
+    sourceRunAt: string;
+    caseId: string;
+    mw: number;
+  }>;
 }) {
   const date = DISPATCH_DATE;
   const units = [
@@ -538,6 +545,39 @@ async function writeDispatchSilver(options: {
     ...(options.extraUnits ?? []),
   ];
   const periods = Array.from({ length: 48 }, (_, i) => i + 1);
+  const [unit] = units;
+  if (!unit) throw new Error("writeDispatchSilver needs a unit");
+  const nodalRows = options.cases
+    ? options.cases.map((c) => ({
+        trading_date: date,
+        trading_period: c.period,
+        event_start_utc: dispatchStart(c.period, c.interval),
+        source_run_at: c.sourceRunAt,
+        case_type: "RTD",
+        case_id: c.caseId,
+        point_of_connection: unit.poc,
+        unit_code: unit.unit,
+        plant_name: unit.name,
+        generation_megawatts: c.mw,
+        bronze_sha256: "nodal-sha",
+      }))
+    : periods.flatMap((period) =>
+        Array.from({ length: 6 }, (_, interval) =>
+          units.map((u) => ({
+            trading_date: date,
+            trading_period: period,
+            event_start_utc: dispatchStart(period, interval),
+            source_run_at: "2026-11-17T10:59:00.000Z",
+            case_type: "RTD",
+            case_id: `case-${period}-${interval}`,
+            point_of_connection: u.poc,
+            unit_code: u.unit,
+            plant_name: u.name,
+            generation_megawatts: u.mw,
+            bronze_sha256: "nodal-sha",
+          })),
+        ).flat(),
+      );
   await writeParquet(
     join(
       silverDir,
@@ -558,23 +598,7 @@ async function writeDispatchSilver(options: {
       generation_megawatts: "DOUBLE",
       bronze_sha256: "VARCHAR",
     },
-    periods.flatMap((period) =>
-      Array.from({ length: 6 }, (_, interval) =>
-        units.map((u) => ({
-          trading_date: date,
-          trading_period: period,
-          event_start_utc: dispatchStart(period, interval),
-          source_run_at: "2026-11-17T10:59:00.000Z",
-          case_type: "RTD",
-          case_id: `case-${period}-${interval}`,
-          point_of_connection: u.poc,
-          unit_code: u.unit,
-          plant_name: u.name,
-          generation_megawatts: u.mw,
-          bronze_sha256: "nodal-sha",
-        })),
-      ).flat(),
-    ),
+    nodalRows,
   );
   await writeParquet(
     join(silverDir, "entity_units", `trading_date=${date}`, "data.parquet"),
@@ -722,98 +746,33 @@ test("wantedVersions includes a nodal day that has no Generation_MD", async () =
 });
 
 test("dispatch gold keeps the latest RTD case of an interval", async () => {
-  const date = DISPATCH_DATE;
-  const start = dispatchStart(1, 0);
-  await writeParquet(
-    join(
-      silverDir,
-      "nodal_prices_and_volumes",
-      `trading_date=${date}`,
-      "data.parquet",
-    ),
-    {
-      trading_date: "DATE",
-      trading_period: "INTEGER",
-      event_start_utc: "TIMESTAMPTZ",
-      source_run_at: "TIMESTAMPTZ",
-      case_type: "VARCHAR",
-      case_id: "VARCHAR",
-      point_of_connection: "VARCHAR",
-      unit_code: "VARCHAR",
-      plant_name: "VARCHAR",
-      generation_megawatts: "DOUBLE",
-      bronze_sha256: "VARCHAR",
-    },
-    [
+  await writeDispatchSilver({
+    mw: 10,
+    cases: [
       {
-        trading_date: date,
-        trading_period: 1,
-        event_start_utc: start,
-        source_run_at: "2026-11-17T10:58:00.000Z",
-        case_type: "RTD",
-        case_id: "old",
-        point_of_connection: "AAA0331",
-        unit_code: "HYD0",
-        plant_name: "hydro1",
-        generation_megawatts: 10,
-        bronze_sha256: "nodal-sha",
+        period: 1,
+        interval: 0,
+        sourceRunAt: "2026-11-17T10:58:00.000Z",
+        caseId: "old",
+        mw: 10,
       },
       {
-        trading_date: date,
-        trading_period: 1,
-        event_start_utc: start,
-        source_run_at: "2026-11-17T10:59:00.000Z",
-        case_type: "RTD",
-        case_id: "new",
-        point_of_connection: "AAA0331",
-        unit_code: "HYD0",
-        plant_name: "hydro1",
-        generation_megawatts: 20,
-        bronze_sha256: "nodal-sha",
+        period: 1,
+        interval: 0,
+        sourceRunAt: "2026-11-17T10:59:00.000Z",
+        caseId: "new",
+        mw: 20,
       },
     ],
-  );
-  await writeParquet(
-    join(silverDir, "entity_units", `trading_date=${date}`, "data.parquet"),
-    {
-      unit_id: "VARCHAR",
-      plant_id: "VARCHAR",
-      plant_name: "VARCHAR",
-      fuel_category: "VARCHAR",
-      inputs_sha256: "VARCHAR",
-    },
-    [
-      {
-        unit_id: "AAA0331:HYD0",
-        plant_id: "AAA/hydro1",
-        plant_name: "hydro1",
-        fuel_category: "hydro",
-        inputs_sha256: "sha-e",
-      },
-    ],
-  );
-  await writeParquet(
-    join(
-      silverDir,
-      "entity_points_of_connection",
-      `trading_date=${date}`,
-      "data.parquet",
-    ),
-    {
-      poc_id: "VARCHAR",
-      island: "VARCHAR",
-      inputs_sha256: "VARCHAR",
-    },
-    [{ poc_id: "AAA0331", island: "NI", inputs_sha256: "sha-e" }],
-  );
+  });
   await publishGeneration({
     silverDir,
     goldDir,
     completeness: completenessView(),
-    date,
+    date: DISPATCH_DATE,
   });
   const [row] = await query(
-    `SELECT megawatt_hours FROM ${gold("generation_by_fuel_period", date)} WHERE trading_period = 1`,
+    `SELECT megawatt_hours FROM ${gold("generation_by_fuel_period", DISPATCH_DATE)} WHERE trading_period = 1`,
   );
   expect(Number(row?.megawatt_hours)).toBeCloseTo(10, 6);
 });
