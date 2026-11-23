@@ -1,5 +1,5 @@
 import type { SiteEvent } from "@gridwatch/publisher/site-contract";
-import { expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
   claimAnchor,
   eventHeadline,
@@ -12,6 +12,15 @@ import {
 } from "./event-page.ts";
 import { loadSiteDay, loadSiteIndex } from "./site-data.ts";
 
+const previousDataRoot = process.env.DATA_ROOT;
+beforeEach(() => {
+  process.env.DATA_ROOT = "/tmp/gridwatch-no-gold";
+});
+afterEach(() => {
+  if (previousDataRoot === undefined) delete process.env.DATA_ROOT;
+  else process.env.DATA_ROOT = previousDataRoot;
+});
+
 const event: SiteEvent = {
   episode_id: "394f75a3bfa948a3",
   review_status: "unreviewed",
@@ -23,10 +32,10 @@ const event: SiteEvent = {
   end_trading_period: 39,
   package_id: "fixture-27-july-2026",
   what_happened:
-    "On 27 July 2026, the wholesale price at Ōtāhuhu reached $3,296.04/MWh. Haywards was $2,853.43. Benmore was $571.46. See /2026/07/27/.",
-  why: "Confirmed: North Island reserve cost $2,154.45/MWh while the South Island reserve cost $0. Possible explanation: the North Island was short of backup while power was still moving north.",
+    "On 27 July 2026, wholesale prices surged at Ōtāhuhu and Haywards. Ōtāhuhu averaged $3,296.04/MWh and Haywards $2,853.43, while Benmore was $571.46. See /2026/07/27/.",
+  why: "North Island slow reserve cost $2,154.45/MWh while the South Island paid $0. The North Island may have been short of backup while power was still moving north.",
   what_it_means:
-    "The evening shows how prices in the North Island and the South Island can pull apart. The Ōtāhuhu–Benmore spread was $2,724.58/MWh.",
+    "The two islands paid very different wholesale prices in the same half-hour. The Ōtāhuhu–Benmore spread was $2,724.58/MWh.",
   claims: [
     {
       id: "price.OTA2201.p36",
@@ -69,9 +78,12 @@ test("eventHeadline reuses the episode sentence", () => {
 });
 
 test("requireCheckedEvent accepts the 27 July fixture", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   const day = loadSiteDay("2026-07-27");
   const published = findEvent(day, "394f75a3bfa948a3");
   expect(() => requireCheckedEvent(published)).not.toThrow();
+  expect(warn).not.toHaveBeenCalled();
+  warn.mockRestore();
 });
 
 test("eventPathsForIndex includes the 27 July event", () => {

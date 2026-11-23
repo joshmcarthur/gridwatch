@@ -123,6 +123,9 @@ test("fixture 2026-07-27 is a complete day with the Unreviewed event", () => {
   expect(otahuhu?.price[35]).toBe(3296.04);
   expect(day.events?.items).toHaveLength(1);
   expect(day.events?.items[0]?.episode_id).toBe("394f75a3bfa948a3");
+  expect(day.events?.items[0]?.what_happened).toContain("$3,296.04");
+  expect(day.events?.items[0]?.why).not.toMatch(/Confirmed:/);
+  expect(day.events?.items[0]?.why).not.toMatch(/Possible explanation:/);
 });
 
 test("loadSiteDay reads a gold day when DATA_ROOT has a matching file", async () => {
