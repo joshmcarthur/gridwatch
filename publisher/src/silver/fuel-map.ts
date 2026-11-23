@@ -49,3 +49,11 @@ export const FUEL_MAP: Record<string, FuelCategory> = {
 export const FUEL_PLANT_OVERRIDES: Record<string, FuelCategory> = {
   "WPG/waipori": "wind",
 };
+
+/**
+ * Fleet unit IDs (`<POC>:<unit code>`) whose automatic plant link is wrong or empty.
+ * The automatic link is unique (POC, fuel category) in Generation_MD (ADR-0008). This map
+ * wins over that link. Use it when two plants share a POC and a fuel, or when Generation_MD
+ * has no plant row. A unit that is still unmapped stays off the plant tables.
+ */
+export const UNIT_PLANT_OVERRIDES: Record<string, string> = {};

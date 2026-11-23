@@ -549,8 +549,8 @@ test("an unknown fuel code, network code, POC and unit are reported, not dropped
       row_count: "1",
     },
   ]);
-  // The placeholder operator is not a participant. The one plant at AAA1101 with the same
-  // fuel category links to the unit; the unit with no category does not link.
+  // The placeholder operator is not a participant. AAA1101 has two plants; Fusion has no
+  // fuel category, so it does not block the hydro unit. The unit with no category does not link.
   expect(
     await query(
       `SELECT unit_id, operator_participant_id, fuel_category, plant_id FROM ${table("entity_units", "2026-11-18")} ORDER BY unit_id`,
@@ -560,7 +560,7 @@ test("an unknown fuel code, network code, POC and unit are reported, not dropped
       unit_id: "AAA1101:AAA0",
       operator_participant_id: "OPR1",
       fuel_category: "hydro",
-      plant_id: null,
+      plant_id: "AAA/alpha",
     },
     {
       unit_id: "AAA1101:BBB0",
@@ -924,7 +924,7 @@ test("Waipori at WPG0331 is wind even when Generation_MD labels it Hydro", async
   ]);
 });
 
-test("a unit links to a plant only when the POC has one plant and the fuel agrees", async () => {
+test("a unit links to a plant when the POC and fuel have one plant", async () => {
   await writeNsp("2026-11-01", [nsp("AAA1101", "NI", "2020-01-01", null)]);
   await writeGmd("2026-11-18", [
     ["ONE", "ONE1101", "NET1", "solo", "HYD"],
@@ -955,6 +955,54 @@ test("a unit links to a plant only when the POC has one plant and the fuel agree
     { unit_id: "ONE1101:SOL0", plant_id: "ONE/solo", fuel_category: "hydro" },
     { unit_id: "TWO1101:TWO0", plant_id: null, fuel_category: "hydro" },
   ]);
+});
+
+test("two plants at one POC link when their fuels differ", async () => {
+  await writeNsp("2026-11-01", [nsp("HLY2201", "NI", "2020-01-01", null)]);
+  await writeGmd("2026-11-18", [
+    ["HLY", "HLY2201", "GENE", "huntly_1_4", "Coal"],
+    ["HLY", "HLY2201", "GENE", "huntly_p40", "Gas"],
+  ]);
+  await writeFleet("2026-11-01", [
+    fleetRow("HLY2201", "HLY1", "CLG"),
+    fleetRow("HLY2201", "HLY6", "GAS"),
+  ]);
+  await build("2026-11-18");
+  expect(
+    await query(
+      `SELECT unit_id, plant_id, fuel_category FROM ${table("entity_units", "2026-11-18")} ORDER BY unit_id`,
+    ),
+  ).toEqual([
+    {
+      unit_id: "HLY2201:HLY1",
+      plant_id: "HLY/huntly_1_4",
+      fuel_category: "coal_gas",
+    },
+    {
+      unit_id: "HLY2201:HLY6",
+      plant_id: "HLY/huntly_p40",
+      fuel_category: "gas",
+    },
+  ]);
+});
+
+test("UNIT_PLANT_OVERRIDES names a plant when two plants share a POC and fuel", async () => {
+  await writeNsp("2026-11-01", [nsp("TWO1101", "NI", "2020-01-01", null)]);
+  await writeGmd("2026-11-18", [
+    ["TWO", "TWO1101", "NET1", "first", "Hydro"],
+    ["TWO", "TWO1101", "NET1", "second", "Hydro"],
+  ]);
+  await writeFleet("2026-11-01", [fleetRow("TWO1101", "TWO0", "HYD")]);
+  await publishEntityMappings({
+    silverDir,
+    date: "2026-11-18",
+    unitPlantOverrides: { "TWO1101:TWO0": "TWO/first" },
+  });
+  expect(
+    await query(
+      `SELECT unit_id, plant_id FROM ${table("entity_units", "2026-11-18")}`,
+    ),
+  ).toEqual([{ unit_id: "TWO1101:TWO0", plant_id: "TWO/first" }]);
 });
 
 test("inputs_sha256 is the same on every table and changes with an input version", async () => {

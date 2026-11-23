@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-20
+- Amended: 2026-11-23 (unit→plant: unique POC and fuel, then `UNIT_PLANT_OVERRIDES`)
 
 ## Context
 
@@ -25,7 +26,7 @@ One plant or place has a different identifier in each dataset. Dispatch energy p
 - **Node and POC are one entity.** No source separates a pricing node from a POC. Dispatch and nodal prices are priced per POC. The model has no separate node entity. If a source separates them, a later ADR adds one.
 - **A POC has an island and a place, not always one region.** An NSP table row has one region. A POC can have several NSPs. On 2026-10-15, 17 POCs have NSPs in two regions. The POC table holds `region_id` only when all its NSPs agree, and `region_count` always.
 - **Region means the network reporting region.** The NSP table also has a zone. The zone has 5 values for 40 regions, so it is too coarse to use. The network reporting region is the unit of the distribution network area, and it is the unit for regional consumption in the Sankey (brief section 8.1). Every region has one island. Zone stays in the NSP table. The model does not use it.
-- **Plant is a Generation_MD concept.** `Gen_Code` is a plant name, such as `aratiatia`. The fleet `PlantName` is a name per unit, such as `Huntly Rankine 1`. No source carries both a unit code and a plant name. So a unit links to a plant only when the unit's POC holds exactly one plant and the fuel category of the unit agrees with the plant. The link is empty otherwise. A plant can have more than one POC and more than one network code, so the plant ID leaves both out. A plant that spans two sites has one ID for each site. A Generation_MD row maps to its plant by the formula, so no key table is needed.
+- **Plant is a Generation_MD concept.** `Gen_Code` is a plant name, such as `aratiatia`. The fleet `PlantName` is a name per unit, such as `Huntly Rankine 1`. No source carries both a unit code and a plant name. So a unit links to a plant when `(point of connection, fuel category)` has exactly one Generation_MD plant. `UNIT_PLANT_OVERRIDES` in `fuel-map.ts` can name a plant by `unit_id` when that automatic link is empty or wrong (two plants of the same fuel at one POC, or no Generation_MD row). The link is empty when neither rule matches. A plant can have more than one POC and more than one network code, so the plant ID leaves both out. A plant that spans two sites has one ID for each site. A Generation_MD row maps to its plant by the formula, so no key table is needed.
 - **Unit is a fleet and nodal concept.** Generation_MD has no unit code. The unit table comes from the fleet file. Nodal prices join to it on POC and unit code.
 - **Participant has no name in most sources.** Only the fleet file gives an operator name. A participant from the NSP table or Generation_MD alone has a null name. The fleet placeholder `N/A` is not a participant.
 - **Canonical IDs equal source codes where a source code exists.** The tables still carry both the canonical ID column and the source columns, so a future change of rule does not change a join key.
@@ -117,5 +118,5 @@ The runner ([#13](https://github.com/joshmcarthur/gridwatch/issues/13)) finds st
 - A reader joins silver rows to the tables on the same `trading_date`. The join keys are `poc_id`, `unit_id`, `plant_id` and `participant_id`. Each is unique in its table.
 - The tables repeat for each day, so storage is small.
 - `entity_unmapped` has a standing row for the fleet placeholder `N/A`. A runner must not treat a non-empty report as a failure.
-- The plant link from a unit is empty when the POC holds more than one plant, when the POC is not in Generation_MD, or when the fuel categories disagree. On 2026-10-19, 27 of 120 units have no link. The three Huntly `CLG` units link to `HLY/huntly_1_4`.
+- The plant link from a unit is empty when `(POC, fuel)` has more than one plant, when the POC is not in Generation_MD, when the fuel categories disagree, and when `UNIT_PLANT_OVERRIDES` has no row. The three Huntly `CLG` units still link to `HLY/huntly_1_4`. Huntly gas units at the same POC link to the one gas plant when Generation_MD has exactly one.
 - The owner accepted this ADR on 2026-11-20, with the closed-row rule, the fleet snapshot rule and the per-day tables.
