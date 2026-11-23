@@ -9,7 +9,9 @@ import {
   checkNarrative,
   DEFAULT_MODEL,
   generateNarrative,
+  NARRATIVE_CACHE_THREAD_ID,
   type PromptPackage,
+  promptPayload,
   serializeNarrative,
   warnNarrativeCheck,
 } from "./narrative.ts";
@@ -56,8 +58,16 @@ const record = await generateNarrative(pkg, {
     const result = await chat({
       adapter: createOpenRouterText(model, key),
       messages: [{ role: "user", content: user }],
-      systemPrompts: [system],
-      threadId: `narrative-${pkg.episode.episode_id}`,
+      systemPrompts: [
+        {
+          content: system,
+          metadata: {
+            cache_control: { type: "ephemeral", ttl: "1h" },
+          },
+        },
+      ],
+      threadId: NARRATIVE_CACHE_THREAD_ID,
+      promptCache: "long",
       stream: false,
     });
     return result.text;
@@ -66,7 +76,10 @@ const record = await generateNarrative(pkg, {
   now: new Date(),
   packageId: createHash("sha256").update(bytes).digest("hex"),
 });
-warnNarrativeCheck(checkNarrative(record, pkg), "narrative check");
+warnNarrativeCheck(
+  checkNarrative(record, promptPayload(pkg)),
+  "narrative check",
+);
 const path = join(
   gold,
   "narratives",

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
+  clockText12,
   dispatchIntervalToUtc,
+  periodClockRange,
   periodsInTradingDate,
   periodToUtc,
   utcToPeriod,
@@ -53,6 +55,13 @@ describe.each(days)("$label ($date)", ({ date, periods }) => {
       /Invalid trading period/,
     );
   });
+});
+
+test("period 36 on 27 July 2026 is 5:30pm–6:00pm", () => {
+  expect(periodClockRange("2026-07-27", 36)).toBe("5:30pm–6:00pm");
+  expect(clockText12(periodToUtc("2026-07-27", 36).eventStartUtc)).toBe(
+    "5:30pm",
+  );
 });
 
 test("period 1 starts at NZ midnight", () => {

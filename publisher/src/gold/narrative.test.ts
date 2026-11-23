@@ -4,13 +4,14 @@ import {
   checkNarrative,
   DEFAULT_MODEL,
   generateNarrative,
+  NARRATIVE_CACHE_THREAD_ID,
   NARRATIVE_SCHEMA_VERSION,
   PROMPT_VERSION,
   type PromptPackage,
   parseNarrativeText,
   promptPayload,
-  SYSTEM_PROMPT,
   serializeNarrative,
+  systemPrompt,
 } from "./narrative.ts";
 
 const pkg: PromptPackage = {
@@ -50,12 +51,26 @@ test("the system prompt is pinned: a changed prompt without a PROMPT_VERSION bum
   expect(PROMPT_VERSION).toBe(1);
   expect(NARRATIVE_SCHEMA_VERSION).toBe(1);
   expect(DEFAULT_MODEL).toBe("anthropic/claude-haiku-4.5");
-  expect(createHash("sha256").update(SYSTEM_PROMPT).digest("hex")).toBe(
-    "474253bcc7dd3aad05861b7ff3994ceb502973285010ff51be4317f323b7455d",
+  expect(createHash("sha256").update(systemPrompt()).digest("hex")).toBe(
+    "207d1dc7af2b246442416c7cfec792c1fd9535ade1362122ccc106186895b3a2",
   );
 });
 
-test("the prompt carries claims, limits and links, not context series", () => {
+test("the system prompt includes site copy and the glossary", () => {
+  expect(systemPrompt()).toContain("Clock times in public sentences");
+  expect(systemPrompt()).toContain("**Trading period.**");
+  expect(systemPrompt()).toContain("Site copy wins for sentences");
+  expect(systemPrompt()).toContain("Two or three sentences each");
+  expect(systemPrompt()).toContain("Ōtāhuhu averaged $3,296.04/MWh");
+  expect(systemPrompt()).toContain("The JSON informs the story");
+  expect(systemPrompt()).not.toContain("Confirmed: North Island");
+});
+
+test("the cache thread id is stable across episodes", () => {
+  expect(NARRATIVE_CACHE_THREAD_ID).toBe("gridwatch-narrative");
+});
+
+test("the prompt carries claims, limits, links and NZ clock labels", () => {
   const payload = promptPayload(pkg);
   const json = JSON.stringify(payload);
   expect(json).toContain("3296.04");
@@ -64,6 +79,8 @@ test("the prompt carries claims, limits and links, not context series", () => {
   expect(json).not.toContain("generation_by_fuel");
   expect(payload.claims).toHaveLength(2);
   expect(payload.claims[1]?.confidence).toBe("possible explanation");
+  expect(payload.episode.clock).toBe("5:30pm–7:30pm");
+  expect(payload.episode.clock_by_period["36"]).toBe("5:30pm–6:00pm");
 });
 
 test("parseNarrativeText reads the three JSON fields and strips fences", () => {
@@ -166,4 +183,41 @@ test("checkNarrative accepts a 27 July fixture that only uses package facts", ()
   );
   expect(result.ok).toBe(true);
   expect(result.mismatches).toEqual([]);
+});
+
+test("checkNarrative does not read 2201 out of OTA2201", () => {
+  const result = checkNarrative(
+    {
+      what_happened: "Prices rose at OTA2201.",
+      why: "Possible explanation: a constraint.",
+      what_it_means: "North Island scarcity.",
+    },
+    pkg,
+  );
+  expect(result.ok).toBe(true);
+});
+
+test("checkNarrative accepts clock times from the payload", () => {
+  const result = checkNarrative(
+    {
+      what_happened: "From 5:30pm to 7:30pm Otahuhu reached $3,296.04/MWh.",
+      why: "Possible explanation: a constraint.",
+      what_it_means: "North Island scarcity.",
+    },
+    pkg,
+  );
+  expect(result.ok).toBe(true);
+});
+
+test("checkNarrative rejects a clock time that is not in the payload", () => {
+  const result = checkNarrative(
+    {
+      what_happened: "Prices rose at 9:00pm.",
+      why: "Possible explanation: a constraint.",
+      what_it_means: "North Island scarcity.",
+    },
+    promptPayload(pkg),
+  );
+  expect(result.ok).toBe(false);
+  expect(result.mismatches).toEqual([{ kind: "time", text: "9:00pm" }]);
 });
