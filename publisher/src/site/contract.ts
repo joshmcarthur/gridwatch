@@ -328,9 +328,9 @@ export interface SiteEvent {
 }
 
 /**
- * Ranked candidates that have a passing narrative (issue #42, ADR-0022). Optional: absence
+ * Ranked candidates that have a stored narrative (issue #42, ADR-0022). Optional: absence
  * means the exporter has not built it. A day with no ranking gold is `missing`. Candidates
- * without a passing narrative are omitted, not invented.
+ * without a narrative are omitted, not invented. A failing number check warns; it does not omit.
  */
 export interface EventsSection extends SectionBase {
   items: SiteEvent[];

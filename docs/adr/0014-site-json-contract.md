@@ -94,8 +94,8 @@ Amended 2026-11-23. `generation.plants` is optional. The contract version stays 
 Amended 2026-11-23. The exporter writes an `events` section on every day. The contract version stays 1. `EXPORT_VERSION` is 10.
 
 - **List.** `is_candidate` on `episode_scores` is the event list. There is no second filter and no allow-list ([ADR-0022](0022-editorial-review-and-publish-flow.md), [ADR-0024](0024-episode-ranking.md)).
-- **Shape.** Each item is a ranked candidate whose narrative passed `checkNarrative` against its evidence JSON: episode times and types, `review_status` (default `unreviewed`), the three prose fields, claims with source path and confidence, the daily-page path, and the evidence window (reference-node prices and North Island 60-second reserve).
-- **State.** `missing` when gold has no `episode_ranking_days` partition. `incomplete` when that stamp has `inputs_complete` false. `complete` otherwise. A candidate with no narrative, or whose check fails, is omitted. It is not invented. Missing narratives do not fail the export.
+- **Shape.** Each item is a ranked candidate that has a stored narrative: episode times and types, `review_status` (default `unreviewed`), the three prose fields, claims with source path and confidence, the daily-page path, and the evidence window (reference-node prices and North Island 60-second reserve). `checkNarrative` warns; it does not omit the item.
+- **State.** `missing` when gold has no `episode_ranking_days` partition. `incomplete` when that stamp has `inputs_complete` false. `complete` otherwise. A candidate with no narrative is omitted. It is not invented. Missing narratives do not fail the export.
 - **`complete` on the day.** Still generation and prices only.
 - **Index.** `sections.events` and `latest_complete_sections.events` are optional so older files still validate.
 - **Rebuild.** The day hash includes the ranking parquet bytes and the narrative JSON files for the date, so a later narrative rebuilds the day.

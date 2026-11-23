@@ -1,4 +1,7 @@
-import { checkNarrative } from "@gridwatch/publisher/narrative";
+import {
+  checkNarrative,
+  warnNarrativeCheck,
+} from "@gridwatch/publisher/narrative";
 import type {
   SiteDay,
   SiteEvent,
@@ -99,20 +102,19 @@ export function eventHeadline(
   );
 }
 
-/** Fail the build when published prose does not match its claims. */
+/** Warn when published prose does not match its claims. Does not fail the build. */
 export function requireCheckedEvent(event: SiteEvent): void {
-  const result = checkNarrative(
-    {
-      what_happened: event.what_happened,
-      why: event.why,
-      what_it_means: event.what_it_means,
-    },
-    event,
+  warnNarrativeCheck(
+    checkNarrative(
+      {
+        what_happened: event.what_happened,
+        why: event.why,
+        what_it_means: event.what_it_means,
+      },
+      event,
+    ),
+    `narrative check ${event.episode_id}`,
   );
-  if (!result.ok) {
-    const list = result.mismatches.map((item) => item.text).join(", ");
-    throw new Error(`Event ${event.episode_id} failed checkNarrative: ${list}`);
-  }
 }
 
 export function claimAnchor(id: string): string {

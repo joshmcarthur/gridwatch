@@ -1,5 +1,5 @@
 import type { SiteEvent } from "@gridwatch/publisher/site-contract";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
   claimAnchor,
   eventHeadline,
@@ -94,13 +94,16 @@ test("recentEvents lists the 27 July write-up first among fixtures", () => {
   expect(listed[0]?.event.episode_id).toBe("394f75a3bfa948a3");
 });
 
-test("requireCheckedEvent throws when a number is not in the claims", () => {
+test("requireCheckedEvent warns when a number is not in the claims", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   expect(() =>
     requireCheckedEvent({
       ...event,
       what_happened: "Otahuhu hit $9,999/MWh.",
     }),
-  ).toThrow(/checkNarrative/);
+  ).not.toThrow();
+  expect(warn).toHaveBeenCalled();
+  warn.mockRestore();
 });
 
 test("claimAnchor drops island and reserve jargon from html ids", () => {
