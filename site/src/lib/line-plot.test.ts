@@ -87,6 +87,36 @@ test("a band is drawn under the line", () => {
   expect(svg).toMatch(/<rect/i);
 });
 
+test("each band is a rect behind the line", () => {
+  const start = periods[0]?.start;
+  const mid = periods[1]?.start;
+  const end = periods[2]?.start;
+  if (!start || !mid || !end) throw new Error("expected three periods");
+  const none = svgOf(
+    plot([{ id: "OTA", values: [10, 20, 30], colour: "#111", dashed: false }]),
+  );
+  const withBands = svgOf(
+    plot([{ id: "OTA", values: [10, 20, 30], colour: "#111", dashed: false }], {
+      bands: [
+        {
+          start,
+          end,
+          title: "Unusual stretch 12:00am–1:00am",
+        },
+        {
+          start: mid,
+          end,
+          title: "Unusual stretch 12:30am–1:00am",
+        },
+      ],
+    }),
+  );
+  expect(withBands).toContain("Unusual stretch 12:00am–1:00am");
+  expect((withBands.match(/<rect/g) ?? []).length).toBe(
+    (none.match(/<rect/g) ?? []).length + 2,
+  );
+});
+
 test("a zero line is drawn when asked", () => {
   const withZero = svgOf(
     plot(
