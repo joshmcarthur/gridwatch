@@ -10,7 +10,7 @@ import {
   type PromptPackage,
   parseNarrativeText,
   promptPayload,
-  SYSTEM_PROMPT,
+  systemPrompt,
   serializeNarrative,
 } from "./narrative.ts";
 
@@ -51,19 +51,19 @@ test("the system prompt is pinned: a changed prompt without a PROMPT_VERSION bum
   expect(PROMPT_VERSION).toBe(1);
   expect(NARRATIVE_SCHEMA_VERSION).toBe(1);
   expect(DEFAULT_MODEL).toBe("anthropic/claude-haiku-4.5");
-  expect(createHash("sha256").update(SYSTEM_PROMPT).digest("hex")).toBe(
+  expect(createHash("sha256").update(systemPrompt()).digest("hex")).toBe(
     "207d1dc7af2b246442416c7cfec792c1fd9535ade1362122ccc106186895b3a2",
   );
 });
 
 test("the system prompt includes site copy and the glossary", () => {
-  expect(SYSTEM_PROMPT).toContain("Clock times in public sentences");
-  expect(SYSTEM_PROMPT).toContain("**Trading period.**");
-  expect(SYSTEM_PROMPT).toContain("Site copy wins for sentences");
-  expect(SYSTEM_PROMPT).toContain("Two or three sentences each");
-  expect(SYSTEM_PROMPT).toContain("Ōtāhuhu averaged $3,296.04/MWh");
-  expect(SYSTEM_PROMPT).toContain("The JSON informs the story");
-  expect(SYSTEM_PROMPT).not.toContain("Confirmed: North Island");
+  expect(systemPrompt()).toContain("Clock times in public sentences");
+  expect(systemPrompt()).toContain("**Trading period.**");
+  expect(systemPrompt()).toContain("Site copy wins for sentences");
+  expect(systemPrompt()).toContain("Two or three sentences each");
+  expect(systemPrompt()).toContain("Ōtāhuhu averaged $3,296.04/MWh");
+  expect(systemPrompt()).toContain("The JSON informs the story");
+  expect(systemPrompt()).not.toContain("Confirmed: North Island");
 });
 
 test("the cache thread id is stable across episodes", () => {

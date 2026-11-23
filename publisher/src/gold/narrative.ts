@@ -79,8 +79,6 @@ const confidenceLabel = (level: Confidence): string => {
   }
 };
 
-const docsDir = join(dirname(fileURLToPath(import.meta.url)), "../../../docs");
-
 const NARRATIVE_INSTRUCTIONS = `You write Gridwatch event narratives for a curious non-specialist.
 
 The narrative is published prose. Site copy wins for sentences: clock times and place names, not trading-period numbers or point-of-connection codes in body copy. The glossary is meaning, not voice.
@@ -104,7 +102,13 @@ This sample is style only. Copy a figure from it only when the same figure is in
 Reply with JSON only, no markdown, in this shape:
 {"what_happened":"...","why":"...","what_it_means":"..."}`;
 
-export const SYSTEM_PROMPT = `${NARRATIVE_INSTRUCTIONS}
+let cachedSystemPrompt: string | undefined;
+
+/** Site copy and glossary. Load only when generating, not when the site imports the checker. */
+export const systemPrompt = (): string => {
+  if (cachedSystemPrompt !== undefined) return cachedSystemPrompt;
+  const docsDir = join(dirname(fileURLToPath(import.meta.url)), "../../../docs");
+  cachedSystemPrompt = `${NARRATIVE_INSTRUCTIONS}
 
 # Site copy
 
@@ -113,6 +117,8 @@ ${readFileSync(join(docsDir, "site-copy.md"), "utf8")}
 # Glossary
 
 ${readFileSync(join(docsDir, "glossary.md"), "utf8")}`;
+  return cachedSystemPrompt;
+};
 
 /** Stable OpenRouter session so system-prompt cache hits across episodes. */
 export const NARRATIVE_CACHE_THREAD_ID = "gridwatch-narrative";
@@ -201,7 +207,7 @@ export const generateNarrative = async (
 ): Promise<NarrativeRecord> => {
   const user = JSON.stringify(promptPayload(pkg));
   const text = await options.complete({
-    system: SYSTEM_PROMPT,
+    system: systemPrompt(),
     user,
     model: options.model,
   });
