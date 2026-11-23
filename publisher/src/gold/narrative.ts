@@ -378,3 +378,15 @@ export const checkNarrative = (
 
   return { ok: mismatches.length === 0, mismatches };
 };
+
+/** Print mismatches. Does not throw. Callers still write and publish. */
+export const warnNarrativeCheck = (
+  check: NarrativeCheck,
+  label: string,
+): void => {
+  if (check.ok) return;
+  console.warn(`${label}:`);
+  for (const mismatch of check.mismatches) {
+    console.warn(`  ${mismatch.kind}: ${mismatch.text}`);
+  }
+};

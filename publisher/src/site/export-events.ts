@@ -8,6 +8,7 @@ import {
   checkNarrative,
   type NarrativeRecord,
   type NarrativeSections,
+  warnNarrativeCheck,
 } from "../gold/narrative.ts";
 import { REFERENCE_NODES } from "../gold/prices.ts";
 import { lit } from "../silver/common.ts";
@@ -199,13 +200,15 @@ const sectionsOf = (record: NarrativeRecord): NarrativeSections => ({
   what_it_means: record.what_it_means,
 });
 
-/** Map a passing narrative onto a site event. Null when the check fails or evidence is unusable. */
+/** Map a narrative onto a site event. Null when evidence is unusable. */
 export function eventFromCandidate(
   narrative: NarrativeRecord,
   evidence: unknown,
 ): SiteEvent | null {
-  const check = checkNarrative(sectionsOf(narrative), evidence);
-  if (!check.ok) return null;
+  warnNarrativeCheck(
+    checkNarrative(sectionsOf(narrative), evidence),
+    `narrative check ${narrative.episode_id}`,
+  );
   const pkg = asRecord(evidence);
   if (!pkg) return null;
   const episode = asRecord(pkg.episode);

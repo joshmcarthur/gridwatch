@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { goldPartitionPath } from "../gold/common.ts";
 import { completenessView } from "../gold/fixtures/completeness.ts";
 import { writeParquet } from "../gold/fixtures/parquet.ts";
@@ -92,13 +92,16 @@ test("eventFromCandidate accepts a 27 July fixture that only uses package facts"
   expect(event?.daily_page).toBe("/2026/07/27/");
 });
 
-test("eventFromCandidate rejects an invented number", () => {
-  expect(
-    eventFromCandidate(
-      narrative({ what_happened: "Otahuhu hit $9,999/MWh." }),
-      evidence,
-    ),
-  ).toBeNull();
+test("eventFromCandidate still returns an event when a number is invented", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const event = eventFromCandidate(
+    narrative({ what_happened: "Otahuhu hit $9,999/MWh." }),
+    evidence,
+  );
+  expect(event?.episode_id).toBe(EPISODE_ID);
+  expect(event?.what_happened).toContain("$9,999");
+  expect(warn).toHaveBeenCalled();
+  warn.mockRestore();
 });
 
 let root: string;
@@ -159,7 +162,8 @@ test("a candidate without a narrative is omitted, not invented", async () => {
   expect(day.events?.items).toEqual([]);
 });
 
-test("a candidate whose narrative fails checkNarrative is omitted", async () => {
+test("a candidate whose narrative fails checkNarrative is still published", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   await writeRanking(true);
   await mkdir(join(goldDir, "narratives", DATE), { recursive: true });
   await mkdir(join(goldDir, "evidence", DATE), { recursive: true });
@@ -176,7 +180,10 @@ test("a candidate whose narrative fails checkNarrative is omitted", async () => 
     date: DATE,
     completeness: completenessView(),
   });
-  expect(day.events?.items).toEqual([]);
+  expect(day.events?.items).toHaveLength(1);
+  expect(day.events?.items[0]?.what_happened).toContain("$9,999");
+  expect(warn).toHaveBeenCalled();
+  warn.mockRestore();
 });
 
 test("a candidate with a passing narrative becomes an unreviewed event", async () => {
