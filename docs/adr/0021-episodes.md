@@ -107,14 +107,16 @@ The generation-change and demand-deviation detectors are not episode inputs in v
 
 Why they are not members. Plant `generation_low` and fuel `generation_low` are island-wide in the join rules. Taking them as members would glue unrelated plants and fuels into one blob, and into any overlapping `price_high` episode. That would change seeds, member arrays and episode ids. `generation_high` has no partner. `demand_low` has no partner. National `NZ` demand has a null island and cannot join on island.
 
-What they do instead. They corroborate an episode without belonging to it. A fuel-level `generation_low` or an NI/SI `demand_high` corroborates an episode when it is on the same trading date, overlaps the episode span and has one of the episode's islands. The list is `CORROBORATION_RULES` in `episodes.ts`. Two readers use it:
+What they do instead. They corroborate an episode without belonging to it. A fuel-level `generation_low`, a plant-level `generation_low`, or an NI/SI `demand_high` corroborates an episode when it is on the same trading date, overlaps the episode span and has one of the episode's islands. The list is `CORROBORATION_RULES` in `episodes.ts`. Two readers use it:
 
 - The evidence package lists matches as `related_observations`, beside the members ([ADR-0025](0025-evidence-packages.md)).
 - The ranking scores them as `corroboration_component` ([ADR-0024](0024-episode-ranking.md)).
 
-Plant-level generation change stays out of both until its noise is cut ([#179](https://github.com/joshmcarthur/gridwatch/issues/179)). Whether any of these types should later become members is a separate decision, and it needs the grouping effect measured on the lake.
+Plant-level `generation_low` is on that list now that [#179](https://github.com/joshmcarthur/gridwatch/issues/179) has cut the noise ([#223](https://github.com/joshmcarthur/gridwatch/issues/223)). Whether any of these types should later become members is a separate decision, and it needs the grouping effect measured on the lake.
 
 Counts on the 2026-11-22 lake (136 days; 310 episodes before and after, because membership is unchanged): plant `generation_high` / `generation_low` 2,796 / 2,651, fuel 579 / 417, `demand_high` / `demand_low` 676 / 521.
+
+On the same 310 episodes, after the #179 floors (plant analysis_version 2: 250 observations) and #223: 9 episodes match plant `generation_low`. Corroboration count 0 / 1 / 2 is 187 / 116 / 7 with fuel and demand only, and 184 / 113 / 13 once plant is included. Candidates stay 31. 27 July 2026 does not pick up Huntly 1–4: that observation is `generation_high`.
 
 ### Stable `episode_id`
 
