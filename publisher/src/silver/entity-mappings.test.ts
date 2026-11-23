@@ -13,7 +13,7 @@ import { DuckDBInstance } from "@duckdb/node-api";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { publishDispatchEnergyPrices } from "./dispatch-energy-prices.ts";
 import { publishEntityMappings, TABLES } from "./entity-mappings.ts";
-import { FUEL_CATEGORIES, FUEL_MAP, UNIT_PLANT_OVERRIDES } from "./fuel-map.ts";
+import { FUEL_CATEGORIES, FUEL_MAP } from "./fuel-map.ts";
 import { publishGenerationFleet } from "./generation-fleet.ts";
 import { publishGenerationMd } from "./generation-md.ts";
 import { publishNetworkSupplyPoints } from "./network-supply-points.ts";
@@ -987,23 +987,22 @@ test("two plants at one POC link when their fuels differ", async () => {
 });
 
 test("UNIT_PLANT_OVERRIDES names a plant when two plants share a POC and fuel", async () => {
-  UNIT_PLANT_OVERRIDES["TWO1101:TWO0"] = "TWO/first";
-  try {
-    await writeNsp("2026-11-01", [nsp("TWO1101", "NI", "2020-01-01", null)]);
-    await writeGmd("2026-11-18", [
-      ["TWO", "TWO1101", "NET1", "first", "Hydro"],
-      ["TWO", "TWO1101", "NET1", "second", "Hydro"],
-    ]);
-    await writeFleet("2026-11-01", [fleetRow("TWO1101", "TWO0", "HYD")]);
-    await build("2026-11-18");
-    expect(
-      await query(
-        `SELECT unit_id, plant_id FROM ${table("entity_units", "2026-11-18")}`,
-      ),
-    ).toEqual([{ unit_id: "TWO1101:TWO0", plant_id: "TWO/first" }]);
-  } finally {
-    delete UNIT_PLANT_OVERRIDES["TWO1101:TWO0"];
-  }
+  await writeNsp("2026-11-01", [nsp("TWO1101", "NI", "2020-01-01", null)]);
+  await writeGmd("2026-11-18", [
+    ["TWO", "TWO1101", "NET1", "first", "Hydro"],
+    ["TWO", "TWO1101", "NET1", "second", "Hydro"],
+  ]);
+  await writeFleet("2026-11-01", [fleetRow("TWO1101", "TWO0", "HYD")]);
+  await publishEntityMappings({
+    silverDir,
+    date: "2026-11-18",
+    unitPlantOverrides: { "TWO1101:TWO0": "TWO/first" },
+  });
+  expect(
+    await query(
+      `SELECT unit_id, plant_id FROM ${table("entity_units", "2026-11-18")}`,
+    ),
+  ).toEqual([{ unit_id: "TWO1101:TWO0", plant_id: "TWO/first" }]);
 });
 
 test("inputs_sha256 is the same on every table and changes with an input version", async () => {

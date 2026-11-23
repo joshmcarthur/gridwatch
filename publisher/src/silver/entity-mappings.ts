@@ -183,6 +183,22 @@ export async function entityWantedVersions(
   return wanted;
 }
 
+function overrideTableSql(
+  table: string,
+  columns: readonly [string, string],
+  entries: ReadonlyArray<readonly [string, string]>,
+): string {
+  const [left, right] = columns;
+  if (entries.length === 0) {
+    return `CREATE TEMP TABLE ${table} AS
+           SELECT NULL::VARCHAR AS ${left}, NULL::VARCHAR AS ${right} WHERE false`;
+  }
+  return `CREATE TEMP TABLE ${table} AS SELECT * FROM (VALUES
+             ${entries
+               .map(([a, b]) => `(${lit(a)}, ${lit(b)})`)
+               .join(", ")}) t(${left}, ${right})`;
+}
+
 /**
  * Publish the entity mapping tables for one trading date, one partition per table:
  * `<silverDir>/<table>/trading_date=<date>/data.parquet`. The tables hold the mapping that
@@ -209,8 +225,13 @@ export async function entityWantedVersions(
 export async function publishEntityMappings(options: {
   silverDir: string;
   date: string;
+  unitPlantOverrides?: Readonly<Record<string, string>>;
 }): Promise<EntityMappingsResult> {
-  const { silverDir, date } = options;
+  const {
+    silverDir,
+    date,
+    unitPlantOverrides = UNIT_PLANT_OVERRIDES,
+  } = options;
   const day = `DATE ${lit(date)}`;
   const picked = pickInputs(await loadPartitions(silverDir), date);
   if (!picked) return { date, status: "missing" };
@@ -235,29 +256,19 @@ export async function publishEntityMappings(options: {
            .map(([code, category]) => `(${lit(code)}, ${lit(category)})`)
            .join(", ")}) t(fuel_code, fuel_category)`,
     );
-    const plantOverrides = Object.entries(FUEL_PLANT_OVERRIDES);
     await run(
-      plantOverrides.length === 0
-        ? `CREATE TEMP TABLE fuel_plant_overrides AS
-           SELECT NULL::VARCHAR AS plant_id, NULL::VARCHAR AS fuel_category WHERE false`
-        : `CREATE TEMP TABLE fuel_plant_overrides AS SELECT * FROM (VALUES
-             ${plantOverrides
-               .map(
-                 ([plantId, category]) => `(${lit(plantId)}, ${lit(category)})`,
-               )
-               .join(", ")}) t(plant_id, fuel_category)`,
+      overrideTableSql(
+        "fuel_plant_overrides",
+        ["plant_id", "fuel_category"],
+        Object.entries(FUEL_PLANT_OVERRIDES),
+      ),
     );
-    const unitOverrides = Object.entries(UNIT_PLANT_OVERRIDES);
     await run(
-      unitOverrides.length === 0
-        ? `CREATE TEMP TABLE unit_plant_overrides AS
-           SELECT NULL::VARCHAR AS unit_id, NULL::VARCHAR AS plant_id WHERE false`
-        : `CREATE TEMP TABLE unit_plant_overrides AS SELECT * FROM (VALUES
-             ${unitOverrides
-               .map(
-                 ([unitId, plantId]) => `(${lit(unitId)}, ${lit(plantId)})`,
-               )
-               .join(", ")}) t(unit_id, plant_id)`,
+      overrideTableSql(
+        "unit_plant_overrides",
+        ["unit_id", "plant_id"],
+        Object.entries(unitPlantOverrides),
+      ),
     );
 
     // NSP rows for the day. A row is in force when start_date <= day <= end_date (inclusive,
