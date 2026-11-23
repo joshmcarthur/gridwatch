@@ -175,7 +175,7 @@ const events = recentEvents(index, loadDay);
           {events.map(({ date, event }) => (
             <li>
               <a href={eventPath(date, event.episode_id)}>
-                {formatTradingDate(date)}: {eventHeadline(event)}
+                {formatTradingDate(date)}: {eventHeadline(event, loadDay(date))}
               </a>
             </li>
           ))}

@@ -83,12 +83,20 @@ export function findEvent(day: SiteDay, episodeId: string): SiteEvent {
   return event;
 }
 
-export function eventHeadline(event: SiteEvent): string {
-  return episodeHeadline({
-    observation_types: event.observation_types,
-    islands: event.islands,
-    member_count: event.observation_types.length,
-  });
+export function eventHeadline(
+  event: SiteEvent,
+  day: Pick<SiteDay, "periods">,
+): string {
+  return episodeHeadline(
+    {
+      observation_types: event.observation_types,
+      islands: event.islands,
+      member_count: event.observation_types.length,
+      start_utc: event.start_utc,
+      end_utc: event.end_utc,
+    },
+    day,
+  );
 }
 
 /** Fail the build when published prose does not match its claims. */

@@ -64,7 +64,8 @@ test("eventPath nests the event under the daily page", () => {
 });
 
 test("eventHeadline reuses the episode sentence", () => {
-  expect(eventHeadline(event)).toMatch(/high wholesale prices/i);
+  const day = loadSiteDay("2026-07-27");
+  expect(eventHeadline(event, day)).toMatch(/high wholesale prices/i);
 });
 
 test("requireCheckedEvent accepts the 27 July fixture", () => {

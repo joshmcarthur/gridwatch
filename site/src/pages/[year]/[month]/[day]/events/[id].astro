@@ -37,7 +37,7 @@ const day = loadSiteDay(date);
 const event = findEvent(day, id);
 requireCheckedEvent(event);
 const titleDate = formatTradingDate(date);
-const headline = eventHeadline(event);
+const headline = eventHeadline(event, day);
 const clock = episodeClockRange(event, day);
 const charts = eventWindowChart(event);
 const dailyHref = dailyPath(date);
