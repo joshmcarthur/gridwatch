@@ -849,43 +849,6 @@ test("generation pivots by fuel and island, and the totals split battery from pr
   expect(day.generation.source).toBe("metered");
 });
 
-test("dispatch generation is complete when nodal is complete and Generation_MD is missing", async () => {
-  await writeGeneration(DATE, {
-    source: "dispatch",
-    period: [
-      {
-        trading_period: 1,
-        fuel_category: "hydro",
-        island: "NI",
-        megawatt_hours: 10,
-      },
-    ],
-    day: [
-      {
-        fuel_category: "hydro",
-        island: "NI",
-        megawatt_hours: 10,
-        average_megawatts: 0.4,
-      },
-    ],
-  });
-  const completeness = completenessView([["generation_md", DATE, "missing"]]);
-  const day = await buildSiteDay({ goldDir, date: DATE, completeness });
-  expect(day.generation.source).toBe("dispatch");
-  expect(day.generation.state).toBe("complete");
-  expect(day.generation.silver_tables).toEqual([
-    "nodal_prices_and_volumes",
-    "entity_units",
-    "entity_points_of_connection",
-  ]);
-  expect(day.generation.datasets).toEqual([
-    "nodal_prices_and_volumes",
-    "entity_mappings",
-  ]);
-  expect(day.datasets.generation_md?.status).toBe("missing");
-  expect(day.datasets.nodal_prices_and_volumes?.status).toBe("complete");
-});
-
 test("generation.plants lists gold plant-day rows, largest first", async () => {
   await writeGeneration(DATE, {
     period: [

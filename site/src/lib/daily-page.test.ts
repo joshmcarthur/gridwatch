@@ -204,7 +204,7 @@ test("completenessNotice labels missing reserve prices", () => {
   expect(text).not.toMatch(/dispatch_reserve_prices/);
 });
 
-test("completenessNotice labels missing nodal dispatch generation", () => {
+test("completenessNotice labels missing nodal prices and volumes", () => {
   const day = {
     complete: false,
     datasets: {
@@ -215,7 +215,7 @@ test("completenessNotice labels missing nodal dispatch generation", () => {
     prices: { state: "complete" as const },
   };
   const text = completenessNotice(day)?.paragraphs.join(" ");
-  expect(text).toMatch(/dispatch generation/i);
+  expect(text).toMatch(/nodal prices and volumes/i);
   expect(text).not.toMatch(/nodal_prices_and_volumes/);
 });
 

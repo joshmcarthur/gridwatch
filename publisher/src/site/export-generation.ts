@@ -2,10 +2,9 @@ import { existsSync } from "node:fs";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { goldPartitionPath } from "../gold/common.ts";
 import {
-  DISPATCH_INPUTS,
   INPUTS as GENERATION_INPUTS,
   TABLES as GENERATION_TABLES,
-  METERED_INPUTS,
+  INPUTS_BY_SOURCE,
 } from "../gold/generation.ts";
 import { lit } from "../silver/common.ts";
 import type { CompletenessView } from "../silver/completeness.ts";
@@ -23,10 +22,10 @@ import {
 } from "./export-common.ts";
 import {
   numberOrNull,
-  readStamp,
   round,
   roundOrNull,
   rowsOf,
+  type Stamp,
 } from "./gold-read.ts";
 
 export const GENERATION_SECTION: Section = {
@@ -47,11 +46,10 @@ export async function buildGeneration(
     GENERATION_SECTION.sentinel,
     date,
   );
-  const stamp = await readStamp(connection, sentinel);
-  const source = stamp ? await readSource(connection, sentinel) : undefined;
+  const stamp = await readGenerationStamp(connection, sentinel);
   const path = {
     ...GENERATION_SECTION,
-    inputs: source === "dispatch" ? DISPATCH_INPUTS : METERED_INPUTS,
+    inputs: stamp ? INPUTS_BY_SOURCE[stamp.source] : GENERATION_INPUTS,
   };
   const base = {
     silver_tables: path.inputs.map((input) => input.table),
@@ -168,17 +166,38 @@ export async function buildGeneration(
       primary_megawatt_hours: round(primary, 3),
       battery_megawatt_hours: round(battery, 3),
     },
-    source,
+    source: stamp.source,
   };
 }
 
-async function readSource(
+async function readGenerationStamp(
   connection: DuckDBConnection,
   path: string,
-): Promise<GenerationSource> {
+): Promise<(Stamp & { source: GenerationSource }) | null> {
+  if (!existsSync(path)) return null;
   const reader = await connection.runAndReadAll(
-    `SELECT any_value(source) AS source FROM read_parquet(${lit(path)})`,
+    `SELECT any_value(analysis_version) AS analysis_version,
+       any_value(inputs_sha256) AS inputs_sha256,
+       bool_and(inputs_complete) AS inputs_complete,
+       any_value(source) AS source
+     FROM read_parquet(${lit(path)})`,
   );
-  const [row] = reader.getRowObjectsJson() as Array<{ source: unknown }>;
-  return row?.source === "dispatch" ? "dispatch" : "metered";
+  const [row] = reader.getRowObjectsJson() as Array<{
+    analysis_version: unknown;
+    inputs_sha256: unknown;
+    inputs_complete: unknown;
+    source: unknown;
+  }>;
+  if (!row || typeof row.inputs_sha256 !== "string") return null;
+  return {
+    analysis_version: Number(row.analysis_version),
+    inputs_sha256: row.inputs_sha256,
+    inputs_complete: row.inputs_complete === true,
+    source: generationSource(row.source),
+  };
+}
+
+function generationSource(value: unknown): GenerationSource {
+  if (value === "metered" || value === "dispatch") return value;
+  throw new TypeError(`generation source ${String(value)}`);
 }
