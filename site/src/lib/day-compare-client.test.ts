@@ -109,3 +109,45 @@ test("a failed fetch leaves the fallback sentence", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("with an open button, nothing loads until the reader asks", async () => {
+  const { document } = parseHTML(`<!doctype html><html><body>
+    <div data-compare-root>
+      <button type="button" data-compare-open hidden>Compare with another day</button>
+      <div data-day-compare hidden>
+        <form><select id="compare-day">
+          <option value="2026-09-26" selected>Saturday 26 September 2026</option>
+        </select></form>
+        <h3 id="compare-heading"></h3>
+        <p id="compare-summary"></p>
+        <div data-compare-other></div>
+      </div>
+    </div>
+  </body></html>`);
+  const originalFetch = globalThis.fetch;
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify(mix26));
+  }) as typeof fetch;
+  try {
+    await bindDayCompare(document);
+    const open = document.querySelector<HTMLButtonElement>(
+      "[data-compare-open]",
+    );
+    expect(open?.hidden).toBe(false);
+    expect(urls).toEqual([]);
+    expect(
+      document.querySelector("[data-day-compare]")?.hasAttribute("hidden"),
+    ).toBe(true);
+    open?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(urls).toEqual(["/2026/09/26/mix.json"]);
+    expect(open?.hidden).toBe(true);
+    expect(
+      document.querySelector("[data-day-compare]")?.hasAttribute("hidden"),
+    ).toBe(false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

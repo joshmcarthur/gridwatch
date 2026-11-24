@@ -149,7 +149,7 @@ test("headline names the kind of day without a unit lecture", () => {
       id: "price",
       label: "Wholesale price",
       href: "#word-wholesale-price",
-      value: "$20 to $73 / MWh",
+      value: "2.0c to 7.3c per kWh",
     },
     {
       id: "islands",
@@ -258,7 +258,7 @@ test("close sample prices use one typical figure", () => {
   expect(headline.sentence).toBe(
     "Hydro made most of the power, and wholesale prices stayed close across Ōtāhuhu, Haywards and Benmore.",
   );
-  expect(headline.stats[1]?.value).toBe("$50 / MWh");
+  expect(headline.stats[1]?.value).toBe("5.0c per kWh");
   expect(headline.stats[2]?.value).toBe("Stayed close");
 });
 
