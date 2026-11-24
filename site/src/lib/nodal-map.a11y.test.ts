@@ -17,7 +17,8 @@ test.skipIf(!existsSync(builtDaily))(
   () => {
     const html = readFileSync(builtDaily, "utf8");
     expect(html).toContain('id="map"');
-    expect(html).toContain('aria-labelledby="map-heading"');
+    expect(html).toContain('aria-label="Wholesale prices on the map"');
+    expect(html).not.toContain("The day on the map");
     expect(html).toContain('role="img"');
     expect(html).toContain(
       'aria-labelledby="nodal-map-chart-title nodal-map-chart-summary"',

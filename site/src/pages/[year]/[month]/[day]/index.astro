@@ -88,8 +88,7 @@ const publishedEvents = eventsOnDay(day);
       </dl>
     </header>
 
-    <section class="slot" id="map" aria-labelledby="map-heading">
-      <h2 id="map-heading">The day on the map</h2>
+    <section class="slot" id="map" aria-label="Wholesale prices on the map">
       {gap && <p class="gap">{gap}</p>}
       <NodalPriceMap day={day} story={story} />
     </section>
