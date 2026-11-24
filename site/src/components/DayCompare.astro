@@ -31,6 +31,9 @@ const showCompare = thisMix !== null && other !== null && options.length > 0;
           <div class="chart-body">
             <GenerationMixChart day={day} />
           </div>
+          <button type="button" class="compare-open" data-compare-open hidden>
+            Compare with another day
+          </button>
         </div>
         <div data-day-compare hidden>
           <form>
@@ -72,6 +75,26 @@ const showCompare = thisMix !== null && other !== null && options.length > 0;
 </script>
 
 <style>
+  .compare-open {
+    align-self: flex-start;
+    font: inherit;
+    font-size: var(--text-label);
+    border: 1px solid var(--color-rule);
+    background: var(--color-card);
+    border-radius: 999px;
+    padding: var(--space-1) var(--space-4);
+    cursor: pointer;
+  }
+
+  .compare[data-paired] .compare-open {
+    display: none;
+  }
+
+  /* One chart until the reader asks to compare: keep it the width it has when paired. */
+  .compare:not([data-paired]) [data-compare-this] {
+    max-width: 34rem;
+  }
+
   .compare,
   .pair,
   [data-day-compare],

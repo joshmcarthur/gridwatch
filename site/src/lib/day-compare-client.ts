@@ -36,22 +36,38 @@ export async function loadMix(root: ParentNode, date: string): Promise<void> {
   }
 }
 
-/** Show the compare island and load the selected day's mix SVGs. */
+/**
+ * Offer a comparison with another day. Nothing loads until the reader asks, so the page
+ * shows one generation chart by default (ADR-0029).
+ */
 export async function bindDayCompare(
   root: ParentNode = document,
 ): Promise<void> {
-  const compare = root.querySelector("[data-day-compare]");
+  const compare = root.querySelector<HTMLElement>("[data-day-compare]");
   if (!compare) return;
   const select = compare.querySelector<HTMLSelectElement>("#compare-day");
   const form = compare.querySelector("form");
+  const open = root.querySelector<HTMLButtonElement>("[data-compare-open]");
   if (!select) return;
-  compare.removeAttribute("hidden");
-  compare.closest("[data-compare-root]")?.setAttribute("data-paired", "");
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
   });
   select.addEventListener("change", () => {
     void loadMix(compare, select.value);
   });
-  await loadMix(compare, select.value);
+  const show = async () => {
+    compare.removeAttribute("hidden");
+    compare.closest("[data-compare-root]")?.setAttribute("data-paired", "");
+    if (open) open.hidden = true;
+    await loadMix(compare, select.value);
+    select.focus();
+  };
+  if (!open) {
+    await show();
+    return;
+  }
+  open.hidden = false;
+  open.addEventListener("click", () => {
+    void show();
+  });
 }

@@ -8,16 +8,11 @@ import type {
 } from "@gridwatch/publisher/site-contract";
 import { episodeHeadline } from "./episode-copy.ts";
 import { FUEL_LABELS, type StackFuel } from "./generation-mix.ts";
+import { centsPerKwh } from "./price-regions.ts";
 
 const energyFormat = new Intl.NumberFormat("en-NZ", {
   maximumFractionDigits: 0,
 });
-const moneyFormat = new Intl.NumberFormat("en-NZ", {
-  style: "currency",
-  currency: "NZD",
-  maximumFractionDigits: 0,
-});
-
 /** Daily mean prices this far apart still count as close. */
 const CLOSE_DOLLARS = 10;
 /** Daily mean prices this far apart or more are far apart. */
@@ -281,14 +276,14 @@ function priceStat(
 ): DayStat {
   let value = "No numbers yet";
   if (means.length === 1) {
-    value = `${moneyFormat.format(means[0] ?? 0)} / MWh`;
+    value = `${centsPerKwh(means[0] ?? 0)} per kWh`;
   } else if (means.length > 1 && agreement === "close") {
     const typical = means.reduce((sum, price) => sum + price, 0) / means.length;
-    value = `${moneyFormat.format(typical)} / MWh`;
+    value = `${centsPerKwh(typical)} per kWh`;
   } else if (means.length > 1) {
-    const low = moneyFormat.format(Math.min(...means));
-    const high = moneyFormat.format(Math.max(...means));
-    value = `${low} to ${high} / MWh`;
+    const low = centsPerKwh(Math.min(...means));
+    const high = centsPerKwh(Math.max(...means));
+    value = `${low} to ${high} per kWh`;
   }
   return {
     id: "price",

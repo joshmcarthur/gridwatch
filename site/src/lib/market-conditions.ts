@@ -4,6 +4,7 @@ import type {
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
 import { dailyPath, pageLead } from "./daily-page.ts";
+import { centsPerKwh } from "./price-regions.ts";
 import { formatTradingDate } from "./site-data.ts";
 
 const RANK_WINDOW = 365;
@@ -213,7 +214,7 @@ const STAT_METRICS: Array<{
     section: "prices",
     subject: "Wholesale prices were",
     metric: meanReferencePrice,
-    change: (delta) => `${money.format(Math.abs(delta))} per megawatt-hour`,
+    change: (delta) => `${centsPerKwh(Math.abs(delta))} per kWh`,
   },
   {
     id: "islands",
@@ -311,9 +312,8 @@ export function leadFinding(
   }
   if (best) return { sentence: best.sentence, short: best.short };
   if (compared === 0) return null;
-  const days = Math.min(earlierCount, RANK_WINDOW);
   return {
-    sentence: `None of the day's main figures was far from normal against the ${days} earlier complete days on this site.`,
+    sentence: `None of the day's main figures was far from usual for ${spanPhrase(earlierCount)}.`,
     short: "Main figures about usual",
   };
 }
@@ -570,21 +570,37 @@ function bandLabel(band: RankBand | null, earlierCount: number): string | null {
   return `That was ${bandPhrase(band, earlierCount)}.`;
 }
 
-function bandPhrase(band: RankBand, earlierCount: number): string {
+/**
+ * Where a figure sits, in plain words. The span is "the past year" once a year of
+ * earlier days exists, else the past N months (ADR-0029: no day counts in prose).
+ */
+function spanPhrase(earlierCount: number): string {
   const days = Math.min(earlierCount, RANK_WINDOW);
-  const pastYear = days >= RANK_WINDOW;
-  const against = pastYear
-    ? "the past year"
-    : `the ${days} earlier complete days on this site`;
-  const most = pastYear ? "most days in the past year" : `most of ${against}`;
+  const months = Math.round(days / 30.4);
+  if (days >= RANK_WINDOW) return "the past year";
+  return months >= 2
+    ? `the past ${months} months`
+    : `the ${days} earlier days on this site`;
+}
+
+function bandPhrase(band: RankBand, earlierCount: number): string {
+  const span = spanPhrase(earlierCount);
+  // "the past year" and "the past 11 months" read as periods; a short history reads as a count.
+  const period = span.startsWith("the past");
   if (band === "lower than most days in the past year") {
-    return `lower than ${most}`;
+    return period
+      ? `lower than most days in ${span}`
+      : `lower than most of ${span}`;
   }
-  if (band === "about usual") return `about usual against ${against}`;
-  if (band === "higher than most") return `higher than ${most}`;
-  return pastYear
-    ? "one of the highest days in the past year"
-    : `one of the highest of ${against}`;
+  if (band === "about usual") return `about usual for ${span}`;
+  if (band === "higher than most") {
+    return period
+      ? `higher than most days in ${span}`
+      : `higher than most of ${span}`;
+  }
+  return period
+    ? `one of the highest in ${span}`
+    : `one of the highest of ${span}`;
 }
 
 function formatReserveMoney(value: number): string {
