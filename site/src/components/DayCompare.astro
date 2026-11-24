@@ -27,7 +27,10 @@ const showCompare = thisMix !== null && other !== null && options.length > 0;
     <div class="compare" data-compare-root>
       <div class="pair">
         <div data-compare-this>
-          <GenerationMixChart day={day} />
+          <h3 class="this-heading">{formatTradingDate(date)}</h3>
+          <div class="chart-body">
+            <GenerationMixChart day={day} />
+          </div>
         </div>
         <div data-day-compare hidden>
           <form>
@@ -47,7 +50,7 @@ const showCompare = thisMix !== null && other !== null && options.length > 0;
           </form>
           <h3 id="compare-heading">{formatTradingDate(other.date)}</h3>
           <p id="compare-summary" aria-live="polite"></p>
-          <div data-compare-other></div>
+          <div class="chart-body" data-compare-other></div>
         </div>
       </div>
       <noscript>
@@ -73,19 +76,66 @@ const showCompare = thisMix !== null && other !== null && options.length > 0;
   .pair,
   [data-day-compare],
   [data-compare-this],
-  [data-compare-other] {
+  [data-compare-other],
+  .chart-body {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  [data-compare-this] .this-heading {
+    display: none;
+  }
+
+  .compare[data-paired] [data-compare-this] .this-heading {
+    display: block;
   }
 
   @media (min-width: 50rem) {
     .compare[data-paired] .pair {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: var(--space-5);
-      align-items: start;
+      grid-template-rows: auto auto auto auto;
+      column-gap: var(--space-5);
+      row-gap: var(--space-4);
     }
+
+    .compare[data-paired] [data-compare-this],
+    .compare[data-paired] [data-day-compare] {
+      display: grid;
+      grid-template-rows: subgrid;
+      grid-row: 1 / span 4;
+      min-width: 0;
+    }
+
+    .compare[data-paired] [data-compare-this] {
+      grid-column: 1;
+    }
+
+    .compare[data-paired] [data-day-compare] {
+      grid-column: 2;
+    }
+
+    .compare[data-paired] [data-day-compare] form {
+      grid-row: 1;
+    }
+
+    .compare[data-paired] [data-compare-this] .this-heading,
+    .compare[data-paired] [data-day-compare] h3 {
+      grid-row: 2;
+    }
+
+    .compare[data-paired] #compare-summary {
+      grid-row: 3;
+    }
+
+    .compare[data-paired] .chart-body {
+      grid-row: 4;
+    }
+  }
+
+  .compare [data-day-compare][hidden] {
+    display: none;
   }
 
   form {
@@ -110,14 +160,10 @@ const showCompare = thisMix !== null && other !== null && options.length > 0;
     color: var(--color-ink-muted);
   }
 
-  [data-compare-other] :global(svg) {
+  .compare .pair :global(svg) {
     width: 100%;
     max-width: 100%;
     height: auto;
     display: block;
-  }
-
-  .pair :global(svg) {
-    max-width: 100%;
   }
 </style>
