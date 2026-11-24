@@ -114,7 +114,7 @@ export function renderSankeySvg(chart: EnergySankey): string {
 
   for (const box of boxes) {
     const rect = document.createElementNS(SVG_NS, "rect");
-    rect.setAttribute("data-id", box.node.id);
+    rect.setAttribute("data-id", svgNodeId(box.node.id));
     rect.setAttribute("x", String(box.x));
     rect.setAttribute("y", String(box.y));
     rect.setAttribute("width", String(NODE_WIDTH));
@@ -409,6 +409,13 @@ function nodeFill(node: SankeyNode): string {
       return _exhaustive;
     }
   }
+}
+
+/** Public SVG ids. The page must not contain the tokens NI or SI. */
+export function svgNodeId(id: string): string {
+  if (id.endsWith(":NI")) return `${id.slice(0, -3)}:north`;
+  if (id.endsWith(":SI")) return `${id.slice(0, -3)}:south`;
+  return id;
 }
 
 function formatMwh(value: number): string {

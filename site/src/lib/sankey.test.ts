@@ -15,7 +15,7 @@ import {
   sankeySummary,
   sankeyTable,
 } from "./sankey.ts";
-import { renderSankeySvg, sankeyLegend } from "./sankey-svg.ts";
+import { renderSankeySvg, sankeyLegend, svgNodeId } from "./sankey-svg.ts";
 
 const fixtureUnknown: unknown = fixtureJson;
 assertSiteDay(fixtureUnknown);
@@ -341,6 +341,8 @@ test("the SVG keeps North Island above South Island and hops the cable between t
   expect(niHydro.y + niHydro.height).toBeLessThan(siHydro.y);
   expect(Math.abs(niHydro.y - ni.y)).toBeLessThan(Math.abs(niHydro.y - si.y));
   expect(Math.abs(siHydro.y - si.y)).toBeLessThan(Math.abs(siHydro.y - ni.y));
+  expect(svg).not.toMatch(/\bNI\b/);
+  expect(svg).not.toMatch(/\bSI\b/);
 });
 
 test("the numbers table is the gold day table and does not say consumption", () => {
@@ -366,7 +368,7 @@ function svgRect(
 ): { x: number; y: number; height: number } {
   const tag = [...svg.matchAll(/<rect\b[^>]*>/g)]
     .map((match) => match[0])
-    .find((open) => open.includes(`data-id="${id}"`));
+    .find((open) => open.includes(`data-id="${svgNodeId(id)}"`));
   if (!tag) throw new Error(`missing rect ${id}`);
   const x = tag.match(/\bx="([^"]+)"/)?.[1];
   const y = tag.match(/\by="([^"]+)"/)?.[1];
