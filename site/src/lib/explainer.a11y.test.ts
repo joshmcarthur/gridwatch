@@ -71,3 +71,85 @@ test.skipIf(!existsSync(explainerPage))(
     expect(html).not.toMatch(/when that day is published here/);
   },
 );
+
+const illustratedBuilt = [
+  {
+    slug: "transmission-constraints",
+    chartIds: ["price-chart-title"],
+    diagram: "When a line is full, prices come apart",
+  },
+  {
+    slug: "instantaneous-reserves",
+    chartIds: ["reserve-fast-title", "reserve-chart-title"],
+    diagram: "What instantaneous reserve is for",
+  },
+  {
+    slug: "hvdc-link",
+    chartIds: ["energy-sankey-chart-title"],
+    diagram: "How the Cook Strait link carries power",
+  },
+  {
+    slug: "wind",
+    chartIds: ["generation-mix-chart-title"],
+    diagram: "When the wind drops, other stations run",
+  },
+] as const;
+
+const mechanismSlugs = [
+  "marginal-generator",
+  "hydro-scarcity",
+  "frequency-keeping",
+  "wholesale-and-the-bill",
+] as const;
+
+function builtExplainer(slug: string): string {
+  return fileURLToPath(
+    new URL(`../../dist/explainers/${slug}/index.html`, import.meta.url),
+  );
+}
+
+for (const page of illustratedBuilt) {
+  test.skipIf(!existsSync(builtExplainer(page.slug)))(
+    `built ${page.slug} reuses its daily chart`,
+    () => {
+      const html = readFileSync(builtExplainer(page.slug), "utf8");
+      expect(page.chartIds.some((id) => html.includes(`id="${id}"`))).toBe(
+        true,
+      );
+      expect(html).toContain('aria-labelledby="visual"');
+      expect(html).toContain(page.diagram);
+      expect(html).toContain('href="/2026/07/27/"');
+    },
+  );
+}
+
+for (const slug of mechanismSlugs) {
+  test.skipIf(!existsSync(builtExplainer(slug)))(
+    `built ${slug} has no price chart and no example day`,
+    () => {
+      const html = readFileSync(builtExplainer(slug), "utf8");
+      expect(html).not.toContain('id="price-chart-title"');
+      expect(html).not.toContain('aria-labelledby="visual"');
+      expect(html).not.toContain('aria-labelledby="historical-example"');
+      expect(html).not.toContain("/2026/07/27/");
+      expect(html).not.toContain(
+        'aria-labelledby="links-to-gridwatch-data-and-events"',
+      );
+    },
+  );
+}
+
+test.skipIf(!existsSync(listingPage))(
+  "built explainer listing links every topic and omits an example line when there is no date",
+  () => {
+    const html = readFileSync(listingPage, "utf8");
+    for (const page of illustratedBuilt) {
+      expect(html).toContain(`href="/explainers/${page.slug}/"`);
+    }
+    for (const slug of mechanismSlugs) {
+      expect(html).toContain(`href="/explainers/${slug}/"`);
+    }
+    const exampleLines = [...html.matchAll(/Example:/g)];
+    expect(exampleLines.length).toBeGreaterThanOrEqual(1);
+  },
+);

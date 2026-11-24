@@ -1,9 +1,16 @@
 ---
 import { getCollection, render, type CollectionEntry } from "astro:content";
+import EnergySankeyChart from "../../components/EnergySankeyChart.astro";
+import GenerationMixChart from "../../components/GenerationMixChart.astro";
 import PriceChart from "../../components/PriceChart.astro";
+import ReserveChart from "../../components/ReserveChart.astro";
 import Layout from "../../layouts/Layout.astro";
 import { dailyPath } from "../../lib/daily-page";
-import { splitExplainerHtml, VISUAL_HEADING } from "../../lib/explainer";
+import {
+  explainerChartFallbackLead,
+  VISUAL_HEADING,
+  splitExplainerHtml,
+} from "../../lib/explainer";
 import { formatTradingDate, loadSiteDayIfPresent } from "../../lib/site-data";
 
 export async function getStaticPaths() {
@@ -21,10 +28,24 @@ interface Props {
 const { entry } = Astro.props;
 const { headings } = await render(entry);
 const sections = splitExplainerHtml(entry.rendered?.html ?? "", headings);
+const chart = entry.data.chart;
+if (chart !== undefined) {
+  switch (chart) {
+    case "price":
+    case "reserve":
+    case "generation":
+    case "sankey":
+      break;
+    default: {
+      const _never: never = chart;
+      throw new Error(`Unknown explainer chart: ${_never}`);
+    }
+  }
+}
 const exampleDate = entry.data.example_date;
-const exampleDay = loadSiteDayIfPresent(exampleDate);
-const examplePath = dailyPath(exampleDate);
-const exampleLabel = formatTradingDate(exampleDate);
+const exampleDay = exampleDate ? loadSiteDayIfPresent(exampleDate) : null;
+const examplePath = exampleDate ? dailyPath(exampleDate) : null;
+const exampleLabel = exampleDate ? formatTradingDate(exampleDate) : null;
 ---
 
 <Layout
@@ -53,13 +74,22 @@ const exampleLabel = formatTradingDate(exampleDate);
             <Fragment set:html={section.html} />
           </div>
           {section.heading === VISUAL_HEADING &&
-            (exampleDay && exampleDay.prices.state !== "missing" ? (
-              <PriceChart day={exampleDay} />
+            chart &&
+            (exampleDay ? (
+              chart === "price" ? (
+                <PriceChart day={exampleDay} />
+              ) : chart === "reserve" ? (
+                <ReserveChart day={exampleDay} />
+              ) : chart === "generation" ? (
+                <GenerationMixChart day={exampleDay} />
+              ) : (
+                <EnergySankeyChart day={exampleDay} />
+              )
             ) : (
               <p class="chart-fallback">
-                The same price and spread charts sit on{" "}
+                {explainerChartFallbackLead(chart)}{" "}
                 <a href={examplePath}>{exampleLabel}</a> when that day is
-                published here. The evening figures in the next section are the
+                published here. The figures in the next section are the
                 example.
               </p>
             ))}
@@ -119,5 +149,61 @@ const exampleLabel = formatTradingDate(exampleDate);
 
   .block :global(code) {
     font-size: 0.92em;
+  }
+
+  .visual :global(.flow) {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .visual :global(.flow li) {
+    background: var(--color-page);
+    border-radius: var(--radius-card);
+    border-left: 4px solid var(--color-brand);
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .visual :global(.flow strong) {
+    font-size: var(--text-label);
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+
+  .visual :global(.flow-edge) {
+    font-size: var(--text-caption);
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--color-ink-muted);
+  }
+
+  @media (min-width: 36rem) {
+    .visual :global(.flow) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .visual :global(.flow li) {
+      position: relative;
+      border-left: 0;
+      border-top: 4px solid var(--color-brand);
+    }
+
+    .visual :global(.flow li:not(:last-child))::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: calc(var(--space-3) / -2);
+      color: var(--color-ink-muted);
+      font-size: var(--text-heading);
+      line-height: 1;
+      transform: translate(50%, -50%);
+    }
   }
 </style>

@@ -1,6 +1,7 @@
 ---
 title: Nodal pricing
 description: Why Auckland, Wellington and the South Island can have different wholesale prices in the same half-hour.
+chart: price
 example_date: "2026-07-27"
 ---
 
@@ -18,7 +19,7 @@ Power stations offer electricity in bulk. The market then sets a wholesale price
 
 A trading period is a 30-minute slice of the trading date, which is a calendar day in New Zealand time. Period 1 starts at midnight. A normal day has 48 periods. The price is in dollars per megawatt-hour ($/MWh). A megawatt-hour is 1,000 kilowatt-hours, the same kWh unit as the line on a power bill.
 
-This site charts three reference nodes, sample points used to watch the two islands:
+Three reference nodes are enough to watch the two islands:
 
 - `OTA2201`, Ōtāhuhu in Auckland, for the upper North Island
 - `HAY2201`, Haywards near Wellington, the North Island end of the Cook Strait cable
@@ -26,7 +27,7 @@ This site charts three reference nodes, sample points used to watch the two isla
 
 The cable is a high-voltage direct current (HVDC) link. It joins the islands but does not make them one market all the time. If it is full, or one island is short of power, the wholesale price on one side can pull away from the other.
 
-Haywards minus Benmore is the North Island / South Island spread. A spread is one node's price minus the other's in the same trading period. A positive Haywards–Benmore spread means the North Island is dearer. Ōtāhuhu minus Haywards is the step inside the North Island. Ōtāhuhu minus Benmore is in the numbers table, not drawn as its own line, because it is the other two added together.
+Haywards minus Benmore is the North Island / South Island spread. A spread is one node's price minus the other's in the same trading period. A positive Haywards–Benmore spread means the North Island is more expensive. Ōtāhuhu minus Haywards is the step inside the North Island. Ōtāhuhu minus Benmore is in the numbers table, not drawn as its own line, because it is the other two added together.
 
 The files behind the chart are dispatch energy prices: the published wholesale price at each node. They can still be revised after the day. They are not a household bill, and they are not a forecast of tomorrow.
 
@@ -43,8 +44,6 @@ Monday 27 July 2026 is an ordinary 48-period winter weekday. In the half-hour fr
 Haywards sat with Ōtāhuhu, not with Benmore: the Haywards–Benmore spread was $2,281.97, and Ōtāhuhu–Haywards was $442.61. Ōtāhuhu minus Benmore was $2,724.58. The split was between the islands, with a further step up into Auckland.
 
 Those four evening half-hours from 17:30 to 19:30 were the spike, then the prices dropped. Across the whole day the averages were much lower: Ōtāhuhu $248.67, Haywards $214.72, Benmore $70.60.
-
-The daily page for [Monday 27 July 2026](/2026/07/27/) has that day's generation, prices, and charts.
 
 ## Links to Gridwatch data and events
 

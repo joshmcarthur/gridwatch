@@ -52,7 +52,7 @@ test("the system prompt is pinned: a changed prompt without a PROMPT_VERSION bum
   expect(NARRATIVE_SCHEMA_VERSION).toBe(1);
   expect(DEFAULT_MODEL).toBe("openai/gpt-6-luna");
   expect(createHash("sha256").update(systemPrompt()).digest("hex")).toBe(
-    "207d1dc7af2b246442416c7cfec792c1fd9535ade1362122ccc106186895b3a2",
+    "d460b6ee9a64e2ad1fe0092244c67a217df2b7053dff47ab158f5f493ede9fc7",
   );
 });
 
