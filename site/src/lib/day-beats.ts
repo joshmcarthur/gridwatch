@@ -506,6 +506,28 @@ export function dayBeats(day: SiteDay): DayStory {
     beats.push(added);
   }
 
+  // Written-up events (ADR-0027): the beat that overlaps an event's window links to it.
+  for (const event of day.events?.items ?? []) {
+    const host =
+      beats.find(
+        (b) =>
+          b.rule === "price_peak" &&
+          event.start_trading_period <= b.to &&
+          event.end_trading_period >= b.from,
+      ) ??
+      beats.find(
+        (b) =>
+          event.start_trading_period <= b.to &&
+          event.end_trading_period >= b.from,
+      );
+    if (host && host.link === null) {
+      host.link = {
+        href: `#event-${event.episode_id}`,
+        label: "Read the write-up of this stretch",
+      };
+    }
+  }
+
   // cable
   const south = day.sankey?.islands.find((island) => island.island === "SI");
   let cheaperLine: string | null = null;

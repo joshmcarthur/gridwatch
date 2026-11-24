@@ -70,7 +70,18 @@ function escapeHtml(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
+/** The id of an event's write-up on its day page (ADR-0029: no nested pages). */
+export function eventAnchor(episodeId: string): string {
+  return `event-${episodeId}`;
+}
+
+/** Where an event's write-up lives: a section of its day page. */
 export function eventPath(date: string, episodeId: string): string {
+  return `${dailyPath(date)}#${eventAnchor(episodeId)}`;
+}
+
+/** The old standalone event URL, kept as a redirect page. */
+export function legacyEventPath(date: string, episodeId: string): string {
   return `${dailyPath(date)}events/${episodeId}/`;
 }
 
@@ -117,13 +128,14 @@ export function requireCheckedEvent(event: SiteEvent): void {
   );
 }
 
-export function claimAnchor(id: string): string {
+/** A claim's anchor. `scope` (an episode id) keeps anchors unique when a page has several events. */
+export function claimAnchor(id: string, scope?: string): string {
   const safe = id
     .replaceAll("SIR", "sixty-second")
     .replaceAll("FIR", "six-second")
     .replaceAll(".NI.", ".north.")
     .replaceAll(".SI.", ".south.");
-  return `claim-${safe}`;
+  return scope ? `claim-${scope}-${safe}` : `claim-${safe}`;
 }
 
 export function confidenceLabel(
@@ -150,7 +162,11 @@ export function claimFigure(claim: SiteEvent["claims"][number]): string {
   return `${String(claim.value)} ${claim.unit}`.trim();
 }
 
-export function linkClaims(text: string, event: SiteEvent): string {
+export function linkClaims(
+  text: string,
+  event: SiteEvent,
+  scope?: string,
+): string {
   let html = escapeHtml(text);
   const replacements = event.claims
     .flatMap((claim) => {
@@ -164,7 +180,7 @@ export function linkClaims(text: string, event: SiteEvent): string {
           : [formatted];
       return needles.map((needle) => ({
         needle,
-        href: claimAnchor(claim.id),
+        href: claimAnchor(claim.id, scope),
       }));
     })
     .sort((a, b) => b.needle.length - a.needle.length);
@@ -244,7 +260,7 @@ export function eventWindowChart(event: SiteEvent): {
     line.values.filter((value): value is number => value !== null),
   );
   const pricePlot: LinePlot = {
-    id: "event-price-chart",
+    id: `event-${event.episode_id}-price-chart`,
     title: "Wholesale price at three places, this evening",
     yLabel: "Wholesale price ($ per megawatt-hour, $/MWh)",
     domain: [Math.min(0, ...priceValues), Math.max(0, ...priceValues, 1)],
@@ -265,7 +281,7 @@ export function eventWindowChart(event: SiteEvent): {
       ? null
       : renderLinePlot(
           {
-            id: "event-reserve-chart",
+            id: `event-${event.episode_id}-reserve-chart`,
             title: "North Island reserve price, this evening",
             yLabel: "Reserve price ($/MWh)",
             domain: [

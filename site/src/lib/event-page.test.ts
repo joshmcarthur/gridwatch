@@ -6,6 +6,7 @@ import {
   eventPath,
   eventPathsForIndex,
   findEvent,
+  legacyEventPath,
   linkClaims,
   recentEvents,
   requireCheckedEvent,
@@ -66,9 +67,21 @@ const event: SiteEvent = {
   },
 };
 
-test("eventPath nests the event under the daily page", () => {
+test("eventPath is the write-up's section of the daily page", () => {
   expect(eventPath("2026-07-27", "394f75a3bfa948a3")).toBe(
+    "/2026/07/27/#event-394f75a3bfa948a3",
+  );
+  expect(legacyEventPath("2026-07-27", "394f75a3bfa948a3")).toBe(
     "/2026/07/27/events/394f75a3bfa948a3/",
+  );
+});
+
+test("claimAnchor and linkClaims can be scoped to one event", () => {
+  expect(claimAnchor("price.OTA2201.p36", "abc")).toBe(
+    "claim-abc-price.OTA2201.p36",
+  );
+  expect(linkClaims("Ōtāhuhu reached $3,296.04.", event, "abc")).toContain(
+    'href="#claim-abc-price.OTA2201.p36"',
   );
 });
 
