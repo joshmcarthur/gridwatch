@@ -34,3 +34,18 @@ export function regionShort(regionId: string): string {
 export function placeLegend(poc: string, regionId: string): string {
   return `${placeName(poc)} (${regionShort(regionId)})`;
 }
+
+const centsOne = new Intl.NumberFormat("en-NZ", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+const centsWhole = new Intl.NumberFormat("en-NZ", {
+  maximumFractionDigits: 0,
+});
+
+/** A $/MWh price as cents per kWh: `6.9c` under 10c, `17c` from 10c (ADR-0029). */
+export function centsPerKwh(dollarsPerMwh: number): string {
+  const cents = dollarsPerMwh / 10;
+  if (Math.abs(cents) < 10) return `${centsOne.format(cents)}c`;
+  return `${centsWhole.format(Math.round(cents))}c`;
+}

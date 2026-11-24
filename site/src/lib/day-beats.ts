@@ -7,6 +7,9 @@ import {
   type StackFuel,
 } from "./generation-mix.ts";
 import { clockLabeller12, zonedAt } from "./period-clock.ts";
+import { centsPerKwh } from "./price-regions.ts";
+
+export { centsPerKwh };
 
 /**
  * A day's story as beats (ADR-0029). Every sentence comes from the day file by a fixed rule.
@@ -39,6 +42,8 @@ export interface Beat {
   from: number;
   /** Last trading period in the window (inclusive). */
   to: number;
+  /** The trading period the beat points at: a peak, a low, a high or a step. */
+  at: number;
   /** Clock range for the window, for example `5:00pm to 8:30pm`, or `All day`. */
   when: string;
   fuels: StackFuel[];
@@ -71,22 +76,11 @@ export const BEAT_THRESHOLDS = {
   gapDollarsPerMwh: 30,
 } as const;
 
-const centsOne = new Intl.NumberFormat("en-NZ", {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-});
 const whole = new Intl.NumberFormat("en-NZ", { maximumFractionDigits: 0 });
 const percent = new Intl.NumberFormat("en-NZ", {
   style: "percent",
   maximumFractionDigits: 0,
 });
-
-/** A $/MWh price as cents per kWh: `6.9c` under 10c, `17c` from 10c. */
-export function centsPerKwh(dollarsPerMwh: number): string {
-  const cents = dollarsPerMwh / 10;
-  if (Math.abs(cents) < 10) return `${centsOne.format(cents)}c`;
-  return `${whole.format(Math.round(cents))}c`;
-}
 
 function megawatts(value: number): string {
   return `${whole.format(Math.round(value / 10) * 10)} MW`;
@@ -211,18 +205,20 @@ function fuelWord(fuel: StackFuel): string {
 
 function beat(
   clocks: Clocks,
-  fields: Omit<Beat, "from" | "to" | "when" | "episodeIds" | "link"> & {
+  fields: Omit<Beat, "from" | "to" | "at" | "when" | "episodeIds" | "link"> & {
     fromIndex: number;
     toIndex: number;
+    atIndex: number;
     link?: Beat["link"];
   },
   periodOf: (index: number) => number,
 ): Beat {
-  const { fromIndex, toIndex, link, ...rest } = fields;
+  const { fromIndex, toIndex, atIndex, link, ...rest } = fields;
   return {
     ...rest,
     from: periodOf(fromIndex),
     to: periodOf(toIndex),
+    at: periodOf(atIndex),
     when: clocks.when(fromIndex, toIndex),
     episodeIds: [],
     link: link ?? null,
@@ -299,6 +295,7 @@ export function dayBeats(day: SiteDay): DayStory {
           clocks,
           {
             rule: "price_peak",
+            atIndex: pk,
             title: `${partOfDay(clocks.hour(pk))} price peak`,
             fromIndex: a,
             toIndex: b,
@@ -362,6 +359,7 @@ export function dayBeats(day: SiteDay): DayStory {
         clocks,
         {
           rule: "price_low",
+          atIndex: cheapest.index,
           title: "Cheapest moment",
           fromIndex: Math.max(0, cheapest.index - 2),
           toIndex: Math.min(count - 1, cheapest.index + 2),
@@ -413,6 +411,7 @@ export function dayBeats(day: SiteDay): DayStory {
           clocks,
           {
             rule: "fuel_high",
+            atIndex: i,
             title: `${FUEL_LABELS[fuel]} at its highest`,
             fromIndex: a,
             toIndex: b,
@@ -456,6 +455,7 @@ export function dayBeats(day: SiteDay): DayStory {
           clocks,
           {
             rule: "step_change",
+            atIndex: best.at,
             title: `Geothermal ${down ? "dropped" : "rose"}`,
             fromIndex: Math.max(0, best.at - 2),
             toIndex: Math.min(count - 1, best.at + 1),
@@ -492,6 +492,7 @@ export function dayBeats(day: SiteDay): DayStory {
       clocks,
       {
         rule: "episode",
+        atIndex: fromIndex,
         title: "Unusual stretch",
         fromIndex,
         toIndex,
@@ -541,6 +542,7 @@ export function dayBeats(day: SiteDay): DayStory {
         clocks,
         {
           rule: "cable",
+          atIndex: 0,
           title: "The cable",
           fromIndex: 0,
           toIndex: count - 1,
