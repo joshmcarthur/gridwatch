@@ -78,7 +78,7 @@ function paintIslands(
       totalNode.textContent =
         known.length === 0
           ? "No numbers for this half-hour"
-          : `${megawatts.format(total)} MW made`;
+          : `${megawatts.format(total)} MW generating`;
     }
     island.fuels.forEach((fuel, index) => {
       const value = values[index] ?? null;

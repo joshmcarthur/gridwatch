@@ -78,7 +78,15 @@ test("missing generation still gives price beats and a price headline", () => {
   expect(story.beats.some((b) => b.rule === "price_peak")).toBe(true);
   expect(story.beats.some((b) => b.rule === "fuel_high")).toBe(false);
   expect(story.headline).toBe(
-    "Power averaged 2.0c per kWh at Benmore and 7.3c at Ōtāhuhu",
+    "Wholesale prices averaged 2.0c per kWh at Benmore and 7.3c at Ōtāhuhu",
+  );
+});
+
+test("a fuel headline is not repeated in the lede", () => {
+  const story = dayBeats(fixture(october29));
+  expect(story.headline).toBe("Hydro made 54% of the day's electricity");
+  expect(story.lede).toBe(
+    "Prices at Ōtāhuhu peaked at 2.8c per kWh at 7:00am. Benmore was cheaper than Ōtāhuhu all day.",
   );
 });
 

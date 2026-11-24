@@ -5,13 +5,13 @@ import type {
   SiteEpisodeHighlight,
 } from "@gridwatch/publisher/site-contract";
 import { clockLabeller12, zonedAt } from "./period-clock.ts";
-import { placeName } from "./price-regions.ts";
+import { centsPerKwh, placeName } from "./price-regions.ts";
 
 const TYPE_LABELS: Record<string, string> = {
   price_high: "high wholesale prices",
   price_low: "low wholesale prices",
-  reserve_price_high: "high backup prices",
-  reserve_price_low: "low backup prices",
+  reserve_price_high: "high reserve prices",
+  reserve_price_low: "low reserve prices",
   separation_high: "wholesale prices far apart",
   separation_low: "wholesale prices unusually close",
   generation_low: "a drop in generation",
@@ -30,13 +30,6 @@ const KNOWN_TYPES = [
 ] as const;
 
 type KnownType = (typeof KNOWN_TYPES)[number];
-
-const money = new Intl.NumberFormat("en-NZ", {
-  style: "currency",
-  currency: "NZD",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
 
 const asKnown = (type: string): KnownType | null => {
   for (const known of KNOWN_TYPES) if (known === type) return known;
@@ -69,7 +62,11 @@ const joinAnd = (parts: string[]): string => {
 const typeLabel = (type: string): string =>
   TYPE_LABELS[type] ?? type.replaceAll("_", " ");
 
-const dollars = (value: number): string => money.format(value);
+const cents = (dollarsPerMwh: number): string =>
+  `${centsPerKwh(dollarsPerMwh)} per kWh`;
+
+const recently = (dollarsPerMwh: number): string =>
+  `compared with about ${centsPerKwh(dollarsPerMwh)} on recent days`;
 
 const pricePlace = (highlight: SiteEpisodeHighlight): string | null =>
   highlight.point_of_connection === null
@@ -86,21 +83,19 @@ const pairPlaces = (
 const priceReached = (
   highlight: SiteEpisodeHighlight,
   verb: "reached" | "fell to",
-  side: "above" | "below",
 ): string | null => {
   const place = pricePlace(highlight);
   if (place === null) return null;
-  return `wholesale prices at ${place} ${verb} ${dollars(highlight.measured_value)} per megawatt-hour, ${side} the recent typical level of about ${dollars(highlight.baseline_value)}`;
+  return `wholesale prices at ${place} ${verb} ${cents(highlight.measured_value)}, ${recently(highlight.baseline_value)}`;
 };
 
-const backupReached = (
+const reserveReached = (
   highlight: SiteEpisodeHighlight,
   verb: "reached" | "fell to",
-  side: "above" | "below",
 ): string => {
   const where =
     highlight.island === null ? "" : `${islandBare(highlight.island)} `;
-  return `${where}backup prices ${verb} ${dollars(highlight.measured_value)} per megawatt-hour, ${side} the recent typical level of about ${dollars(highlight.baseline_value)}`;
+  return `${where}reserve prices ${verb} ${cents(highlight.measured_value)}, ${recently(highlight.baseline_value)}`;
 };
 
 const spreadReached = (
@@ -111,9 +106,9 @@ const spreadReached = (
   if (pair === null) return null;
   const [from, to] = pair;
   if (kind === "high") {
-    return `wholesale prices at ${from} and ${to} were ${dollars(highlight.measured_value)} apart, above the recent typical gap of about ${dollars(highlight.baseline_value)}`;
+    return `wholesale prices at ${from} and ${to} were ${cents(highlight.measured_value)} apart, ${recently(highlight.baseline_value)}`;
   }
-  return `wholesale prices at ${from} and ${to} were only ${dollars(highlight.measured_value)} apart, below the recent typical gap of about ${dollars(highlight.baseline_value)}`;
+  return `wholesale prices at ${from} and ${to} were only ${cents(highlight.measured_value)} apart, ${recently(highlight.baseline_value)}`;
 };
 
 const factFromHighlight = (highlight: SiteEpisodeHighlight): string | null => {
@@ -121,13 +116,13 @@ const factFromHighlight = (highlight: SiteEpisodeHighlight): string | null => {
   if (known === null) return null;
   switch (known) {
     case "price_high":
-      return priceReached(highlight, "reached", "above");
+      return priceReached(highlight, "reached");
     case "price_low":
-      return priceReached(highlight, "fell to", "below");
+      return priceReached(highlight, "fell to");
     case "reserve_price_high":
-      return backupReached(highlight, "reached", "above");
+      return reserveReached(highlight, "reached");
     case "reserve_price_low":
-      return backupReached(highlight, "fell to", "below");
+      return reserveReached(highlight, "fell to");
     case "separation_high":
       return spreadReached(highlight, "high");
     case "separation_low":
@@ -139,14 +134,13 @@ const factFromHighlight = (highlight: SiteEpisodeHighlight): string | null => {
   }
 };
 
-const joinFacts = (facts: string[]): string => {
-  if (facts.length === 0) return "";
-  const [first, ...rest] = facts;
-  if (first === undefined) return "";
-  if (rest.length === 0) return first;
-  if (rest.length === 1) return `${first}, at the same time as ${rest[0]}`;
-  return `${first}, at the same time as ${joinAnd(rest)}`;
-};
+/** One sentence per fact, so a busy stretch does not become one long run-on. */
+const joinFacts = (facts: string[]): string =>
+  facts
+    .map((fact, index) =>
+      index === 0 ? fact : `${fact.charAt(0).toUpperCase()}${fact.slice(1)}`,
+    )
+    .join(". ");
 
 const fallbackBody = (
   episode: Pick<SiteEpisode, "observation_types" | "islands">,
@@ -171,9 +165,9 @@ const fromTo = (
 };
 
 /**
- * One sentence for a detected episode: clock window, size, place. Wholesale prices
- * are what generators and retailers paid each other, not a household bill. Backup
- * prices are the cost of generation kept ready if something trips.
+ * Sentences for a detected episode: clock window, size, place. Wholesale prices
+ * are what generators and retailers paid each other, not a household bill. Reserve
+ * prices are the cost of backup generation kept ready if something trips.
  */
 export function episodeHeadline(
   episode: Pick<
@@ -224,7 +218,7 @@ export function episodeEvidenceLinks(
   }
   if (types.some((type) => type.startsWith("reserve_price_"))) {
     links.push({
-      label: "See backup prices for this stretch.",
+      label: "See reserve prices for this stretch.",
       href: "#reserve-prices",
     });
   }

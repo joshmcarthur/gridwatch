@@ -423,9 +423,11 @@ test("each condition card uses its own latest complete date and has no composite
   expect(cards.find((card) => card.id === "supply")?.date).toBe("2026-10-20");
   expect(cards.find((card) => card.id === "reserves")?.date).toBe("2026-11-18");
   expect(cards.find((card) => card.id === "regional")?.date).toBe("2026-11-18");
-  expect(cards.find((card) => card.id === "prices")?.figure).toMatch(/\$200/);
   expect(cards.find((card) => card.id === "prices")?.figure).toMatch(
-    /three sample places/,
+    /20c per kWh/,
+  );
+  expect(cards.find((card) => card.id === "prices")?.figure).toMatch(
+    /Ōtāhuhu, Haywards and Benmore/,
   );
   expect(cards.find((card) => card.id === "supply")?.figure).toMatch(/50%/);
   expect(cards.find((card) => card.id === "reserves")?.figure).toMatch(
@@ -709,7 +711,7 @@ test("the latest update leads with the episode line when that day has one", () =
     (date) => long.byDate[date] as SiteDay,
   );
   expect(update.summary).toBe(pageLead(last, quietLead));
-  expect(update.summary).toMatch(/Ōtāhuhu reached \$410/);
+  expect(update.summary).toMatch(/Ōtāhuhu reached 41c/);
   expect(update.summary).not.toMatch(/because|caused|due to/i);
 });
 

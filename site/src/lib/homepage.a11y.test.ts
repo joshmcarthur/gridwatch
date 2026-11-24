@@ -29,7 +29,9 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(/<h2 id="recent-days-heading"[^>]*>Recent days<\/h2>/);
     expect(html).toContain("Wholesale prices");
     expect(html).not.toMatch(/<h3[^>]*>Supply<\/h3>/);
-    expect(html).toContain("three sample places");
+    expect(html).toContain(
+      "At Ōtāhuhu, Haywards and Benmore, wholesale prices averaged",
+    );
     expect(html).toContain("Reserves");
     expect(html).toContain("Regional price differences");
     expect(html).toContain("Gas and coal");
@@ -39,7 +41,6 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(/<ol class="days week[^"]*"/);
     expect(html).not.toMatch(/trading day|grouped readings|dataset/i);
     expect(html).not.toMatch(/placeholder homepage/i);
-    expect(html).toMatch(/no single score/);
     expect(html).not.toMatch(/green\/amber\/red/);
     expect(html).not.toMatch(/composite score/);
     expect(html).not.toMatch(/\bEMI\b/);

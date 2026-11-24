@@ -164,7 +164,7 @@ const islandsNow = (view?.islands ?? []).map((island) => {
                     {island.name}{" "}
                     <span data-island-total>
                       {island.known
-                        ? `${megawatts.format(island.total)} MW made`
+                        ? `${megawatts.format(island.total)} MW generating`
                         : "No numbers for this half-hour"}
                     </span>
                   </h3>

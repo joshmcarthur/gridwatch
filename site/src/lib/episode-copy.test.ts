@@ -27,7 +27,7 @@ const highlight = (
   ...rest,
 });
 
-test("a scarcity episode names the peak, the place, the time and backup prices", () => {
+test("a scarcity episode names the peak, the place, the time and reserve prices", () => {
   expect(
     episodeHeadline(
       {
@@ -55,7 +55,7 @@ test("a scarcity episode names the peak, the place, the time and backup prices",
       day,
     ),
   ).toBe(
-    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu reached $3,296 per megawatt-hour, above the recent typical level of about $150, at the same time as North Island backup prices reached $2,154 per megawatt-hour, above the recent typical level of about $12.",
+    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu reached 330c per kWh, compared with about 15c on recent days. North Island reserve prices reached 215c per kWh, compared with about 1.2c on recent days.",
   );
 });
 
@@ -81,7 +81,7 @@ test("a singleton price high does not say at the same time", () => {
       day,
     ),
   ).toBe(
-    "From 4:00pm to 6:30pm, wholesale prices at Benmore reached $80 per megawatt-hour, above the recent typical level of about $40.",
+    "From 4:00pm to 6:30pm, wholesale prices at Benmore reached 8.0c per kWh, compared with about 4.0c on recent days.",
   );
 });
 
@@ -107,7 +107,7 @@ test("a price-gap episode names both places", () => {
       day,
     ),
   ).toBe(
-    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu and Benmore were $2,725 apart, above the recent typical gap of about $80.",
+    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu and Benmore were 273c per kWh apart, compared with about 8.0c on recent days.",
   );
 });
 
@@ -177,7 +177,7 @@ test("price and reserve episodes each link to their chart; price-only does not l
       href: "#wholesale-prices",
     },
     {
-      label: "See backup prices for this stretch.",
+      label: "See reserve prices for this stretch.",
       href: "#reserve-prices",
     },
   ]);
