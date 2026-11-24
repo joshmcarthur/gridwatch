@@ -28,11 +28,17 @@ Daily pages follow Daily pages below. They may use a short, consistent label and
 
 A daily page explains that day. It does not re-teach the market.
 
-The page opens with the day's story: a headline and lede built from its beats ([ADR-0029](adr/0029-map-led-day-stories.md)), then the price map. Beat sentences say what the files show and what happened at the same time. They never say why. Explainers and the reviewed LLM narratives carry the why. Prices in body copy are in cents per kWh (`6.9c`), with $/MWh kept for tables and hover text. The page must not define megawatt-hours, wholesale vs a household bill, or the Cook Strait cable. Those belong on About, and in a compact "Words on this page" glossary on the day so a cold link still has an escape hatch.
+The page opens with the day's story: a headline, then a short write-up by AI, or a lede built from the day's beats when there is no write-up ([ADR-0029](adr/0029-map-led-day-stories.md), [ADR-0031](adr/0031-day-page-layout-g.md)). The price map and its lanes come next. Beat and lane sentences say what the files show and what happened at the same time. They never say why. The explainers and the AI write-ups carry the why. Prices in body copy are in cents per kWh (`6.9c`), with $/MWh kept for tables and hover text. The page must not define megawatt-hours, wholesale vs a household bill, or the Cook Strait cable. Those belong on About, and in a compact "Words on this page" glossary on the day so a cold link still has an escape hatch.
 
 Link the short labels (wholesale price, megawatt-hour, the two islands) to that glossary, and from the glossary on to About. Same word for the same thing.
 
-Method caveats about **this day's numbers** stay with the chart: incomplete files, residual, proxy prices, batteries as storage. Put the long method in a "How to read this" disclosure. The visible caption is one line.
+Method caveats about **this day's numbers** stay with the numbers: incomplete files, residual, proxy prices, batteries as storage. Put them in "How to read this", inside "The numbers behind this". A visible note under a lane is one line.
+
+A lane starts with its name and one sentence from the data. The sentence says what the lane shows that day. It does not explain the legend or the scale. Lane prices are in cents per kWh.
+
+Say reserve for the spare generating capacity kept ready in case a plant trips, and for its price. Gloss it once on a page and link the glossary. Don't call it backup.
+
+Text written by AI carries the label "Written by AI" and a "What this was written from" list that links to How we do this. Don't call it reviewed or unreviewed.
 
 Clock times in public sentences, not trading period numbers. Place names in body copy (Ōtāhuhu, Haywards, Benmore). Point-of-connection codes belong in the numbers table and in hover text.
 
@@ -73,6 +79,6 @@ this site, Gridwatch, files, pages, retailer, wholesale price, bill, Electricity
 
 ## Don't
 
-I, we (in body copy), observatory, evidence-led, hostile, "the gap", "exists because of that", "headlines hide", "rewrite your bill", pretty, serves as, it's not X it's Y, unexplained acronyms, "work there" when you mean the industry, trading-period numbers in public sentences, POC codes in daily body copy, "dataset", "grouped readings", "sample points", "Power made" (it is energy, not power), "trading day" on the home and daily pages (How we do this explains it), claims about the two islands drawn from the three places, dear, dearer, dearest (say more expensive)
+I, we (in body copy), observatory, evidence-led, hostile, "the gap", "exists because of that", "headlines hide", "rewrite your bill", pretty, serves as, it's not X it's Y, unexplained acronyms, "work there" when you mean the industry, trading-period numbers in public sentences, backup (say reserve), unreviewed, POC codes in daily body copy, "dataset", "grouped readings", "sample points", "Power made" (it is energy, not power), "trading day" on the home and daily pages (How we do this explains it), claims about the two islands drawn from the three places, dear, dearer, dearest (say more expensive)
 
 Run published copy through the humanize skill before it ships.

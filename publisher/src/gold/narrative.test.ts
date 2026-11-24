@@ -49,11 +49,11 @@ const pkg: PromptPackage = {
 const packageId = "file-bytes-sha256";
 
 test("the system prompt is pinned: a changed prompt without a PROMPT_VERSION bump fails here", () => {
-  expect(PROMPT_VERSION).toBe(1);
+  expect(PROMPT_VERSION).toBe(2);
   expect(NARRATIVE_SCHEMA_VERSION).toBe(1);
   expect(DEFAULT_MODEL).toBe("openai/gpt-6-luna");
   expect(createHash("sha256").update(systemPrompt()).digest("hex")).toBe(
-    "fe16946a06fc9159df38667f6f46b22c61b69ca10bc36b73e2649008de386fdd",
+    "aa41e7b14388e87d802c0fba9d881f4ebc384ae0f0b1d92bdb8db16a7358ed65",
   );
 });
 
@@ -118,7 +118,7 @@ test("generateNarrative stores package id, model, prompt version and date", asyn
     packageId,
   });
   expect(record.schema_version).toBe(1);
-  expect(record.prompt_version).toBe(1);
+  expect(record.prompt_version).toBe(2);
   expect(record.episode_id).toBe("abc123");
   expect(record.trading_date).toBe("2026-07-27");
   expect(record.model).toBe("anthropic/claude-haiku-4.5");
