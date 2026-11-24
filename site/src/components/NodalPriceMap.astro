@@ -148,6 +148,13 @@ const islandsNow = (view?.islands ?? []).map((island) => {
                     </>
                   )}
                 </p>
+                {beat.flags.length > 0 && (
+                  <ul class="flags" aria-label="Flagged as unusual">
+                    {beat.flags.map((flag) => (
+                      <li>{flag}</li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ol>
@@ -211,21 +218,22 @@ const islandsNow = (view?.islands ?? []).map((island) => {
         <p>{coverageSentence(view)}</p>
         <p>
           Each dot is a named place on the grid, coloured by its wholesale price
-          for the half-hour on the slider. The colour bands stay the same all
-          day, so the same colour means the same price at 3am and at 6pm. A
-          larger dot is among the cheapest or most expensive 5 percent of
-          places in that half-hour.
+          in the half-hour on the slider. The colours don't shift through the
+          day, so orange at 3am means the same price as orange at 6pm, and the
+          bigger dots are the cheapest or most expensive 5 percent of places in
+          that half-hour.
         </p>
         <p>
-          Ōtāhuhu, Haywards and Benmore are labelled with their price. The
-          cable arrow is the day's average flow across Cook Strait, not the
-          flow in each half-hour.
+          Ōtāhuhu, Haywards and Benmore carry price labels. The cable arrow
+          shows the day's average flow across Cook Strait. The flow in each
+          half-hour isn't on this page yet.
         </p>
         <p>
-          The moments in the day come from fixed rules over the day's numbers:
-          the highest and lowest prices, when wind or solar peaked, lasting
-          changes in geothermal output, unusual stretches, and the cable. They
-          say what the numbers show, not why.
+          The moments beside the map come from fixed rules run over the day's
+          numbers (the highest and lowest prices, when wind or solar peaked,
+          lasting shifts in geothermal output, unusual stretches, and the
+          cable), so they describe what the numbers show rather than why it
+          happened.
         </p>
         <p>
           Source: Electricity Authority wholesale prices at each named place on
@@ -497,8 +505,16 @@ const islandsNow = (view?.islands ?? []).map((island) => {
   }
 
   /* With the script running, only the active moment shows its sentence. */
-  [data-js] .beats li:not(.active) p {
+  [data-js] .beats li:not(.active) p,
+  [data-js] .beats li:not(.active) .flags {
     display: none;
+  }
+
+  .flags {
+    margin: var(--space-2) 0 0;
+    padding-left: 1.25rem;
+    font-size: var(--text-label);
+    color: var(--color-ink-muted);
   }
 
   .islands {

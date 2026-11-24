@@ -19,24 +19,26 @@ test("centsPerKwh uses one decimal place under 10c and whole cents above", () =>
 test("a spike day leads with the peak and joins its episode to the peak beat", () => {
   const day = fixture(july27);
   const story = dayBeats(day);
-  expect(story.headline).toBe("Ōtāhuhu reached 330c per kWh at 5:30pm");
+  expect(story.headline).toBe("Ōtāhuhu hit 330c per kWh at 5:30pm");
   const evening = story.beats.find((b) => b.title === "Evening price peak");
   expect(evening?.text).toContain(
-    "Ōtāhuhu reached 330c per kWh at 5:30pm, while Benmore was 57c.",
+    "Ōtāhuhu peaked at 330c per kWh at 5:30pm, while Benmore was 57c.",
   );
   const episode = day.episodes?.items.find(
     (e) => e.start_trading_period === 35,
   );
   expect(episode).toBeDefined();
   expect(evening?.episodeIds).toContain(episode?.episode_id);
-  expect(evening?.text).toContain("From 5:00pm to 8:30pm,");
+  expect(
+    evening?.flags.some((flag) => flag.startsWith("From 5:00pm to 8:30pm,")),
+  ).toBe(true);
 });
 
 test("a windy day gets a wind beat with its share of generation", () => {
   const story = dayBeats(fixture(september26));
   const wind = story.beats.find((b) => b.rule === "fuel_high");
   expect(wind?.title).toBe("Wind at its highest");
-  expect(wind?.text).toContain("23% of all generation");
+  expect(wind?.text).toContain("23% of everything generated");
   expect(wind?.fuels).toEqual(["wind"]);
 });
 
@@ -66,7 +68,7 @@ test("a lasting geothermal drop gets a step_change beat", () => {
   const step = dayBeats(day).beats.find((b) => b.rule === "step_change");
   expect(step?.title).toBe("Geothermal dropped");
   // 200 MW injected, plus the fixture's own small drift.
-  expect(step?.text).toMatch(/fell by about 2\d0 MW around 10:00am/);
+  expect(step?.text).toMatch(/dropped by about 2\d0 MW around 10:00am/);
 });
 
 test("missing generation still gives price beats and a price headline", () => {
@@ -75,7 +77,9 @@ test("missing generation still gives price beats and a price headline", () => {
   const story = dayBeats(day);
   expect(story.beats.some((b) => b.rule === "price_peak")).toBe(true);
   expect(story.beats.some((b) => b.rule === "fuel_high")).toBe(false);
-  expect(story.headline).toBe("Benmore averaged 2.0c per kWh, Ōtāhuhu 7.3c");
+  expect(story.headline).toBe(
+    "Power averaged 2.0c per kWh at Benmore and 7.3c at Ōtāhuhu",
+  );
 });
 
 test("no beat states a cause", () => {
