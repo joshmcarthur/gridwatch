@@ -51,7 +51,7 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(
       /<h2 id="recent-events-heading"[^>]*>Recent events<\/h2>/,
     );
-    expect(html).toContain("/2026/07/27/events/394f75a3bfa948a3/");
+    expect(html).toContain("/2026/07/27/#event-394f75a3bfa948a3");
     expect(html).not.toMatch(/overlapped|grid load|regional price gap/i);
   },
 );

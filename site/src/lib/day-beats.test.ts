@@ -85,3 +85,12 @@ test("no beat states a cause", () => {
     }
   }
 });
+
+test("the beat that overlaps a written-up event links to it", () => {
+  const day = fixture(july27);
+  const event = day.events?.items[0];
+  const linked = dayBeats(day).beats.find(
+    (b) => b.link?.href === `#event-${event?.episode_id}`,
+  );
+  expect(linked?.title).toBe("Evening price peak");
+});

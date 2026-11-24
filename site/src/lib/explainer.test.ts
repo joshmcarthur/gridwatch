@@ -217,7 +217,7 @@ for (const page of illustrated) {
     expect(body).toContain("## Links to Gridwatch data and events");
     expect(body).not.toMatch(/The daily page for \[Monday 27 July 2026\]/);
     expect(body).toContain("/2026/07/27/");
-    expect(body).toContain("/2026/07/27/events/394f75a3bfa948a3/");
+    expect(body).toContain("/2026/07/27/#event-394f75a3bfa948a3");
     for (const figure of page.figures) {
       expect(body).toContain(figure);
     }
