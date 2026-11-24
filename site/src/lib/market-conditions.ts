@@ -338,7 +338,7 @@ export function dayContext(
     const band = rankAgainstEarlier(value, earlier);
     const line = band
       ? `${spec.subject} ${bandPhrase(band, earlier.length)}.`
-      : "Not enough earlier days yet to compare.";
+      : null;
     let change: string | null = null;
     if (
       spec.change &&
@@ -550,11 +550,7 @@ function sectionIsComplete(
 }
 
 function bandLabel(band: RankBand | null, earlierCount: number): string | null {
-  if (band === null) {
-    return earlierCount < RANK_MINIMUM
-      ? "Not enough complete days yet to compare with the past year."
-      : null;
-  }
+  if (band === null) return null;
   return `That was ${bandPhrase(band, earlierCount)}.`;
 }
 

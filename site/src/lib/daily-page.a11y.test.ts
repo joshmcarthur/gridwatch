@@ -46,7 +46,7 @@ test.skipIf(!existsSync(builtPage))(
         html.includes('id="reserve-chart-title"') ||
         html.includes("Reserve prices are not ready for this day yet."),
     ).toBe(true);
-    expect(html).toContain("Not enough earlier days yet to compare.");
+    expect(html).not.toContain("Not enough earlier days");
     expect(html.indexOf('id="detected-episodes"')).toBeGreaterThan(-1);
     expect(html.indexOf('id="detected-episodes"')).toBeLessThan(
       html.indexOf('id="generation-mix"'),

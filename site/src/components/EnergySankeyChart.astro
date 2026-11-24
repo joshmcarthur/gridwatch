@@ -58,17 +58,15 @@ const legend = chart ? sankeyLegend(chart) : [];
       </Fragment>
       <Fragment slot="method">
         <p>
-          Megawatt-hours for the day. Hover a band for the number. The
-          New Zealand grid is meshed: electricity does not travel on one path
-          from a station to a house. This chart is a set of regional balances,
-          not generator-to-consumer flows.
+          Megawatt-hours for the day. Hover a band for the number. The chart
+          balances each island's generation against its estimated load. It
+          does not trace a path from a station to a house.
         </p>
         <p>
-          Load is an estimate from Transpower's real-time dispatch. Transpower is
-          the system operator, the company that runs the grid. The estimate is
-          not read from household meters, so it will not match a bill. The
-          residual is generation plus transfer minus load. It gets its own band
-          whenever it is not zero.
+          Load is an estimate from Transpower's real-time dispatch, not a meter
+          reading. Transpower is the system operator, the company that runs the
+          grid. The residual is generation plus transfer minus load, and it gets
+          its own band whenever it is not zero.
         </p>
         <p>{sankeySummary(chart)}</p>
       </Fragment>

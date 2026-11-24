@@ -437,9 +437,7 @@ test("each condition card uses its own latest complete date and has no composite
     /Haywards/,
   );
   expect(cards.every((card) => card.band === null)).toBe(true);
-  expect(
-    cards.every((card) => card.bandNote?.includes("Not enough complete days")),
-  ).toBe(true);
+  expect(cards.every((card) => card.bandNote === null)).toBe(true);
 });
 
 test("thirty earlier complete days produce a rank band in past tense", () => {
@@ -602,19 +600,14 @@ test("two days with different price levels get different comparison lines", () =
   expect(line(dear)).toMatch(/one of the highest/);
 });
 
-test("dayContext says so when there are too few earlier days", () => {
+test("dayContext leaves the line out when there are too few earlier days", () => {
   const { index, byDate, lastDate } = daySeries(10, { primary: 1000 });
   const context = dayContext(
     index,
     lastDate,
     (date) => byDate[date] as SiteDay,
   );
-  expect(context.every((entry) => entry.line !== null)).toBe(true);
-  expect(context.map((entry) => entry.line)).toEqual([
-    "Not enough earlier days yet to compare.",
-    "Not enough earlier days yet to compare.",
-    "Not enough earlier days yet to compare.",
-  ]);
+  expect(context.map((entry) => entry.line)).toEqual([null, null, null]);
 });
 
 test("leadFact picks the figure furthest from usual and says nothing about cause", () => {

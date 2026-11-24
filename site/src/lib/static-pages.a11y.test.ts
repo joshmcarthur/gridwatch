@@ -82,9 +82,7 @@ test.skipIf(!existsSync(howPage))(
     );
     expect(html).not.toMatch(/reserve[^.]*not on the daily\s+pages yet/i);
     expect(html).toMatch(/One megawatt-hour is\s+1,000\s+kilowatt-hours/);
-    expect(
-      count(html.toLowerCase(), "tomorrow's prices aren't in these files"),
-    ).toBe(1);
+    expect(html).not.toMatch(/tomorrow's prices aren't in these files/i);
     expect(html).not.toMatch(/runs New Zealand's wholesale electricity market/);
     expect(html).not.toMatch(/keep the lights on/);
   },

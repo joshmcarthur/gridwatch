@@ -168,10 +168,6 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
         {chart.bands.length > 0 && (
           <p>A shaded band marks a stretch that stood out.</p>
         )}
-        <p>
-          Where two spread lines have the same values, one sits on top of the
-          other.
-        </p>
         {anyProxy && <p>An open circle marks a price copied from a nearby place after an outage.</p>}
         {daily.map((line) => (
           <p>{line}</p>

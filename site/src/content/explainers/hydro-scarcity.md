@@ -15,4 +15,4 @@ Hydro is stored energy. Operators choose when to run water today against keeping
 
 A spike can still happen when the lakes are full: a still evening, a full Cook Strait link, or tight reserve can lift the price while there is plenty of water in the catchments.
 
-How much hydro generated on a day is not a lake level, an inflow, or a water-value. A large hydro share does not mean the lakes were scarce, or that they were full. Wind is another fuel that moves with the weather: [wind and wholesale prices](/explainers/wind/). A more expensive plant can set the price when hydro is held back: [what makes a generator marginal](/explainers/marginal-generator/). [About](/about/) has a short note on dry years.
+A day's hydro share says nothing about how full the lakes were. Wind is another fuel that moves with the weather: [wind and wholesale prices](/explainers/wind/). A more expensive plant can set the price when hydro is held back: [what makes a generator marginal](/explainers/marginal-generator/). [About](/about/) has a short note on dry years.
