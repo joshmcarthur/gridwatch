@@ -127,7 +127,7 @@ function fuel(
 test("a missing sankey day has no chart and says the transfer is not published yet", () => {
   expect(energySankey(dayOf(missingSankey()))).toBeNull();
   expect(sankeyMissingCopy()).toMatch(/not published yet/i);
-  expect(sankeyMissingCopy()).toMatch(/does not guess/i);
+  expect(sankeyMissingCopy()).not.toMatch(/guess/i);
   expect(sankeyMissingCopy()).not.toMatch(/\bNI\b/);
   expect(sankeyMissingCopy()).not.toMatch(/\bSI\b/);
 });
