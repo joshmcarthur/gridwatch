@@ -3,11 +3,15 @@ import type { SiteDay } from "@gridwatch/publisher/site-contract";
 import Layout from "../layouts/Layout.astro";
 import { dailyPath } from "../lib/daily-page";
 import { episodeHeadline } from "../lib/episode-copy";
+import { dayBeats } from "../lib/day-beats";
 import {
+  groupRecentDays,
   latestMarketUpdate,
   marketConditionCards,
   recentDays,
+  shortDayLabel,
 } from "../lib/market-conditions";
+import { nodalMapView, PRICE_BANDS, renderMapSvg } from "../lib/nodal-map";
 import {
   eventHeadline,
   eventPath,
@@ -32,79 +36,121 @@ const loadDay = (date: string): SiteDay => {
 const update = latestMarketUpdate(index, loadDay);
 const cards = marketConditionCards(index, loadDay);
 const recent = recentDays(index, undefined, loadDay);
-const week = recent.slice(0, 7);
+const week = groupRecentDays(recent.slice(0, 7));
 const earlier = recent.slice(7);
 const episodes = recentEpisodes(index, loadDay);
 const events = recentEvents(index, loadDay);
+
+// The latest day's story leads the page (ADR-0029), with a still map at its main moment.
+const latestDay = update.date ? loadDay(update.date) : null;
+const story = latestDay ? dayBeats(latestDay) : null;
+const mapView = latestDay ? nodalMapView(latestDay) : null;
+const otahuhu = mapView?.places.find(
+  (place) => place.point_of_connection === "OTA2201",
+);
+const peak = story?.beats
+  .filter((beat) => beat.rule === "price_peak")
+  .sort(
+    (a, b) =>
+      (otahuhu?.prices[b.at - 1] ?? 0) - (otahuhu?.prices[a.at - 1] ?? 0),
+  )[0];
+const mapPeriod = peak?.at ?? mapView?.defaultPeriod ?? 1;
+const mapClock =
+  mapView?.periods.find((item) => item.period === mapPeriod)?.time ?? "";
+const mapSvg = mapView
+  ? renderMapSvg(mapView, mapPeriod, {
+      id: "home-map",
+      title: `Wholesale prices on the grid at ${mapClock}, ${update.dateLabel}`,
+      summary: `Each dot is a named place on the grid, coloured by its wholesale price at ${mapClock}.`,
+    })
+  : null;
+const leadBeats = (story?.beats ?? []).filter(
+  (beat) => beat.rule !== "cable",
+);
 ---
 
 <Layout
   title="Gridwatch NZ"
   description="Pages from the Electricity Authority's public wholesale market files: prices, generation, reserves, and regional differences, for days that have already finished."
 >
-  <section class="prose">
-    <h1>New Zealand's electricity market, day by day</h1>
-    <p>
-      The Electricity Authority publishes the files for New Zealand's wholesale
-      electricity market. Wholesale prices are what generators and retailers
-      paid each other, not the rate on a household bill. The files are a slog
-      if you don't already work in the industry, because they were written for
-      the systems that run the market.
-    </p>
-    <p>
-      This site reads those files after the day is over and makes a page for
-      each finished day: what power stations made, what it sold for,
-      and where prices pulled apart.
-    </p>
-  </section>
+  <h1 class="site-title">New Zealand's electricity market, day by day</h1>
 
-  <section class="card" aria-labelledby="latest-heading">
-    <h2 id="latest-heading">Latest market update</h2>
-    {
-      update.href ? (
-        <p>
-          <a href={update.href}>{update.dateLabel}</a>
-        </p>
-      ) : (
-        <p>{update.dateLabel}</p>
-      )
-    }
-    <p>{update.summary}</p>
-    {
-      update.generationLag ? (
-        <p>
-          {update.generationLag.text}
-          {update.generationLag.latest ? (
-            <>
-              {" "}
-              Latest complete generation day:{" "}
-              <a href={update.generationLag.latest.href}>
-                {update.generationLag.latest.label}
-              </a>
-              .
-            </>
-          ) : null}
-        </p>
-      ) : null
-    }
-    {
-      update.href ? (
-        <p>
-          <a href={update.href}>Open the {update.dateLabel} page</a>
-        </p>
-      ) : null
-    }
+  <section class="card story" aria-labelledby="latest-heading">
+    <p class="eyebrow">
+      Latest day:{" "}
+      {update.href ? <a href={update.href}>{update.dateLabel}</a> : update.dateLabel}
+    </p>
+    <h2 id="latest-heading">{story?.headline ?? "Latest market update"}</h2>
+    <div class="story-body">
+      <div class="story-text">
+        <p class="lede">{story?.lede ?? update.summary}</p>
+        {leadBeats.length > 0 ? (
+          <ol class="moments" aria-label="Moments in the day">
+            {leadBeats.map((beat) => (
+              <li>
+                <span class="moment-title">{beat.title}</span>{" "}
+                <span class="note">{beat.when}</span>
+                <p>{beat.text}</p>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        {update.generationLag ? (
+          <p class="note">
+            {update.generationLag.text}
+            {update.generationLag.latest ? (
+              <>
+                {" "}
+                Latest complete generation day:{" "}
+                <a href={update.generationLag.latest.href}>
+                  {update.generationLag.latest.label}
+                </a>
+                .
+              </>
+            ) : null}
+          </p>
+        ) : null}
+        {update.href ? (
+          <p>
+            <a class="open" href={update.href}>
+              Open the {update.dateLabel} page, with the map you can play
+              through the day
+            </a>
+          </p>
+        ) : null}
+      </div>
+      {mapSvg ? (
+        <figure class="still-map">
+          <a href={update.href ? `${update.href}#map` : "#"} aria-hidden="true" tabindex="-1">
+            <Fragment set:html={mapSvg} />
+          </a>
+          <figcaption>
+            Wholesale prices on the grid at {mapClock}.{" "}
+            {PRICE_BANDS.map((band, at) => (
+              <span class="band">
+                <span class="swatch" style={`background:${band.fill}`} />
+                {band.label}
+                {at < PRICE_BANDS.length - 1 ? " " : ""}
+              </span>
+            ))}
+          </figcaption>
+        </figure>
+      ) : null}
+    </div>
   </section>
 
   <section class="conditions" aria-labelledby="conditions-heading">
     <div class="conditions-intro prose">
       <h2 id="conditions-heading">Market conditions</h2>
-      <p>
-        Each card is one number from the latest day with complete files for it. There
-        is no single score for the day. A card ranks its number against earlier
-        complete days on this site, up to a year back, not against a fixed
-        threshold. Each card says how many days it compared with.
-      </p>
+      <details class="how">
+        <summary>How these cards work</summary>
+        <p>
+          Each card is one number from the latest day with complete files for
+          it. There is no single score for the day. A card ranks its number
+          against earlier complete days on this site, up to a year back, not
+          against a fixed threshold.
+        </p>
+      </details>
     </div>
     <ul class="condition-grid">
       {
@@ -134,14 +180,32 @@ const events = recentEvents(index, loadDay);
       ) : (
         <>
           <ol class="days week">
-            {week.map((day) => (
+            {week.map((group) => (
               <li>
-                <a href={day.href}>{day.label}</a>
-                {day.lead ? <span class="note">{day.lead}</span> : null}
-                {day.complete ? null : <span class="note">Incomplete.</span>}
+                {group.lead ? (
+                  <span class="lead">{group.lead}</span>
+                ) : null}
+                <span class="dates">
+                  {group.days.map((day, at) => (
+                    <>
+                      <a href={day.href}>
+                        {group.days.length > 1 ? shortDayLabel(day.date) : day.label}
+                      </a>
+                      {day.complete ? null : (
+                        <span class="incomplete" title="Some files for this day are missing">
+                          *<span class="visually-hidden"> (incomplete)</span>
+                        </span>
+                      )}
+                      {at < group.days.length - 1 ? ", " : ""}
+                    </>
+                  ))}
+                </span>
               </li>
             ))}
           </ol>
+          {recent.some((day) => !day.complete) ? (
+            <p class="note">* Some files for that day are missing.</p>
+          ) : null}
           {earlier.length > 0 ? (
             <details>
               <summary>Earlier days</summary>
@@ -150,7 +214,9 @@ const events = recentEvents(index, loadDay);
                   <li>
                     <a href={day.href}>{day.label}</a>
                     {day.complete ? null : (
-                      <span class="note">Incomplete.</span>
+                      <span class="incomplete" title="Some files for this day are missing">
+                        *<span class="visually-hidden"> (incomplete)</span>
+                      </span>
                     )}
                   </li>
                 ))}
@@ -162,15 +228,11 @@ const events = recentEvents(index, loadDay);
     }
   </section>
 
-  <section class="card" aria-labelledby="recent-events-heading">
-    <h2 id="recent-events-heading">Recent events</h2>
-    <p>
-      Write-ups of unusual stretches. Each one is still Unreviewed.
-    </p>
-    {
-      events.length === 0 ? (
-        <p>No written-up events on the days this site holds yet.</p>
-      ) : (
+  {
+    events.length > 0 ? (
+      <section class="card" aria-labelledby="recent-events-heading">
+        <h2 id="recent-events-heading">Recent events</h2>
+        <p>Write-ups of unusual stretches. Each one is still Unreviewed.</p>
         <ol class="episodes">
           {events.map(({ date, event }) => (
             <li>
@@ -180,9 +242,9 @@ const events = recentEvents(index, loadDay);
             </li>
           ))}
         </ol>
-      )
-    }
-  </section>
+      </section>
+    ) : null
+  }
 
   <section class="card" aria-labelledby="recent-episodes-heading">
     <h2 id="recent-episodes-heading">Recently detected</h2>
@@ -206,9 +268,190 @@ const events = recentEvents(index, loadDay);
       )
     }
   </section>
+  <section class="prose about" aria-labelledby="about-heading">
+    <h2 id="about-heading">About this site</h2>
+    <p>
+      The Electricity Authority publishes the files for New Zealand's wholesale
+      electricity market. Wholesale prices are what generators and retailers
+      paid each other, not the rate on a household bill. The files are a slog
+      if you don't already work in the industry, because they were written for
+      the systems that run the market.
+    </p>
+    <p>
+      This site reads those files after the day is over and makes a page for
+      each finished day: what power stations made, what it sold for, and where
+      prices pulled apart. <a href="/about/">More about the market</a>.
+    </p>
+  </section>
 </Layout>
 
 <style>
+  .site-title {
+    font-size: var(--text-heading);
+    margin: 0 0 var(--space-4);
+    color: var(--color-ink-muted);
+  }
+
+  .card.story {
+    max-width: none;
+  }
+
+  .story h2 {
+    margin: 0;
+    font-size: var(--text-title);
+    line-height: 1.2;
+  }
+
+  .eyebrow {
+    margin: 0;
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  .story-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+  }
+
+  @media (min-width: 48rem) {
+    .story-body {
+      grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem);
+    }
+  }
+
+  .story-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 0;
+  }
+
+  .lede {
+    margin: 0;
+    font-size: var(--text-body);
+  }
+
+  .moments {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .moments li {
+    border-left: 3px solid var(--color-rule);
+    padding-left: var(--space-3);
+  }
+
+  .moment-title {
+    font-weight: 700;
+  }
+
+  .moments p {
+    margin: var(--space-1) 0 0;
+  }
+
+  .open {
+    font-weight: 700;
+  }
+
+  .still-map {
+    margin: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .still-map :global(svg) {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 330 / 480;
+    display: block;
+    background: var(--color-page);
+    border-radius: var(--radius-card);
+  }
+
+  .still-map :global(.place-name) {
+    font-size: 10px;
+    font-weight: 700;
+    fill: var(--color-ink);
+    paint-order: stroke;
+    stroke: var(--color-page);
+    stroke-width: 3px;
+  }
+
+  .still-map :global(.place-price) {
+    font-size: 13px;
+    font-weight: 700;
+    fill: var(--color-ink);
+    paint-order: stroke;
+    stroke: var(--color-page);
+    stroke-width: 3px;
+  }
+
+  .still-map :global(.map-note) {
+    font-size: 9px;
+    font-weight: 700;
+    fill: var(--color-ink);
+  }
+
+  .still-map :global(.map-note.muted) {
+    font-weight: 400;
+    fill: var(--color-ink-muted);
+  }
+
+  .still-map figcaption {
+    font-size: var(--text-label);
+    color: var(--color-ink-muted);
+  }
+
+  .band {
+    white-space: nowrap;
+  }
+
+  .swatch {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 3px;
+    margin: 0 var(--space-1) 0 var(--space-2);
+    vertical-align: -1px;
+  }
+
+  .how > summary {
+    cursor: pointer;
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  .lead {
+    display: block;
+    font-weight: 700;
+  }
+
+  .incomplete {
+    color: var(--color-caution);
+    font-weight: 700;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .about {
+    max-width: var(--measure-prose);
+  }
+
   .prose {
     margin-bottom: var(--space-6);
   }
