@@ -31,6 +31,10 @@ test.skipIf(!existsSync(builtDaily))(
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain('aria-label="Moments in the day"');
     expect(html).toContain('id="nodal-play"');
+    expect(html).toContain('data-lane="price"');
+    expect(html).toContain('data-lane="generation"');
+    expect(html).toContain('role="status"');
+    expect(html).toMatch(/Use the left and right arrow keys/);
     expect(html).toContain("ALB0331");
     expect(html).toContain("no coordinates");
     expect(html).toContain("LINZ Data Service");

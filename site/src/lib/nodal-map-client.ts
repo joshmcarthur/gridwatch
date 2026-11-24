@@ -1,4 +1,10 @@
 import {
+  type Lane,
+  laneCentreShare,
+  laneIndexAt,
+  tooltipRows,
+} from "./day-lanes.ts";
+import {
   DOT_RADIUS,
   formatPrice,
   isOutlier,
@@ -100,6 +106,63 @@ function paintIslands(
   }
 }
 
+/** Dim every fuel the active beat does not name, in the lane, its key and the island bars. */
+function paintFuels(root: ParentNode, lit: string[] | null): void {
+  for (const node of root.querySelectorAll<Element>(
+    "[data-lane-fuel], [data-legend-fuel], [data-segment], [data-fuel]",
+  )) {
+    const fuel =
+      node.getAttribute("data-lane-fuel") ??
+      node.getAttribute("data-legend-fuel") ??
+      node.getAttribute("data-segment") ??
+      node.getAttribute("data-fuel") ??
+      "";
+    node.classList.toggle("dim", lit !== null && !lit.includes(fuel));
+  }
+}
+
+function moveLine(line: SVGLineElement, share: number, svg: SVGSVGElement) {
+  const width = Number(svg.getAttribute("viewBox")?.split(" ")[2] ?? 0);
+  const x = (share * width).toFixed(1);
+  line.setAttribute("x1", x);
+  line.setAttribute("x2", x);
+}
+
+function fillTip(
+  doc: Document,
+  tip: HTMLElement,
+  lane: Lane,
+  index: number,
+  time: string,
+): void {
+  const heading = doc.createElement("p");
+  heading.className = "lane-tip-time";
+  heading.textContent = time;
+  const list = doc.createElement("ul");
+  for (const row of tooltipRows(lane, index)) {
+    const item = doc.createElement("li");
+    if (row.colour) {
+      const swatch = doc.createElement("span");
+      swatch.className = "swatch";
+      swatch.setAttribute("style", `background:${row.colour}`);
+      item.append(swatch);
+    }
+    const label = doc.createElement("span");
+    label.textContent = `${row.label} `;
+    const value = doc.createElement("strong");
+    value.textContent = row.value;
+    item.append(label, value);
+    if (row.note) {
+      const note = doc.createElement("span");
+      note.className = "lane-tip-note";
+      note.textContent = ` ${row.note}`;
+      item.append(note);
+    }
+    list.append(item);
+  }
+  tip.replaceChildren(heading, list);
+}
+
 function documentOf(root: ParentNode): Document {
   if ("createElement" in root) return root as Document;
   return (root as Element).ownerDocument;
@@ -177,7 +240,6 @@ export function bindNodalMap(root: ParentNode = document): void {
   container?.setAttribute("data-js", "");
   const beats = payload.beats ?? [];
   const beatItems = [...root.querySelectorAll<HTMLElement>("[data-beat]")];
-  const cursor = root.querySelector<SVGLineElement>("[data-spark-cursor]");
   const play = root.querySelector<HTMLButtonElement>("#nodal-play");
   const count = payload.periods.length;
   const reduceMotion =
@@ -213,14 +275,13 @@ export function bindNodalMap(root: ParentNode = document): void {
     if (summary) summary.textContent = periodSummary(payload, period);
     const svgSummary = root.querySelector("#nodal-map-chart-summary");
     if (svgSummary) svgSummary.textContent = periodSummary(payload, period);
-    if (cursor) {
-      const x0 = Number(cursor.dataset.x0 ?? 0);
-      const width = Number(cursor.dataset.width ?? 0);
-      const x = x0 + (count > 1 ? ((period - 1) / (count - 1)) * width : 0);
-      cursor.setAttribute("x1", x.toFixed(1));
-      cursor.setAttribute("x2", x.toFixed(1));
+    for (const svg of root.querySelectorAll<SVGSVGElement>("[data-lane-svg]")) {
+      const line = svg.querySelector<SVGLineElement>("[data-lane-cursor]");
+      if (line) moveLine(line, laneCentreShare(period - 1, count), svg);
     }
     const active = activeBeat();
+    const fuels = beats[active]?.fuels;
+    paintFuels(root, active >= 0 && fuels && fuels.length > 0 ? fuels : null);
     beatItems.forEach((item, index) => {
       const on = index === active;
       item.classList.toggle("active", on);
@@ -313,6 +374,66 @@ export function bindNodalMap(root: ParentNode = document): void {
         dir = next === "price" || next === "outlier" ? "desc" : "asc";
       }
       paint();
+    });
+  }
+  const lanes = payload.lanes ?? [];
+  const timeOf = (index: number) => payload.periods[index]?.time ?? "";
+  for (const plot of root.querySelectorAll<HTMLElement>("[data-lane]")) {
+    const lane = lanes.find((item) => item.id === plot.dataset.lane);
+    const svg = plot.querySelector<SVGSVGElement>("[data-lane-svg]");
+    const tip = plot.querySelector<HTMLElement>("[data-lane-tip]");
+    const hover = svg?.querySelector<SVGLineElement>("[data-lane-hover]");
+    if (!lane || !svg || !tip) continue;
+    const show = (index: number) => {
+      fillTip(doc, tip, lane, index, timeOf(index));
+      const share = laneCentreShare(index, count);
+      tip.hidden = false;
+      tip.style.left = `${(share * 100).toFixed(1)}%`;
+      tip.classList.toggle("flip", share > 0.55);
+      if (hover) {
+        moveLine(hover, share, svg);
+        hover.setAttribute("visibility", "visible");
+      }
+    };
+    const hide = () => {
+      tip.hidden = true;
+      hover?.setAttribute("visibility", "hidden");
+    };
+    const indexAt = (clientX: number) => {
+      const box = svg.getBoundingClientRect();
+      return laneIndexAt(
+        box.width > 0 ? (clientX - box.left) / box.width : 0,
+        count,
+      );
+    };
+    svg.addEventListener("pointermove", (event) =>
+      show(indexAt(event.clientX)),
+    );
+    svg.addEventListener("pointerleave", (event) => {
+      if (event.pointerType === "mouse") hide();
+    });
+    svg.addEventListener("click", (event) => {
+      const index = indexAt(event.clientX);
+      stop();
+      chosen = null;
+      goTo(index + 1);
+      show(index);
+    });
+    plot.addEventListener("focus", () => show(period - 1));
+    plot.addEventListener("blur", hide);
+    plot.addEventListener("keydown", (event) => {
+      const step =
+        event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+      if (event.key === "Escape") {
+        hide();
+        return;
+      }
+      if (step === 0) return;
+      event.preventDefault();
+      stop();
+      chosen = null;
+      goTo(period + step);
+      show(period - 1);
     });
   }
   paint();

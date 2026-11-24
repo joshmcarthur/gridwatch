@@ -1,16 +1,18 @@
 ---
 import type { SiteDay } from "@gridwatch/publisher/site-contract";
 import type { DayStory } from "../lib/day-beats";
+import { isSqueezed, laneSvg } from "../lib/day-lanes";
 import {
   clientPayload,
   coverageSentence,
+  dayLanes,
   formatPrice,
+  laneAxis,
   nodalMapView,
   PRICE_BANDS,
   periodSummary,
   renderMapSvg,
   rowsForPeriod,
-  sparklineSvg,
 } from "../lib/nodal-map";
 
 interface Props {
@@ -33,13 +35,16 @@ const peak = beats
       (otahuhu?.prices[b.at - 1] ?? 0) - (otahuhu?.prices[a.at - 1] ?? 0),
   )[0];
 const period = peak?.at ?? view?.defaultPeriod ?? 1;
+const lanes = view ? dayLanes(day, view, beats) : [];
+const axis = laneAxis(day);
 const payload = view
   ? {
       ...clientPayload(
         view,
-        beats.map(({ at, from, to }) => ({ at, from, to })),
+        beats.map(({ at, from, to, fuels }) => ({ at, from, to, fuels })),
       ),
       defaultPeriod: period,
+      lanes,
     }
   : null;
 const rows = payload ? rowsForPeriod(payload, period) : [];
@@ -50,7 +55,6 @@ const svg = view
       summary: periodSummary(view, period),
     })
   : null;
-const spark = view ? sparklineSvg(view, beats, period) : null;
 const clock =
   view?.periods.find((item) => item.period === period)?.time ?? "";
 const allDay = (beat: (typeof beats)[number]) =>
@@ -58,6 +62,11 @@ const allDay = (beat: (typeof beats)[number]) =>
 const activeIndex = beats.findIndex(
   (beat) => !allDay(beat) && period >= beat.from && period <= beat.to,
 );
+const litFuels: string[] | null =
+  activeIndex >= 0 && (beats[activeIndex]?.fuels.length ?? 0) > 0
+    ? (beats[activeIndex]?.fuels ?? null)
+    : null;
+const dim = (fuel: string) => litFuels !== null && !litFuels.includes(fuel);
 const megawatts = new Intl.NumberFormat("en-NZ", { maximumFractionDigits: 0 });
 const islandsNow = (view?.islands ?? []).map((island) => {
   const values = island.fuels.map((fuel) => fuel.megawatts[period - 1] ?? null);
@@ -111,7 +120,6 @@ const islandsNow = (view?.islands ?? []).map((island) => {
               step="1"
               aria-valuetext={clock}
             />
-            <Fragment set:html={spark} />
             <button type="button" id="nodal-play" aria-pressed="false">
               Play the day
             </button>
@@ -172,6 +180,7 @@ const islandsNow = (view?.islands ?? []).map((island) => {
                     {island.fuels.map((fuel) => (
                       <span
                         data-segment={fuel.fuel}
+                        class:list={[{ dim: dim(fuel.fuel) }]}
                         style={`background:${fuel.colour};flex-basis:${island.total > 0 && fuel.now !== null ? ((fuel.now / island.total) * 100).toFixed(2) : 0}%`}
                       />
                     ))}
@@ -180,6 +189,7 @@ const islandsNow = (view?.islands ?? []).map((island) => {
                     {island.fuels.map((fuel) => (
                       <li
                         data-fuel={fuel.fuel}
+                        class:list={[{ dim: dim(fuel.fuel) }]}
                         hidden={fuel.now === null || fuel.now < 1}
                       >
                         <span
@@ -204,6 +214,65 @@ const islandsNow = (view?.islands ?? []).map((island) => {
               prices only.
             </p>
           )}
+
+          <div class="lanes">
+            {lanes.map((lane, index) => (
+              <section class="lane" aria-labelledby={`lane-${lane.id}-name`}>
+                <p class="lane-lead">
+                  <span class="lane-name" id={`lane-${lane.id}-name`}>
+                    {lane.name}
+                  </span>{" "}
+                  {lane.sentence}
+                </p>
+                <ul class="lane-key" aria-label={`Key, ${lane.name.toLowerCase()}`}>
+                  {lane.series.map((series) => (
+                    <li
+                      data-legend-fuel={lane.stacked ? series.key : undefined}
+                      class:list={[{ dim: lane.stacked && dim(series.key) }]}
+                    >
+                      <span
+                        class="swatch"
+                        style={`background:${series.colour}`}
+                      />
+                      {series.label}
+                    </li>
+                  ))}
+                  {lane.gap && (
+                    <li>
+                      <span class="swatch gap" />
+                      {lane.gap.label}
+                    </li>
+                  )}
+                  {isSqueezed(lane) && (
+                    <li>
+                      <span class="swatch squeeze" />
+                      Above 40c the scale is squeezed
+                    </li>
+                  )}
+                  <li class="unit">
+                    {lane.unit === "price" ? "cents per kWh" : "MW"}
+                  </li>
+                </ul>
+                <div
+                  class="lane-plot"
+                  data-lane={lane.id}
+                  tabindex="0"
+                  role="group"
+                  aria-label={`${lane.name} through the day. Use the left and right arrow keys to move through the half-hours.`}
+                >
+                  <Fragment
+                    set:html={laneSvg(
+                      lane,
+                      beats,
+                      period,
+                      index === lanes.length - 1 ? axis : null,
+                    )}
+                  />
+                  <div class="lane-tip" data-lane-tip role="status" hidden />
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -218,9 +287,12 @@ const islandsNow = (view?.islands ?? []).map((island) => {
           that half-hour.
         </p>
         <p>
-          Ōtāhuhu, Haywards and Benmore carry price labels. The cable arrow
-          shows the day's average flow across Cook Strait. The flow in each
-          half-hour isn't on this page yet.
+          Ōtāhuhu, Haywards and Benmore carry price labels, and the price lane
+          beside the map follows the same three places. Above 40c per kWh the
+          lane squeezes its scale, so a spike keeps its shape, and the labels
+          give the true values. The generation lane stacks every fuel for both
+          islands. The cable arrow shows the day's average flow across Cook
+          Strait. The flow in each half-hour isn't on this page yet.
         </p>
         <p>
           The moments beside the map come from fixed rules run over the day's
@@ -325,7 +397,7 @@ const islandsNow = (view?.islands ?? []).map((island) => {
 
   @media (min-width: 48rem) {
     .layout {
-      grid-template-columns: minmax(16rem, 26rem) 1fr;
+      grid-template-columns: minmax(16rem, 28.5rem) 1fr;
     }
   }
 
@@ -421,15 +493,225 @@ const islandsNow = (view?.islands ?? []).map((island) => {
     line-height: 1.1;
   }
 
+  /* As wide as the lanes' plot (320 of 360 units), so the thumb lines up with the cursors. */
   input[type="range"] {
-    width: 100%;
+    width: calc(100% * 320 / 360);
+    margin: 0;
     accent-color: var(--color-brand);
   }
 
-  .control :global(.spark) {
+  /* On a phone the lanes come straight after the slider, before the moments. */
+  @media (max-width: 47.99rem) {
+    .control {
+      order: 1;
+    }
+    .summary {
+      order: 2;
+    }
+    .lanes {
+      order: 3;
+    }
+    .beats {
+      order: 4;
+    }
+    .islands {
+      order: 5;
+    }
+  }
+
+  .lanes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .lane {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .lane-lead {
+    margin: 0;
+    font-size: var(--text-label);
+  }
+
+  .lane-name {
+    font-size: var(--text-caption);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    margin-right: var(--space-1);
+  }
+
+  .lane-key {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--space-3);
+    font-size: var(--text-caption);
+    color: var(--color-ink-muted);
+  }
+
+  .lane-key .unit {
+    font-style: italic;
+  }
+
+  .swatch.gap {
+    background: color-mix(in srgb, var(--color-island-north) 25%, white);
+    border: 1px solid var(--color-rule);
+  }
+
+  .swatch.squeeze {
+    background: color-mix(in srgb, var(--color-ink) 6%, white);
+    border: 1px solid var(--color-rule);
+  }
+
+  .lane-plot {
+    position: relative;
+    border-radius: 4px;
+    touch-action: pan-y;
+  }
+
+  .lane-plot :global(.lane-svg) {
     width: 100%;
     height: auto;
     display: block;
+    overflow: visible;
+    cursor: crosshair;
+  }
+
+  .lane-plot :global(.lane-beat) {
+    fill: var(--color-brand);
+    fill-opacity: 0.08;
+  }
+
+  .lane-plot :global(.lane-squeeze) {
+    fill: var(--color-ink);
+    fill-opacity: 0.045;
+  }
+
+  .lane-plot :global(.lane-grid) {
+    stroke: var(--color-rule);
+    stroke-width: 0.6;
+  }
+
+  .lane-plot :global(.lane-grid.dashed) {
+    stroke: var(--color-ink-muted);
+    stroke-dasharray: 3 3;
+  }
+
+  .lane-plot :global(.lane-tick) {
+    font-size: 9px;
+    fill: var(--color-ink-muted);
+  }
+
+  .lane-plot :global(.lane-gap) {
+    fill-opacity: 0.14;
+  }
+
+  .lane-plot :global(.lane-halo) {
+    fill: none;
+    stroke: var(--color-card);
+    stroke-width: 4;
+    stroke-linejoin: round;
+  }
+
+  .lane-plot :global(.lane-line) {
+    stroke-width: 1.8;
+    stroke-linejoin: round;
+  }
+
+  .lane-plot :global(.lane-edge) {
+    fill: none;
+    stroke: var(--color-card);
+    stroke-width: 0.8;
+  }
+
+  .lane-plot :global(.lane-top) {
+    fill: none;
+    stroke: var(--color-ink);
+    stroke-width: 1.1;
+  }
+
+  .lane-plot :global(.lane-cursor) {
+    stroke: var(--color-ink);
+    stroke-width: 1.5;
+  }
+
+  .lane-plot :global(.lane-hover) {
+    stroke: var(--color-ink-muted);
+    stroke-width: 1;
+    stroke-dasharray: 2 2;
+  }
+
+  .lane-plot :global([data-lane-fuel]) {
+    transition: opacity 0.2s;
+  }
+
+  .lane-plot :global([data-lane-fuel].dim) {
+    opacity: 0.22;
+  }
+
+  .lane-key li.dim,
+  .islands li.dim,
+  .bar span.dim {
+    opacity: 0.35;
+  }
+
+  .lane-tip {
+    position: absolute;
+    bottom: calc(100% + var(--space-1));
+    transform: translateX(-50%);
+    z-index: 2;
+    min-width: 11rem;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-card);
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-chip);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+    font-size: var(--text-caption);
+    pointer-events: none;
+  }
+
+  .lane-tip.flip {
+    transform: translateX(-90%);
+  }
+
+  .lane-tip :global(.lane-tip-time) {
+    margin: 0 0 var(--space-1);
+    font-weight: 700;
+  }
+
+  .lane-tip :global(ul) {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .lane-tip :global(.swatch) {
+    display: inline-block;
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 2px;
+    margin-right: var(--space-1);
+    vertical-align: -1px;
+  }
+
+  .lane-tip :global(.lane-tip-note) {
+    color: var(--color-ink-muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lane-plot :global([data-lane-fuel]) {
+      transition: none;
+    }
   }
 
   #nodal-play {

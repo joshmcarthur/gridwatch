@@ -1,4 +1,5 @@
 import type { Island } from "@gridwatch/publisher/site-contract";
+import type { Lane } from "./day-lanes.ts";
 import { centsPerKwh } from "./price-regions.ts";
 
 export const MISSING_FILL = "#b7c5c0";
@@ -10,10 +11,10 @@ export const OUTLIER_RADIUS = 5.5;
  * (ADR-0029). `below` is exclusive; the last band has no upper limit.
  */
 export const PRICE_BANDS = [
-  { label: "Very cheap", range: "under 3c", below: 30, fill: "#4fa89a" },
-  { label: "Usual", range: "3c to 8c", below: 80, fill: "#9fb3ae" },
-  { label: "High", range: "8c to 20c", below: 200, fill: "#e0a23a" },
-  { label: "Very high", range: "20c and over", below: null, fill: "#c8553d" },
+  { label: "Very cheap", range: "under 3c", below: 30, fill: "#72bcae" },
+  { label: "Usual", range: "3c to 8c", below: 80, fill: "#869792" },
+  { label: "High", range: "8c to 20c", below: 200, fill: "#b06a08" },
+  { label: "Very high", range: "20c and over", below: null, fill: "#8a2716" },
 ] as const;
 
 export interface NodalMapRow {
@@ -37,6 +38,8 @@ export interface NodalMapBeat {
   at: number;
   from: number;
   to: number;
+  /** Fuels the beat names. The generation lane and island bars dim the others. */
+  fuels?: string[];
 }
 
 /** One island's generation by fuel, average MW per period. Null in a gap. */
@@ -58,6 +61,8 @@ export interface NodalMapPayload {
   places: Array<{ point_of_connection: string; prices: Array<number | null> }>;
   beats: NodalMapBeat[];
   islands: NodalMapIsland[];
+  /** The lanes beside the map, for tooltips (ADR-0031). */
+  lanes?: Lane[];
   p05: Array<number | null>;
   p95: Array<number | null>;
   min: Array<number | null>;

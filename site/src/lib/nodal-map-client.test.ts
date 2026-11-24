@@ -10,8 +10,22 @@ const payload: NodalMapPayload = {
   ],
   places: [{ point_of_connection: "OTA2201", prices: [690, 33] }],
   beats: [
-    { at: 2, from: 2, to: 2 },
+    { at: 2, from: 2, to: 2, fuels: ["gas"] },
     { at: 1, from: 1, to: 2 },
+  ],
+  lanes: [
+    {
+      id: "price",
+      name: "Price",
+      sentence: "",
+      unit: "price",
+      stacked: false,
+      series: [
+        { key: "OTA2201", label: "Ōtāhuhu", colour: "teal", values: [690, 33] },
+      ],
+      gap: null,
+      extra: [],
+    },
   ],
   islands: [
     {
@@ -61,6 +75,10 @@ function page() {
         <div><span data-segment="hydro"></span><span data-segment="gas"></span></div>
         <ul><li data-fuel="hydro"><span data-fuel-mw></span></li><li data-fuel="gas"><span data-fuel-mw></span></li></ul>
       </section>
+      <div data-lane="price" tabindex="0">
+        <svg data-lane-svg viewBox="0 0 360 68"><line data-lane-hover /><line data-lane-cursor /></svg>
+        <div data-lane-tip hidden></div>
+      </div>
       <table id="nodal-map-table">
         <thead>
           <tr>
@@ -158,4 +176,43 @@ test("the island bars follow the slider", () => {
     document.querySelector<HTMLElement>('[data-segment="hydro"]')?.style
       .flexBasis,
   ).toBe("100.00%");
+});
+
+test("a beat that names fuels dims the others in the island bars", () => {
+  const { document } = page();
+  bindNodalMap(document);
+  const hydro = () =>
+    document.querySelector('[data-segment="hydro"]')?.classList.contains("dim");
+  expect(hydro()).toBe(false);
+  document.querySelector<HTMLButtonElement>('[data-beat="0"] button')?.click();
+  expect(hydro()).toBe(true);
+  expect(
+    document.querySelector('[data-segment="gas"]')?.classList.contains("dim"),
+  ).toBe(false);
+});
+
+test("a lane shows its tooltip on focus and the arrow keys move the slider", () => {
+  const { document, Event } = page();
+  const key = (name: string) =>
+    Object.assign(new Event("keydown"), { key: name });
+  bindNodalMap(document);
+  const plot = document.querySelector<HTMLElement>('[data-lane="price"]');
+  const tip = document.querySelector<HTMLElement>("[data-lane-tip]");
+  if (!plot || !tip) throw new Error("missing lane");
+  expect(tip.hidden).toBe(true);
+  plot.dispatchEvent(new Event("focus"));
+  expect(tip.hidden).toBe(false);
+  expect(tip.textContent).toContain("12:00am");
+  expect(tip.textContent).toContain("69c");
+  expect(tip.textContent).toContain("$690/MWh");
+  plot.dispatchEvent(key("ArrowRight"));
+  expect(document.querySelector<HTMLInputElement>("#nodal-period")?.value).toBe(
+    "2",
+  );
+  expect(tip.textContent).toContain("3.3c");
+  expect(document.querySelector("[data-lane-cursor]")?.getAttribute("x1")).toBe(
+    "240.0",
+  );
+  plot.dispatchEvent(key("Escape"));
+  expect(tip.hidden).toBe(true);
 });
