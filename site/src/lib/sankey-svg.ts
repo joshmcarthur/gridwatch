@@ -1,6 +1,10 @@
 import type { FuelCategory } from "@gridwatch/publisher/site-contract";
 import { parseHTML } from "linkedom";
-import type { EnergySankey, SankeyNode } from "./sankey.ts";
+import {
+  type EnergySankey,
+  fuelFromNodeId,
+  type SankeyNode,
+} from "./sankey.ts";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const WIDTH = 480;
@@ -57,7 +61,7 @@ export function renderSankeySvg(chart: EnergySankey): string {
   const desc = document.createElementNS(SVG_NS, "desc");
   desc.setAttribute("id", "energy-sankey-chart-summary");
   desc.textContent =
-    "Generation by fuel to each island, the inter-island cable, estimated load, losses, and residual.";
+    "Each island's generation by fuel, the inter-island cable as a hop between them, estimated load, losses, and residual.";
   svg.append(title, desc);
 
   for (const link of chart.links) {
@@ -66,25 +70,40 @@ export function renderSankeySvg(chart: EnergySankey): string {
     if (!from || !to) continue;
     const scale = from.height / Math.max(from.flow, 1e-9);
     const thickness = Math.max(1.5, link.megawattHours * scale);
-    const backward = to.x < from.x;
-    const y1 = from.y + (sourceUsed.get(edgeKey(from.node.id, backward)) ?? 0);
-    const y2 = to.y + (targetUsed.get(edgeKey(to.node.id, !backward)) ?? 0);
-    sourceUsed.set(
-      edgeKey(from.node.id, backward),
-      (sourceUsed.get(edgeKey(from.node.id, backward)) ?? 0) + thickness,
-    );
-    targetUsed.set(
-      edgeKey(to.node.id, !backward),
-      (targetUsed.get(edgeKey(to.node.id, !backward)) ?? 0) + thickness,
-    );
-    const x1 = backward ? from.x : from.x + NODE_WIDTH;
-    const x2 = backward ? to.x + NODE_WIDTH : to.x;
-    const mid = (x1 + x2) / 2;
     const path = document.createElementNS(SVG_NS, "path");
-    path.setAttribute(
-      "d",
-      `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2} L${x2},${y2 + thickness} C${mid},${y2 + thickness} ${mid},${y1 + thickness} ${x1},${y1 + thickness} Z`,
-    );
+    if (from.x === to.x) {
+      const downward = to.y > from.y;
+      const y1 = downward ? from.y + from.height : from.y;
+      const y2 = downward ? to.y : to.y + to.height;
+      const xMid = from.x + NODE_WIDTH / 2;
+      const left = xMid - thickness / 2;
+      const right = xMid + thickness / 2;
+      const midY = (y1 + y2) / 2;
+      path.setAttribute(
+        "d",
+        `M${left},${y1} C${left},${midY} ${left},${midY} ${left},${y2} L${right},${y2} C${right},${midY} ${right},${midY} ${right},${y1} Z`,
+      );
+    } else {
+      const backward = to.x < from.x;
+      const y1 =
+        from.y + (sourceUsed.get(edgeKey(from.node.id, backward)) ?? 0);
+      const y2 = to.y + (targetUsed.get(edgeKey(to.node.id, !backward)) ?? 0);
+      sourceUsed.set(
+        edgeKey(from.node.id, backward),
+        (sourceUsed.get(edgeKey(from.node.id, backward)) ?? 0) + thickness,
+      );
+      targetUsed.set(
+        edgeKey(to.node.id, !backward),
+        (targetUsed.get(edgeKey(to.node.id, !backward)) ?? 0) + thickness,
+      );
+      const x1 = backward ? from.x : from.x + NODE_WIDTH;
+      const x2 = backward ? to.x + NODE_WIDTH : to.x;
+      const mid = (x1 + x2) / 2;
+      path.setAttribute(
+        "d",
+        `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2} L${x2},${y2 + thickness} C${mid},${y2 + thickness} ${mid},${y1 + thickness} ${x1},${y1 + thickness} Z`,
+      );
+    }
     path.setAttribute("fill", from.fill);
     path.setAttribute("fill-opacity", "0.35");
     const tip = document.createElementNS(SVG_NS, "title");
@@ -95,6 +114,7 @@ export function renderSankeySvg(chart: EnergySankey): string {
 
   for (const box of boxes) {
     const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("data-id", box.node.id);
     rect.setAttribute("x", String(box.x));
     rect.setAttribute("y", String(box.y));
     rect.setAttribute("width", String(NODE_WIDTH));
@@ -151,8 +171,15 @@ export function sankeyLegend(
 
 function layout(chart: EnergySankey): Box[] {
   const flowOf = flowMap(chart);
-  const fuels = chart.nodes.filter(
-    (node) => node.kind === "fuel" || node.kind === "battery",
+  const niFuels = chart.nodes.filter(
+    (node) =>
+      (node.kind === "fuel" || node.kind === "battery") &&
+      node.id.endsWith(":NI"),
+  );
+  const siFuels = chart.nodes.filter(
+    (node) =>
+      (node.kind === "fuel" || node.kind === "battery") &&
+      node.id.endsWith(":SI"),
   );
   const islands = chart.nodes.filter((node) => node.kind === "island");
   const hvdc = chart.nodes.find((node) => node.kind === "hvdc");
@@ -169,19 +196,40 @@ function layout(chart: EnergySankey): Box[] {
       node.id.endsWith(":SI") &&
       node.megawattHours >= 0,
   );
-  const negativeResidual = chart.nodes.filter(
-    (node) => node.kind === "residual" && node.megawattHours < 0,
-  );
+  const niFuelColumn = [
+    ...chart.nodes.filter(
+      (node) =>
+        node.kind === "residual" &&
+        node.id.endsWith(":NI") &&
+        node.megawattHours < 0,
+    ),
+    ...niFuels,
+  ];
+  const siFuelColumn = [
+    ...chart.nodes.filter(
+      (node) =>
+        node.kind === "residual" &&
+        node.id.endsWith(":SI") &&
+        node.megawattHours < 0,
+    ),
+    ...siFuels,
+  ];
 
   const inner = HEIGHT - PAD * 2;
-  const fuelFlow = sumFlow(fuels, flowOf);
-  const islandFlow = sumFlow(islands, flowOf);
+  const ni = islands.find((node) => node.id.endsWith(":NI"));
+  const si = islands.find((node) => node.id.endsWith(":SI"));
+  const niIslandFlow = ni ? (flowOf.get(ni.id) ?? 0) : 0;
+  const siIslandFlow = si ? (flowOf.get(si.id) ?? 0) : 0;
   const hvdcFlow = hvdc ? (flowOf.get(hvdc.id) ?? 0) : 0;
   const lossFlow = losses ? (flowOf.get(losses.id) ?? 0) : 0;
   const niSinkFlow = sumFlow(niSinks, flowOf);
   const siSinkFlow = sumFlow(siSinks, flowOf);
-  const fuelGaps = Math.max(0, fuels.length - 1) * GAP;
-  const islandGaps = Math.max(0, islands.length + (hvdc ? 1 : 0) - 1) * GAP;
+  const middleCount = (ni ? 1 : 0) + (hvdc ? 1 : 0) + (si ? 1 : 0);
+  const fuelGaps =
+    Math.max(0, niFuelColumn.length - 1) * GAP +
+    Math.max(0, siFuelColumn.length - 1) * GAP +
+    GAP;
+  const islandGaps = Math.max(0, middleCount - 1) * GAP;
   const sinkGaps =
     Math.max(0, niSinks.length - 1) * GAP +
     Math.max(0, siSinks.length - 1) * GAP +
@@ -191,33 +239,18 @@ function layout(chart: EnergySankey): Box[] {
   const scale =
     usable /
     Math.max(
-      fuelFlow,
-      islandFlow + hvdcFlow,
+      sumFlow(niFuelColumn, flowOf) + sumFlow(siFuelColumn, flowOf),
+      niIslandFlow + siIslandFlow + hvdcFlow,
       niSinkFlow + siSinkFlow + lossFlow,
       1,
     );
 
-  const xs = [78, 168, 268, 372];
+  const xs = [78, 186, 372];
   const boxes: Box[] = [];
-  stackColumn(
-    boxes,
-    [...negativeResidual, ...fuels],
-    xs[0] ?? PAD,
-    PAD,
-    scale,
-    flowOf,
-  );
-
-  const ni = islands.find((node) => node.id.endsWith(":NI"));
-  const si = islands.find((node) => node.id.endsWith(":SI"));
-  const niHeight = ni
-    ? Math.max(MIN_NODE, (flowOf.get(ni.id) ?? 0) * scale)
-    : 0;
-  const siHeight = si
-    ? Math.max(MIN_NODE, (flowOf.get(si.id) ?? 0) * scale)
-    : 0;
+  const niHeight = ni ? Math.max(MIN_NODE, niIslandFlow * scale) : 0;
+  const siHeight = si ? Math.max(MIN_NODE, siIslandFlow * scale) : 0;
   const hvdcHeight = hvdc ? Math.max(MIN_NODE, hvdcFlow * scale) : 0;
-  const islandBlock = niHeight + siHeight + hvdcHeight + 2 * GAP;
+  const islandBlock = niHeight + siHeight + hvdcHeight + islandGaps;
   let islandY = PAD + Math.max(0, (inner - islandBlock) / 2);
   if (ni) {
     boxes.push(boxOf(ni, xs[1] ?? PAD, islandY, niHeight, flowOf));
@@ -225,32 +258,34 @@ function layout(chart: EnergySankey): Box[] {
   }
   const hvdcY = islandY;
   if (hvdc) {
-    boxes.push(boxOf(hvdc, xs[2] ?? PAD, hvdcY, hvdcHeight, flowOf));
+    boxes.push(boxOf(hvdc, xs[1] ?? PAD, hvdcY, hvdcHeight, flowOf));
     islandY += hvdcHeight + GAP;
   }
   if (si) {
     boxes.push(boxOf(si, xs[1] ?? PAD, islandY, siHeight, flowOf));
   }
 
-  const niSinkStart = ni
+  const niStart = ni
     ? (boxes.find((item) => item.node.id === ni.id)?.y ?? PAD)
     : PAD;
-  stackColumn(boxes, niSinks, xs[3] ?? PAD, niSinkStart, scale, flowOf);
+  const siStart = si
+    ? (boxes.find((item) => item.node.id === si.id)?.y ?? PAD)
+    : PAD;
+  stackColumn(boxes, niFuelColumn, xs[0] ?? PAD, niStart, scale, flowOf);
+  stackColumn(boxes, siFuelColumn, xs[0] ?? PAD, siStart, scale, flowOf);
+  stackColumn(boxes, niSinks, xs[2] ?? PAD, niStart, scale, flowOf);
   if (losses) {
     boxes.push(
       boxOf(
         losses,
-        xs[3] ?? PAD,
+        xs[2] ?? PAD,
         hvdcY,
         Math.max(MIN_NODE, (flowOf.get(losses.id) ?? 0) * scale),
         flowOf,
       ),
     );
   }
-  const siSinkStart = si
-    ? (boxes.find((item) => item.node.id === si.id)?.y ?? PAD)
-    : PAD;
-  stackColumn(boxes, siSinks, xs[3] ?? PAD, siSinkStart, scale, flowOf);
+  stackColumn(boxes, siSinks, xs[2] ?? PAD, siStart, scale, flowOf);
   return boxes;
 }
 
@@ -352,10 +387,7 @@ function displayLabel(node: SankeyNode): string {
 function nodeFill(node: SankeyNode): string {
   switch (node.kind) {
     case "fuel": {
-      const fuel = node.id.slice("fuel:".length) as Exclude<
-        FuelCategory,
-        "battery"
-      >;
+      const fuel = fuelFromNodeId(node.id) as Exclude<FuelCategory, "battery">;
       return FUEL_COLOUR[fuel] ?? "var(--color-fuel-other)";
     }
     case "battery":

@@ -10,6 +10,7 @@ import fixtureJson from "../../fixtures/days/2026-09-27.json";
 import {
   energySankey,
   nodeId,
+  sankeyCaption,
   sankeyMissingCopy,
   sankeySummary,
   sankeyTable,
@@ -191,6 +192,47 @@ test("node values match the #23 gold day table", () => {
   expect(link(chart, nodeId("island", "NI"), nodeId("residual", "NI"))).toBe(
     GOLD.NI.residual,
   );
+  expect(node(chart, nodeId("fuel", "hydro", "NI")).megawattHours).toBe(
+    GOLD.NI.generation,
+  );
+  expect(node(chart, nodeId("fuel", "hydro", "SI")).megawattHours).toBe(
+    GOLD.SI.generation,
+  );
+  expect(
+    link(chart, nodeId("fuel", "hydro", "NI"), nodeId("island", "NI")),
+  ).toBe(GOLD.NI.generation);
+  expect(
+    link(chart, nodeId("fuel", "hydro", "SI"), nodeId("island", "SI")),
+  ).toBe(GOLD.SI.generation);
+  expect(
+    chart.links.find(
+      (item) =>
+        item.source === nodeId("fuel", "hydro", "SI") &&
+        item.target === nodeId("island", "NI"),
+    ),
+  ).toBeUndefined();
+});
+
+test("a southward day reverses the cable hop", () => {
+  const southward = completeSankey();
+  for (const island of southward.islands) {
+    if (island.island === "NI") island.hvdc_import_megawatt_hours = -57.6;
+    if (island.island === "SI") island.hvdc_import_megawatt_hours = 48;
+  }
+  const chart = energySankey(dayOf(southward));
+  if (!chart) throw new Error("expected a sankey");
+  expect(link(chart, nodeId("island", "NI"), "hvdc")).toBe(57.6);
+  expect(link(chart, "hvdc", nodeId("island", "SI"))).toBe(48);
+  expect(
+    chart.links.find(
+      (item) =>
+        item.source === "hvdc" && item.target === nodeId("island", "NI"),
+    ),
+  ).toBeUndefined();
+  expect(sankeyCaption(chart)).toMatch(/southward/i);
+  expect(sankeySummary(chart)).toMatch(/southward/i);
+  expect(sankeyCaption(chart)).not.toMatch(/\bNI\b/);
+  expect(sankeySummary(chart)).not.toMatch(/\bSI\b/);
 });
 
 test("a non-zero residual is a visible node, and a zero residual is omitted", () => {
@@ -203,7 +245,13 @@ test("a non-zero residual is a visible node, and a zero residual is omitted", ()
   ).toBe(true);
   expect(sankeySummary(withResidual)).toMatch(/residual/i);
   expect(sankeySummary(withResidual)).toMatch(/estimated load/i);
+  expect(sankeySummary(withResidual)).toMatch(/northward/i);
   expect(sankeySummary(withResidual)).not.toMatch(/\bconsumption\b/i);
+  expect(sankeySummary(withResidual)).not.toMatch(/\bNI\b/);
+  expect(sankeySummary(withResidual)).not.toMatch(/\bSI\b/);
+  expect(sankeyCaption(withResidual)).toMatch(/northward/i);
+  expect(sankeyCaption(withResidual)).not.toMatch(/\bNI\b/);
+  expect(sankeyCaption(withResidual)).not.toMatch(/\bSI\b/);
 
   const balanced = completeSankey();
   for (const island of balanced.islands) {
@@ -225,15 +273,14 @@ test("battery is its own node, not mixed into primary generation", () => {
     ]),
   );
   if (!chart) throw new Error("expected a sankey");
-  const battery = node(chart, nodeId("fuel", "battery"));
+  const battery = node(chart, nodeId("fuel", "battery", "NI"));
   expect(battery.kind).toBe("battery");
   expect(battery.label).toMatch(/stored power/i);
+  expect(node(chart, nodeId("fuel", "hydro", "NI")).kind).toBe("fuel");
+  expect(node(chart, nodeId("fuel", "hydro", "SI")).kind).toBe("fuel");
   expect(
-    chart.nodes.find((item) => item.id === nodeId("fuel", "hydro"))?.kind,
-  ).toBe("fuel");
-  expect(link(chart, nodeId("fuel", "battery"), nodeId("island", "NI"))).toBe(
-    8,
-  );
+    link(chart, nodeId("fuel", "battery", "NI"), nodeId("island", "NI")),
+  ).toBe(8);
 });
 
 test("the static SVG labels residual and uses a text alternative", () => {
@@ -273,6 +320,29 @@ test("the legend has one entry per band colour drawn, including other", () => {
   expect(new Set(labels).size).toBe(labels.length);
 });
 
+test("the SVG keeps North Island above South Island and hops the cable between them", () => {
+  const chart = energySankey(
+    dayOf(completeSankey(), [
+      fuel("hydro", "NI", GOLD.NI.generation),
+      fuel("hydro", "SI", GOLD.SI.generation),
+    ]),
+  );
+  if (!chart) throw new Error("expected a sankey");
+  const svg = renderSankeySvg(chart);
+  const ni = svgRect(svg, nodeId("island", "NI"));
+  const si = svgRect(svg, nodeId("island", "SI"));
+  const cable = svgRect(svg, "hvdc");
+  const niHydro = svgRect(svg, nodeId("fuel", "hydro", "NI"));
+  const siHydro = svgRect(svg, nodeId("fuel", "hydro", "SI"));
+  expect(ni.y + ni.height).toBeLessThan(cable.y);
+  expect(cable.y + cable.height).toBeLessThan(si.y);
+  expect(ni.x).toBe(si.x);
+  expect(cable.x).toBe(ni.x);
+  expect(niHydro.y + niHydro.height).toBeLessThan(siHydro.y);
+  expect(Math.abs(niHydro.y - ni.y)).toBeLessThan(Math.abs(niHydro.y - si.y));
+  expect(Math.abs(siHydro.y - si.y)).toBeLessThan(Math.abs(siHydro.y - ni.y));
+});
+
 test("the numbers table is the gold day table and does not say consumption", () => {
   const chart = energySankey(dayOf(completeSankey()));
   if (!chart) throw new Error("expected a sankey");
@@ -289,6 +359,23 @@ test("the numbers table is the gold day table and does not say consumption", () 
   expect(table.rows[2]?.[0]).toBe("Cable losses");
   expect(table.rows[2]?.[4]).toBe("9.6");
 });
+
+function svgRect(
+  svg: string,
+  id: string,
+): { x: number; y: number; height: number } {
+  const tag = [...svg.matchAll(/<rect\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((open) => open.includes(`data-id="${id}"`));
+  if (!tag) throw new Error(`missing rect ${id}`);
+  const x = tag.match(/\bx="([^"]+)"/)?.[1];
+  const y = tag.match(/\by="([^"]+)"/)?.[1];
+  const height = tag.match(/\bheight="([^"]+)"/)?.[1];
+  if (x === undefined || y === undefined || height === undefined) {
+    throw new Error(`rect ${id} is missing x, y, or height`);
+  }
+  return { x: Number(x), y: Number(y), height: Number(height) };
+}
 
 function node(chart: NonNullable<ReturnType<typeof energySankey>>, id: string) {
   const found = chart.nodes.find((item) => item.id === id);

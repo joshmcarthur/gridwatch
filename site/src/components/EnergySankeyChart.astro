@@ -4,6 +4,7 @@ import ChartFigure from "./ChartFigure.astro";
 import { renderSankeySvg, sankeyLegend } from "../lib/sankey-svg";
 import {
   energySankey,
+  sankeyCaption,
   sankeyMissingCopy,
   sankeySummary,
   sankeyTable,
@@ -52,8 +53,7 @@ const legend = chart ? sankeyLegend(chart) : [];
       </Fragment>
       <Fragment slot="caption">
         <p>
-          Energy for the whole day, from fuel to each island, across the cable,
-          then to estimated load.
+          {sankeyCaption(chart)}
         </p>
       </Fragment>
       <Fragment slot="method">
