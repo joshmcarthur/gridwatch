@@ -211,7 +211,7 @@ test("the SVG is a labelled figure with a titled circle per located POC", () => 
   expect(svg).toContain('role="img"');
   expect(svg).toContain("nodal-map-chart-title");
   expect(svg).toContain('data-poc="ALB0331"');
-  expect(svg).not.toContain("HAY2201");
+  expect(svg).not.toContain('data-poc="HAY2201"');
   expect(svg).toContain("<title>ALB0331, 80.00 dollars per megawatt-hour");
 });
 

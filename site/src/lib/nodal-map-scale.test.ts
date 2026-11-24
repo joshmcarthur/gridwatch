@@ -5,7 +5,8 @@ import {
   isOutlier,
   MISSING_FILL,
   type NodalMapRow,
-  priceFill,
+  periodSummary,
+  priceBandFill,
   sortRows,
 } from "./nodal-map-scale.ts";
 
@@ -20,16 +21,28 @@ test("formatPrice uses two decimal places and a no-data label", () => {
   expect(formatPrice(null)).toBe("No data");
 });
 
-test("priceFill is missing grey when any input is null, mid when min equals max", () => {
-  expect(priceFill(null, 0, 10)).toBe(MISSING_FILL);
-  expect(priceFill(5, null, 10)).toBe(MISSING_FILL);
-  expect(priceFill(5, 10, 10)).toBe("#f2b544");
+test("priceBandFill is grey when missing and uses fixed bands in cents per kWh", () => {
+  expect(priceBandFill(null)).toBe(MISSING_FILL);
+  expect(priceBandFill(-5)).toBe("#4fa89a");
+  expect(priceBandFill(29.99)).toBe("#4fa89a");
+  expect(priceBandFill(30)).toBe("#9fb3ae");
+  expect(priceBandFill(80)).toBe("#e0a23a");
+  expect(priceBandFill(200)).toBe("#c8553d");
+  expect(priceBandFill(3296)).toBe("#c8553d");
 });
 
-test("priceFill runs from teal through gold to amber", () => {
-  expect(priceFill(0, 0, 100)).toBe("#1f6f78");
-  expect(priceFill(50, 0, 100)).toBe("#f2b544");
-  expect(priceFill(100, 0, 100)).toBe("#b7791f");
+test("periodSummary says the clock and the range in cents per kWh", () => {
+  const view = {
+    periods: [{ period: 1, time: "7:00pm" }],
+    min: [9],
+    max: [150],
+  };
+  expect(periodSummary(view, 1)).toBe(
+    "At 7:00pm, wholesale prices on the grid ranged from 0.9c to 15c per kWh.",
+  );
+  expect(periodSummary({ ...view, min: [null] }, 1)).toBe(
+    "At 7:00pm, wholesale prices for this half-hour are missing.",
+  );
 });
 
 test("isOutlier is outside p05–p95, never for a missing price", () => {

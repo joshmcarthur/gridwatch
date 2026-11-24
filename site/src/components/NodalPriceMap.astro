@@ -1,23 +1,47 @@
 ---
 import type { SiteDay } from "@gridwatch/publisher/site-contract";
+import type { DayStory } from "../lib/day-beats";
 import {
   clientPayload,
   coverageSentence,
   formatPrice,
   nodalMapView,
+  PRICE_BANDS,
   periodSummary,
   renderMapSvg,
   rowsForPeriod,
+  sparklineSvg,
 } from "../lib/nodal-map";
 
 interface Props {
   day: SiteDay;
+  story: DayStory;
 }
 
-const { day } = Astro.props;
+const { day, story } = Astro.props;
 const view = nodalMapView(day);
-const period = view?.defaultPeriod ?? 1;
-const payload = view ? clientPayload(view) : null;
+const beats = story.beats;
+
+// Open on the day's highest price peak, else the half-hour with the widest spread.
+const otahuhu = view?.places.find(
+  (place) => place.point_of_connection === "OTA2201",
+);
+const peak = beats
+  .filter((beat) => beat.rule === "price_peak")
+  .sort(
+    (a, b) =>
+      (otahuhu?.prices[b.at - 1] ?? 0) - (otahuhu?.prices[a.at - 1] ?? 0),
+  )[0];
+const period = peak?.at ?? view?.defaultPeriod ?? 1;
+const payload = view
+  ? {
+      ...clientPayload(
+        view,
+        beats.map(({ at, from, to }) => ({ at, from, to })),
+      ),
+      defaultPeriod: period,
+    }
+  : null;
 const rows = payload ? rowsForPeriod(payload, period) : [];
 const svg = view
   ? renderMapSvg(view, period, {
@@ -26,8 +50,29 @@ const svg = view
       summary: periodSummary(view, period),
     })
   : null;
+const spark = view ? sparklineSvg(view, beats, period) : null;
 const clock =
   view?.periods.find((item) => item.period === period)?.time ?? "";
+const allDay = (beat: (typeof beats)[number]) =>
+  beat.from === 1 && beat.to === day.periods.length;
+const activeIndex = beats.findIndex(
+  (beat) => !allDay(beat) && period >= beat.from && period <= beat.to,
+);
+const megawatts = new Intl.NumberFormat("en-NZ", { maximumFractionDigits: 0 });
+const islandsNow = (view?.islands ?? []).map((island) => {
+  const values = island.fuels.map((fuel) => fuel.megawatts[period - 1] ?? null);
+  const total = values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+  return {
+    key: island.key,
+    name: island.key === "north" ? "North Island" : "South Island",
+    total,
+    known: values.some((value) => value !== null),
+    fuels: island.fuels.map((fuel, index) => ({
+      ...fuel,
+      now: values[index] ?? null,
+    })),
+  };
+});
 ---
 
 {
@@ -37,113 +82,215 @@ const clock =
       published for this day yet.
     </p>
   ) : (
-    <div class="nodal" data-nodal-map>
+    <div class="story-map" data-nodal-map>
       {view.incomplete && (
         <p>
           Some wholesale price numbers are incomplete, so a place can be
-          missing a colour for a 30-minute slice.
+          missing a colour for a half-hour.
         </p>
       )}
-      <p>{coverageSentence(view)}</p>
-      <p>
-        A trading period is a 30-minute slice of the day. The map opens on the
-        slice with the widest spread of prices. Move the slider to colour the
-        same places for another slice. Scripts off, this page stays on that
-        opening slice and the table below.
-      </p>
-      <div class="control">
-        <label for="nodal-period">Trading period</label>
-        <input
-          id="nodal-period"
-          type="range"
-          min="1"
-          max={view.periods.length}
-          value={period}
-          step="1"
-        />
-        <p id="nodal-period-label">
-          Trading period {period} of {view.periods.length}, starting {clock}
+      <div class="layout">
+        <figure class="map">
+          <Fragment set:html={svg} />
+          <figcaption>
+            <ul class="bands" aria-label="Colour key, wholesale price">
+              {PRICE_BANDS.map((band) => (
+                <li>
+                  <span class="swatch" style={`background:${band.fill}`} />
+                  {band.label}, {band.range} per kWh
+                </li>
+              ))}
+            </ul>
+          </figcaption>
+        </figure>
+
+        <div class="side">
+          <div class="control">
+            <label for="nodal-period">Time of day</label>
+            <p id="nodal-period-label" class="clock">{clock}</p>
+            <input
+              id="nodal-period"
+              type="range"
+              min="1"
+              max={view.periods.length}
+              value={period}
+              step="1"
+              aria-valuetext={clock}
+            />
+            <Fragment set:html={spark} />
+            <button type="button" id="nodal-play" aria-pressed="false">
+              Play the day
+            </button>
+          </div>
+          <p id="nodal-map-live-summary" class="summary" aria-live="polite">
+            {periodSummary(view, period)}
+          </p>
+
+          <ol class="beats" aria-label="Moments in the day">
+            {beats.map((beat, index) => (
+              <li
+                data-beat={index}
+                class:list={[{ active: index === activeIndex }]}
+              >
+                <button
+                  type="button"
+                  aria-pressed={index === activeIndex ? "true" : "false"}
+                >
+                  <span class="beat-title">{beat.title}</span>
+                  <span class="beat-when">{beat.when}</span>
+                </button>
+                <p>
+                  {beat.text}
+                  {beat.link && (
+                    <>
+                      {" "}
+                      <a href={beat.link.href}>{beat.link.label}</a>.
+                    </>
+                  )}
+                </p>
+              </li>
+            ))}
+          </ol>
+
+          {islandsNow.length > 0 ? (
+            <div class="islands">
+              {islandsNow.map((island) => (
+                <section
+                  data-island={island.key}
+                  aria-labelledby={`island-${island.key}`}
+                >
+                  <h3 id={`island-${island.key}`}>
+                    {island.name}{" "}
+                    <span data-island-total>
+                      {island.known
+                        ? `${megawatts.format(island.total)} MW made`
+                        : "No numbers for this half-hour"}
+                    </span>
+                  </h3>
+                  <div class="bar" aria-hidden="true">
+                    {island.fuels.map((fuel) => (
+                      <span
+                        data-segment={fuel.fuel}
+                        style={`background:${fuel.colour};flex-basis:${island.total > 0 && fuel.now !== null ? ((fuel.now / island.total) * 100).toFixed(2) : 0}%`}
+                      />
+                    ))}
+                  </div>
+                  <ul>
+                    {island.fuels.map((fuel) => (
+                      <li
+                        data-fuel={fuel.fuel}
+                        hidden={fuel.now === null || fuel.now < 1}
+                      >
+                        <span
+                          class="swatch"
+                          style={`background:${fuel.colour}`}
+                        />
+                        {fuel.label}{" "}
+                        <span data-fuel-mw>
+                          {fuel.now === null
+                            ? ""
+                            : `${megawatts.format(fuel.now)} MW`}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <p class="summary">
+              Generation numbers for this day are not in yet, so the map shows
+              prices only.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <details class="more">
+        <summary>How to read this</summary>
+        <p>{coverageSentence(view)}</p>
+        <p>
+          Each dot is a named place on the grid, coloured by its wholesale price
+          for the half-hour on the slider. The colour bands stay the same all
+          day, so the same colour means the same price at 3am and at 6pm. A
+          larger dot is among the cheapest or most expensive 5 percent of
+          places in that half-hour.
         </p>
-      </div>
-      <p id="nodal-map-live-summary" aria-live="polite">
-        {periodSummary(view, period)}
-      </p>
-      <figure class="map">
-        <Fragment set:html={svg} />
-        <figcaption>
-          <p>
-            Colour is the wholesale price in dollars per megawatt-hour ($/MWh),
-            from low (teal) to high (amber). A larger dot is among the cheapest
-            or most expensive 5 percent of places in that slice: a large
-            difference.
-            Hover a dot for its name and price.
-          </p>
-          <p>
-            Contains data sourced from the LINZ Data Service licensed for reuse
-            under CC BY 4.0. LINZ is Land Information New Zealand. CC BY 4.0 is
-            Creative Commons Attribution 4.0. Coastline simplified; Chatham and
-            subantarctic islands are not drawn.
-          </p>
-        </figcaption>
-      </figure>
-      <p>
-        Source: Electricity Authority dispatch energy prices at each named
-        place on the grid. Prices are interim and may be revised. Coordinates
-        come from the Authority's network supply point mapping files: the
-        public list of where local networks meet the grid. A proxy price is a
-        copy of a nearby place's price, used when a place is out of service.
-      </p>
-      <div class="table-wrap">
-      <table id="nodal-map-table">
-        <caption>
-          Wholesale price at each named place for the selected 30-minute slice.
-          Places without coordinates have a blank location.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">
-              <button type="button" data-sort="point_of_connection">
-                Place
-              </button>
-            </th>
-            <th scope="col">
-              <button type="button" data-sort="location">Location</button>
-            </th>
-            <th scope="col">
-              <button type="button" data-sort="island">Island</button>
-            </th>
-            <th scope="col">
-              <button type="button" data-sort="price">
-                Price ($/MWh)
-              </button>
-            </th>
-            <th scope="col">
-              <button type="button" data-sort="outlier">Note</button>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {
-            rows.map((row) => (
+        <p>
+          Ōtāhuhu, Haywards and Benmore are labelled with their price. The
+          cable arrow is the day's average flow across Cook Strait, not the
+          flow in each half-hour.
+        </p>
+        <p>
+          The moments in the day come from fixed rules over the day's numbers:
+          the highest and lowest prices, when wind or solar peaked, lasting
+          changes in geothermal output, unusual stretches, and the cable. They
+          say what the numbers show, not why.
+        </p>
+        <p>
+          Source: Electricity Authority wholesale prices at each named place on
+          the grid. Prices can be revised after the day. Coordinates come from
+          the Authority's public list of where local networks meet the grid.
+          Contains data sourced from the LINZ Data Service licensed for reuse
+          under CC BY 4.0. LINZ is Land Information New Zealand. CC BY 4.0 is
+          Creative Commons Attribution 4.0. Coastline simplified; Chatham and
+          subantarctic islands are not drawn.
+        </p>
+      </details>
+
+      <details class="more">
+        <summary>Show the numbers as a table</summary>
+        <div class="table-wrap">
+          <table id="nodal-map-table">
+            <caption>
+              Wholesale price at each named place for the selected half-hour,
+              in dollars per megawatt-hour. Places without coordinates have a
+              blank location.
+            </caption>
+            <thead>
               <tr>
-                <th scope="row">{row.point_of_connection}</th>
-                <td>{row.location}</td>
-                <td>{row.island}</td>
-                <td>{formatPrice(row.price)}</td>
-                <td>
-                  {[
-                    row.outlier ? "Large difference" : "",
-                    row.proxy ? "Proxy price" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(". ")}
-                </td>
+                <th scope="col">
+                  <button type="button" data-sort="point_of_connection">
+                    Place
+                  </button>
+                </th>
+                <th scope="col">
+                  <button type="button" data-sort="location">Location</button>
+                </th>
+                <th scope="col">
+                  <button type="button" data-sort="island">Island</button>
+                </th>
+                <th scope="col">
+                  <button type="button" data-sort="price">
+                    Price ($/MWh)
+                  </button>
+                </th>
+                <th scope="col">
+                  <button type="button" data-sort="outlier">Note</button>
+                </th>
               </tr>
-            ))
-          }
-        </tbody>
-      </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr>
+                  <th scope="row">{row.point_of_connection}</th>
+                  <td>{row.location}</td>
+                  <td>{row.island}</td>
+                  <td>{formatPrice(row.price)}</td>
+                  <td>
+                    {[
+                      row.outlier ? "Large difference" : "",
+                      row.proxy ? "Copied from a nearby place" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(". ")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
       {payload && (
         <script
           is:inline
@@ -162,10 +309,96 @@ const clock =
 </script>
 
 <style>
-  .nodal {
+  .story-map {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+    align-items: start;
+  }
+
+  @media (min-width: 48rem) {
+    .layout {
+      grid-template-columns: minmax(16rem, 26rem) 1fr;
+    }
+  }
+
+  .map {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .map :global(svg) {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 330 / 480;
+    display: block;
+    background: var(--color-page);
+    border-radius: var(--radius-card);
+  }
+
+  .map :global(.place-name) {
+    font-size: 10px;
+    font-weight: 700;
+    fill: var(--color-ink);
+    paint-order: stroke;
+    stroke: var(--color-page);
+    stroke-width: 3px;
+  }
+
+  .map :global(.place-price) {
+    font-size: 13px;
+    font-weight: 700;
+    fill: var(--color-ink);
+    paint-order: stroke;
+    stroke: var(--color-page);
+    stroke-width: 3px;
+  }
+
+  .map :global(.map-note) {
+    font-size: 9px;
+    font-weight: 700;
+    fill: var(--color-ink);
+  }
+
+  .map :global(.map-note.muted) {
+    font-weight: 400;
+    fill: var(--color-ink-muted);
+  }
+
+  .bands,
+  .islands ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+    font-size: var(--text-label);
+    color: var(--color-ink-muted);
+  }
+
+  .swatch {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 3px;
+    margin-right: var(--space-1);
+    vertical-align: -1px;
+  }
+
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 0;
   }
 
   .control {
@@ -174,34 +407,154 @@ const clock =
     gap: var(--space-2);
   }
 
+  .control label {
+    font-size: var(--text-label);
+    font-weight: 700;
+  }
+
+  .clock {
+    margin: 0;
+    font-size: var(--text-title);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+
   input[type="range"] {
     width: 100%;
-    max-width: 24rem;
+    accent-color: var(--color-brand);
   }
 
-  .map {
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
-
-  .map :global(svg) {
+  .control :global(.spark) {
     width: 100%;
-    max-width: 28rem;
     height: auto;
-    aspect-ratio: 330 / 480;
     display: block;
-    background: var(--color-page);
-    border-radius: var(--radius-card);
   }
 
-  figcaption {
+  #nodal-play {
+    align-self: flex-start;
+    font: inherit;
+    font-size: var(--text-label);
+    border: 1px solid var(--color-rule);
+    background: var(--color-card);
+    border-radius: 999px;
+    padding: var(--space-1) var(--space-4);
+    cursor: pointer;
+  }
+
+  .summary {
+    margin: 0;
+    font-size: var(--text-label);
+    color: var(--color-ink-muted);
+  }
+
+  .beats {
+    list-style: none;
+    margin: 0;
+    padding: 0;
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
+  }
+
+  .beats li {
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-chip);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .beats li.active {
+    border-color: var(--color-brand);
+    box-shadow: inset 4px 0 0 var(--color-brand);
+  }
+
+  .beats button {
+    all: unset;
+    cursor: pointer;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--space-3);
+    align-items: baseline;
+    width: 100%;
+  }
+
+  .beats button:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  .beat-title {
+    font-weight: 700;
+  }
+
+  .beat-when {
     font-size: var(--text-label);
     color: var(--color-ink-muted);
+  }
+
+  .beats p {
+    margin: var(--space-2) 0 0;
+  }
+
+  /* With the script running, only the active moment shows its sentence. */
+  [data-js] .beats li:not(.active) p {
+    display: none;
+  }
+
+  .islands {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .islands section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .islands h3 {
+    margin: 0;
+    font-size: var(--text-body);
+  }
+
+  .islands h3 span {
+    font-weight: 400;
+    color: var(--color-ink-muted);
+    font-size: var(--text-label);
+  }
+
+  .bar {
+    display: flex;
+    height: 0.9rem;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--color-page);
+  }
+
+  .bar span {
+    flex-grow: 0;
+    flex-shrink: 0;
+    transition: flex-basis 0.2s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar span {
+      transition: none;
+    }
+  }
+
+  .more {
+    font-size: var(--text-label);
+  }
+
+  .more > summary {
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .more p {
+    max-width: 46rem;
   }
 
   .table-wrap {
@@ -210,7 +563,6 @@ const clock =
 
   table {
     border-collapse: collapse;
-    font-size: var(--text-label);
     width: 100%;
     min-width: 28rem;
   }

@@ -121,7 +121,8 @@ test.skipIf(!existsSync(builtPage))(
       ...(html.match(/id="reserve-slow-title"/g) ?? []),
       ...(html.match(/id="reserve-chart-title"/g) ?? []),
     ].length;
-    expect(html.match(/role="img"/g)?.length).toBe(5 + reserveCharts);
+    // Five charts, the price map, and the reserve charts.
+    expect(html.match(/role="img"/g)?.length).toBe(6 + reserveCharts);
     expect(html).toContain('aria-labelledby="energy-flow"');
     expect(html).toContain(
       'aria-labelledby="energy-sankey-chart-title energy-sankey-chart-summary"',

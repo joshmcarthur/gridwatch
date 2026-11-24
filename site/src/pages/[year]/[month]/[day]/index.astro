@@ -2,6 +2,7 @@
 import DayCompare from "../../../../components/DayCompare.astro";
 import EnergySankeyChart from "../../../../components/EnergySankeyChart.astro";
 import FuelPlants from "../../../../components/FuelPlants.astro";
+import NodalPriceMap from "../../../../components/NodalPriceMap.astro";
 import PriceChart from "../../../../components/PriceChart.astro";
 import ReserveChart from "../../../../components/ReserveChart.astro";
 import Layout from "../../../../layouts/Layout.astro";
@@ -11,11 +12,10 @@ import {
   dailyStaticPaths,
   dateFromParams,
   dayHeadline,
-  mapPath,
   monthGroups,
   neighbouringDays,
-  pageLead,
 } from "../../../../lib/daily-page";
+import { dayBeats } from "../../../../lib/day-beats";
 import {
   episodeEvidenceLinks,
   episodeHeadline,
@@ -47,7 +47,7 @@ const headline = dayHeadline(day);
 const loadEarlier = (earlier: string) => loadSiteDayCached(earlier, index);
 const context = dayContext(index, date, loadEarlier);
 const lead = leadFact(index, date, loadEarlier);
-const opening = pageLead(day, lead);
+const story = dayBeats(day);
 const notice = completenessNotice(day);
 const neighbours = neighbouringDays(index, date);
 const months = monthGroups(index);
@@ -65,7 +65,8 @@ const publishedEvents = eventsOnDay(day);
   <article class="prose">
     <header class="lede">
       <h1>{titleDate}</h1>
-      <p>{opening}</p>
+      {story.headline && <p class="headline">{story.headline}</p>}
+      {story.lede ? <p>{story.lede}</p> : lead && <p>{lead}</p>}
       <p class="places">
         Prices here come from three places: Ōtāhuhu in Auckland, Haywards near
         Wellington, and Benmore in the South Island.
@@ -107,6 +108,11 @@ const publishedEvents = eventsOnDay(day);
         </section>
       )
     }
+
+    <section class="slot" id="map" aria-labelledby="map-heading">
+      <h2 id="map-heading">The day on the map</h2>
+      <NodalPriceMap day={day} story={story} />
+    </section>
 
     {
       publishedEvents.length > 0 ? (
@@ -164,11 +170,6 @@ const publishedEvents = eventsOnDay(day);
     <section class="slot" aria-labelledby="wholesale-prices">
       <h2 id="wholesale-prices">What it sold for</h2>
       <PriceChart day={day} />
-      <p>
-        <a href={mapPath(date)}>
-          Map of wholesale prices at each named place on the grid
-        </a>
-      </p>
     </section>
 
     <section class="slot" aria-labelledby="reserve-prices">
@@ -283,6 +284,14 @@ const publishedEvents = eventsOnDay(day);
   .home {
     margin: 0 0 var(--space-5);
     font-size: var(--text-label);
+  }
+
+  .headline {
+    margin: 0;
+    font-size: var(--text-title);
+    font-weight: 700;
+    line-height: 1.2;
+    max-width: 40rem;
   }
 
   .lede,
