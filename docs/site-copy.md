@@ -36,7 +36,7 @@ Method caveats about **this day's numbers** stay with the chart: incomplete file
 
 Clock times in public sentences, not trading period numbers. Place names in body copy (Ōtāhuhu, Haywards, Benmore). Point-of-connection codes belong in the numbers table and in hover text.
 
-Completeness is a warning when a day is incomplete. A complete day does not lead with a pipeline status.
+An incomplete day gets one line beside the map naming what is missing, as clock ranges ("The market files have no wholesale prices for 3:00pm to 3:30pm."). It does not lead the page. Most gaps are a half-hour or two, and dispatch generation fills recent days before the meter file lands. A complete day says nothing about its files.
 
 ## About, How, Terms
 

@@ -1,13 +1,14 @@
 import type {
-  DatasetState,
   FuelCategory,
   SectionState,
+  SiteDay,
   SiteEpisode,
   SiteIndex,
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
 import { episodeHeadline } from "./episode-copy.ts";
 import { FUEL_LABELS, type StackFuel } from "./generation-mix.ts";
+import { clockLabeller12, zonedAt } from "./period-clock.ts";
 import { centsPerKwh } from "./price-regions.ts";
 
 const energyFormat = new Intl.NumberFormat("en-NZ", {
@@ -17,21 +18,6 @@ const energyFormat = new Intl.NumberFormat("en-NZ", {
 const CLOSE_DOLLARS = 10;
 /** Daily mean prices this far apart or more are far apart. */
 const APART_DOLLARS = 50;
-
-const DATASET_LABELS: Record<string, string> = {
-  dispatch_energy_prices: "wholesale energy prices",
-  dispatch_reserve_prices:
-    "reserve prices (the cost of standing ready to lift or drop generation)",
-  generation_md: "generation",
-  entity_mappings: "plant names and locations",
-};
-
-export type CompletenessSource = {
-  complete: boolean;
-  datasets: Record<string, { status: DatasetState }>;
-  generation: { state: SectionState };
-  prices: { state: SectionState };
-};
 
 export type HeadlineSource = {
   generation: {
@@ -195,29 +181,76 @@ export function pageLead(
   return quietLead ?? dayHeadline(day).sentence;
 }
 
-export function completenessNotice(day: CompletenessSource): {
-  tone: "warn";
-  paragraphs: string[];
-} | null {
+export type GapSource = Pick<SiteDay, "complete" | "periods"> & {
+  generation: { state: SectionState; missing_periods: number[] };
+  prices: { state: SectionState; missing_periods: number[] };
+};
+
+/**
+ * One line naming what an incomplete day is missing, as clock ranges (ADR-0029). Null for a
+ * complete day. It sits beside the map rather than leading the page: most gaps are a
+ * half-hour or two of prices.
+ */
+export function gapNote(day: GapSource): string | null {
   if (day.complete) return null;
-  const paragraphs = ["This day is incomplete."];
-  for (const [id, dataset] of Object.entries(day.datasets)) {
-    if (dataset.status === "complete") continue;
-    paragraphs.push(
-      `${datasetStatusHeading(dataset.status)}: ${datasetLabel(id)}.`,
+  const ranges = (periods: number[]) => clockRanges(day, periods);
+  const missing: string[] = [];
+  const absent: string[] = [];
+  if (day.prices.state === "missing") absent.push("wholesale prices");
+  else if (day.prices.missing_periods.length > 0) {
+    missing.push(`wholesale prices for ${ranges(day.prices.missing_periods)}`);
+  }
+  if (day.generation.state === "missing") absent.push("generation figures");
+  else if (day.generation.missing_periods.length > 0) {
+    missing.push(
+      `generation figures for ${ranges(day.generation.missing_periods)}`,
     );
   }
-  if (day.generation.state !== "complete") {
-    paragraphs.push(
-      `Generation numbers ${sectionStatusPhrase(day.generation.state)}.`,
+  const parts: string[] = [];
+  if (missing.length > 0) {
+    parts.push(`The market files have no ${joinAnd(missing)}.`);
+  }
+  if (absent.length > 0) {
+    const what = joinAnd(absent);
+    parts.push(
+      `${what.charAt(0).toUpperCase()}${what.slice(1)} for this day aren't in the files yet.`,
     );
   }
-  if (day.prices.state !== "complete") {
-    paragraphs.push(
-      `Wholesale prices ${sectionStatusPhrase(day.prices.state)}.`,
-    );
+  return parts.length > 0
+    ? parts.join(" ")
+    : "Some of the market files for this day are incomplete.";
+}
+
+/** Trading periods as clock ranges, for example `3:00pm to 3:30pm and 7:00pm to 8:00pm`. */
+function clockRanges(day: Pick<SiteDay, "periods">, periods: number[]): string {
+  const label = clockLabeller12(day);
+  const indexOf = (period: number) =>
+    day.periods.findIndex((item) => item.period === period);
+  const startOf = (index: number) => {
+    const period = day.periods[index];
+    return period ? label(zonedAt(period.start_utc)) : "";
+  };
+  const endOf = (index: number) => {
+    const next = day.periods[index + 1];
+    if (next) return label(zonedAt(next.start_utc));
+    const period = day.periods[index];
+    return period ? label(zonedAt(period.start_utc).add({ minutes: 30 })) : "";
+  };
+  const indexes = [...new Set(periods.map(indexOf))]
+    .filter((index) => index !== -1)
+    .sort((a, b) => a - b);
+  const runs: Array<[number, number]> = [];
+  for (const index of indexes) {
+    const last = runs.at(-1);
+    if (last && index === last[1] + 1) last[1] = index;
+    else runs.push([index, index]);
   }
-  return { tone: "warn", paragraphs };
+  return joinAnd(runs.map(([from, to]) => `${startOf(from)} to ${endOf(to)}`));
+}
+
+function joinAnd(parts: string[]): string {
+  if (parts.length < 2) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
 
 function kindOfDay(
@@ -362,42 +395,6 @@ function meanPrices(day: HeadlineSource): number[] {
   return day.prices.nodes
     .map((node) => node.daily.mean_price)
     .filter((price): price is number => typeof price === "number");
-}
-
-function datasetLabel(id: string): string {
-  return DATASET_LABELS[id] ?? id.replaceAll("_", " ");
-}
-
-function datasetStatusHeading(status: DatasetState): string {
-  switch (status) {
-    case "complete":
-      return "Complete";
-    case "partial":
-      return "Only partial";
-    case "missing":
-      return "Missing";
-    case "invalid":
-      return "Failed a check";
-    default: {
-      const _exhaustive: never = status;
-      return _exhaustive;
-    }
-  }
-}
-
-function sectionStatusPhrase(status: SectionState): string {
-  switch (status) {
-    case "complete":
-      return "look complete";
-    case "incomplete":
-      return "are incomplete";
-    case "missing":
-      return "are missing";
-    default: {
-      const _exhaustive: never = status;
-      return _exhaustive;
-    }
-  }
 }
 
 function capitalize(text: string): string {
