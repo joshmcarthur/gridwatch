@@ -7,7 +7,7 @@ description: The service that holds the grid at 50 Hz from moment to moment, and
 
 The New Zealand grid runs at 50 hertz (50 Hz). Hertz is cycles per second: the rate the alternating current swings. If generation and load drift apart, that rate moves. Frequency keeping is the service that trims output from moment to moment so the rate stays near 50 Hz.
 
-It is not the same as instantaneous reserve. Reserve is spare capacity held ready in case a plant trips. Frequency keeping is always working.
+Instantaneous reserve is a different service: spare capacity held ready in case a plant trips. Frequency keeping is always working.
 
 ## A more technical explanation
 

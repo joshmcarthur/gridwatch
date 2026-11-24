@@ -113,7 +113,7 @@ test("splitExplainerHtml throws when optional headings are out of order", () => 
   );
 });
 
-test("nodal pricing quotes period 36 from the reconstruction and links the daily page", () => {
+test("nodal pricing quotes 5:30pm from the reconstruction and links the daily page", () => {
   expect(nodalPricing).toMatch(/chart: price/);
   expect(nodalPricing).toMatch(/example_date: "2026-07-27"/);
   expect(nodalBody).toContain("$3,296.04");
@@ -123,7 +123,7 @@ test("nodal pricing quotes period 36 from the reconstruction and links the daily
   expect(nodalBody).toContain("$442.61");
   expect(nodalBody).toContain("$2,724.58");
   expect(nodalBody).toContain("/2026/07/27/");
-  expect(nodalBody).toMatch(/trading period 36/);
+  expect(nodalBody).toContain("5:30pm to 6:00pm");
 });
 
 test("nodal pricing copy follows site-copy.md", () => {
@@ -138,6 +138,9 @@ test("nodal pricing copy follows site-copy.md", () => {
   expect(nodalBody).not.toMatch(/\$21,000/);
   expect(nodalBody).not.toMatch(/\bthis site\b/i);
   expect(nodalBody).not.toMatch(/\bdear(?:er|est)?\b/i);
+  expect(nodalBody).not.toMatch(/trading period/i);
+  expect(nodalBody).not.toMatch(/\b[A-Z]{3}\d{4}\b/);
+  expect(nodalBody).not.toMatch(/\b\d{2}:\d{2}\b/);
   expect(nodalBody).toMatch(/wholesale price/);
   expect(nodalBody).toMatch(/household bill/);
   expect(nodalBody).toMatch(/point of connection/);
@@ -166,6 +169,8 @@ function expectBannedTokens(body: string) {
   expect(body).not.toMatch(/83%/);
   expect(body).not.toMatch(/\bthis site\b/i);
   expect(body).not.toMatch(/\bdear(?:er|est)?\b/i);
+  expect(body).not.toMatch(/trading period/i);
+  expect(body).not.toMatch(/\b\d{2}:\d{2}\b/);
 }
 
 const illustrated = [
