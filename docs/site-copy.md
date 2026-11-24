@@ -28,7 +28,7 @@ Daily pages follow Daily pages below. They may use a short, consistent label and
 
 A daily page explains that day. It does not re-teach the market.
 
-When the day has an unusual stretch, that line opens the page. A quiet day uses the figure furthest from usual, or one sentence about the kind of day, then a few labelled numbers. It must not define megawatt-hours, wholesale vs a household bill, or the Cook Strait cable. Those belong on About, and in a compact "Words on this page" glossary on the day so a cold link still has an escape hatch.
+The page opens with the day's story: a headline and lede built from its beats ([ADR-0029](adr/0029-map-led-day-stories.md)), then the price map. Beat sentences say what the files show and what happened at the same time. They never say why. Explainers and the reviewed LLM narratives carry the why. Prices in body copy are in cents per kWh (`6.9c`), with $/MWh kept for tables and hover text. The page must not define megawatt-hours, wholesale vs a household bill, or the Cook Strait cable. Those belong on About, and in a compact "Words on this page" glossary on the day so a cold link still has an escape hatch.
 
 Link the short labels (wholesale price, megawatt-hour, the two islands) to that glossary, and from the glossary on to About. Same word for the same thing.
 
