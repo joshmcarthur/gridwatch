@@ -11,7 +11,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { PublisherDataset } from "./datasets.ts";
 import { datasets } from "./datasets.ts";
 import {
@@ -376,6 +376,30 @@ test("completeness is saved after each dataset, so a crashed run keeps it", asyn
   ];
   await run({ registry });
   expect(onDisk).toEqual([DISPATCH]);
+});
+
+test("afterGold runs even when no dataset published", async () => {
+  let called = false;
+  await run({
+    only: [DISPATCH],
+    afterGold: async () => {
+      called = true;
+    },
+  });
+  expect(called).toBe(true);
+});
+
+test("afterGold errors do not fail the publisher", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const summaries = await run({
+    only: [DISPATCH],
+    afterGold: async () => {
+      throw new Error("openrouter down");
+    },
+  });
+  expect(hasFailures(summaries)).toBe(false);
+  expect(warn).toHaveBeenCalled();
+  warn.mockRestore();
 });
 
 test("partitionVersions throws when a partition holds more than one version", async () => {

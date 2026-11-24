@@ -19,13 +19,15 @@ Owner comment on #39, 2026-11-23: use a provider-neutral library (TanStack AI) s
 
 Narratives call the model through [TanStack AI](https://tanstack.com/ai). The installed adapter is `@tanstack/ai-openrouter`. One OpenRouter key reaches many upstream providers. The model id is a config string of the form `provider/model-name`. A later swap does not add a package.
 
-The publisher runner and the updater do not call the model. Generation is on demand:
+The publisher runner and the updater generate narratives after gold tables and before the site export, when `OPENROUTER_API_KEY` is set. They skip that step when the key is empty, and they do not fail the run. One failed episode is a warning. The rest continue. A narrative file that already exists is left alone unless `--force` is set.
+
+The on-demand CLI still works for one episode:
 
 ```bash
 npm run build:narrative -- --date YYYY-MM-DD --episode <episode_id>
 ```
 
-or `--package path/to/evidence.json`. The command reads an evidence file that `build:evidence` already wrote. It does not rebuild the package.
+or `--package path/to/evidence.json`. The command reads an evidence file that `build:evidence` already wrote. It does not rebuild the package. The daily path rebuilds the evidence package, then writes the narrative.
 
 ### Default model
 
@@ -44,14 +46,13 @@ Luna is the default because live 27 July drafts used clocks and place names, did
 
 ### API key
 
-The key is a file on the home server ([ADR-0002](0002-daily-run-data-and-site-hosting.md)). The process reads it as `OPENROUTER_API_KEY`. The image and this repository do not contain the key. Compose does not mount it in this change, because the daily run does not call the LLM. When someone runs the CLI on the server:
+The key is a file on the home server ([ADR-0002](0002-daily-run-data-and-site-hosting.md)). The process reads it as `OPENROUTER_API_KEY`. The image and this repository do not contain the key. Compose passes `OPENROUTER_API_KEY` and `GRIDWATCH_LLM_MODEL` from the host into `updater` and `publisher`. Empty values skip generation. On the server:
 
 ```bash
 export OPENROUTER_API_KEY=$(cat /path/to/openrouter-key)
-npm run build:narrative -- --date 2026-07-27 --episode <episode_id>
 ```
 
-`collector` and `publisher` still know only `DATA_ROOT`. The key is an environment variable of the CLI process, not a branch in the apps.
+`collector` still knows only `DATA_ROOT`. The publisher runner does not import the LLM adapter. `publisher/src/main.ts` and `updater/main.ts` pass `afterGold: narrateIfKeyed`, so tests that import the runner do not load TanStack.
 
 ### Prompt
 
@@ -59,13 +60,13 @@ The user message is a reduced package: episode fields, NZ clock labels (`clock`,
 
 The system prompt is `systemPrompt()` in `publisher/src/gold/narrative.ts`. It is the narrative instructions (two or three sentences per section, plus a 27 July style sample), then the full text of [`site-copy.md`](../site-copy.md) and [`glossary.md`](../glossary.md). Site copy wins for published sentences (clock times, place names). The glossary is meaning, not voice. The files load when generating, not when the site imports the number checker. A test pins the SHA-256 of the composed string. `PROMPT_VERSION` is the stored record field. It does not bump when the voice files change.
 
-The CLI sends that system prompt with OpenRouter `cache_control` (`ephemeral`, 1 hour TTL) and a stable `threadId` (`gridwatch-narrative`) plus `promptCache: "long"`. The marker is on the system prompt only, so the per-episode user JSON is not cached. Routes that ignore `cache_control` still get a sticky session for implicit prefix cache.
+The OpenRouter adapter sends that system prompt with OpenRouter `cache_control` (`ephemeral`, 1 hour TTL) and a stable `threadId` (`gridwatch-narrative`) plus `promptCache: "long"`. The marker is on the system prompt only, so the per-episode user JSON is not cached. Routes that ignore `cache_control` still get a sticky session for implicit prefix cache.
 
 The model replies with JSON: `what_happened`, `why`, `what_it_means`. The CLI rejects a reply that is not JSON or that omits a field.
 
 ### Storage
 
-The CLI writes `<gold>/narratives/<date>/<episode_id>.json`. The site does not read it. The site contract ([ADR-0014](0014-site-json-contract.md)) is unchanged. Event pages stay on [#42](https://github.com/joshmcarthur/gridwatch/issues/42).
+The CLI and the daily run write `<gold>/narratives/<date>/<episode_id>.json`. The site export reads those files for ranked candidates ([ADR-0014](0014-site-json-contract.md)).
 
 The file holds `schema_version`, `prompt_version`, `package_id`, `episode_id`, `trading_date`, `model`, `generated_at`, and the three section strings. `package_id` is the SHA-256 of the evidence JSON bytes, so a checker can tell which package produced the text. `generated_at` is the run time in UTC. The same package can yield different prose on a second run; the claims must still match.
 
@@ -77,7 +78,7 @@ Each has a default. The default is what the code does now.
 
 1. Default model `openai/gpt-6-luna`? **[yes]**
 2. OpenRouter rather than a direct Anthropic or OpenAI key? **[yes]**
-3. On-demand CLI, not the daily runner? **[yes]**
+3. On-demand CLI, not the daily runner? **[no]** — the daily run generates when `OPENROUTER_API_KEY` is set.
 4. Store three JSON fields, not one markdown blob? **[yes]**
 
 ## Alternatives considered
@@ -85,12 +86,12 @@ Each has a default. The default is what the code does now.
 - **Vercel AI SDK, or a raw `fetch` to OpenRouter.** Rejected. The owner named TanStack AI so the provider is a config string.
 - **One TanStack adapter package per provider (`@tanstack/ai-openai`, `@tanstack/ai-anthropic`, ...).** Rejected. Extra packages and extra keys. OpenRouter is the swap.
 - **Local Ollama on the home server.** Rejected for v1. No extra service, and the first narrative needs a model that follows the fact list. Ollama stays possible later through TanStack's Ollama adapter.
-- **A gold Parquet table of narratives.** Rejected. Same reason as ADR-0025: the record is a small tree, and a row for every episode on every run would call the model when nobody asked.
-- **Call the model from the publisher runner.** Rejected. That needs the key on every daily run. [#42](https://github.com/joshmcarthur/gridwatch/issues/42) decides when events emit.
+- **A gold Parquet table of narratives.** Rejected. Same reason as ADR-0025: the record is a small tree.
+- **Always call the model, even with no key.** Rejected. A host without a key still publishes gold and the site. The skip is the empty env var, not a separate flag.
 
 ## Consequences
 
 - [#40](https://github.com/joshmcarthur/gridwatch/issues/40) is this checker. It walks the prompt payload and warns when a number, date, clock, or link is missing. It does not block the write or the publish.
-- [#42](https://github.com/joshmcarthur/gridwatch/issues/42) still writes event pages. This CLI does not publish. Event pages call `checkNarrative` and warn. They do not fail the build.
-- The Docker image gains `@tanstack/ai` and `@tanstack/ai-openrouter`. They are production dependencies because the CLI runs in the image. The key stays out of the image.
+- [#42](https://github.com/joshmcarthur/gridwatch/issues/42) still writes event pages. Event pages call `checkNarrative` and warn. They do not fail the build.
+- The Docker image gains `@tanstack/ai` and `@tanstack/ai-openrouter`. They are production dependencies because the CLI and the daily run call the model in the image. The key stays out of the image.
 - The 27 July 2026 narrative for owner review needs a live key. If a PR ships the pipeline without that file, a follow-up issue holds the live run ([#206](https://github.com/joshmcarthur/gridwatch/issues/206)).

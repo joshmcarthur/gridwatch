@@ -10,6 +10,7 @@ import {
   printSummary as printCollect,
   runCollect,
 } from "../collector/src/runner.ts";
+import { narrateIfKeyed } from "../publisher/src/gold/narrative-openrouter.ts";
 import {
   printSummary as printPublish,
   hasFailures as publishFailed,
@@ -152,6 +153,7 @@ async function main(): Promise<void> {
         silverDir: silver,
         goldDir: gold,
         ...(range && { range }),
+        afterGold: narrateIfKeyed,
       });
       printPublish(published);
       if (collectFailed(collected) || publishFailed(published)) {

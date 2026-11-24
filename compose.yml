@@ -11,6 +11,9 @@ services:
     <<: *gridwatch
     restart: unless-stopped
     entrypoint: ["node", "updater/main.ts"]
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GRIDWATCH_LLM_MODEL: ${GRIDWATCH_LLM_MODEL:-}
     volumes:
       - *data
       - *site-out
@@ -34,6 +37,9 @@ services:
     <<: *gridwatch
     profiles: ["jobs"]
     entrypoint: ["node", "publisher/src/main.ts"]
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GRIDWATCH_LLM_MODEL: ${GRIDWATCH_LLM_MODEL:-}
     volumes:
       - *data
   site-build:

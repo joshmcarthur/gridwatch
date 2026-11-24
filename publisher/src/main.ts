@@ -1,5 +1,6 @@
 import { dataPaths } from "./data-root.ts";
 import { datasets } from "./datasets.ts";
+import { narrateIfKeyed } from "./gold/narrative-openrouter.ts";
 import {
   hasFailures,
   parseRunArgs,
@@ -39,6 +40,7 @@ if (argv[0] === "status") {
       range: args.range,
       force: args.force,
       only: args.only,
+      afterGold: narrateIfKeyed,
     });
     printSummary(summaries);
     process.exitCode = hasFailures(summaries) ? 1 : 0;
