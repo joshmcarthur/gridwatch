@@ -15,11 +15,11 @@ When the link can carry enough, cheaper electricity on one island can serve the 
 
 The South Island end of the link is at Benmore in the Waitaki. The North Island end is at Haywards near Wellington. Offtake is energy taken from the alternating-current grid into the link. Injection is energy put from the link back into the grid. Some energy is lost in the crossing.
 
-This site meters the flow at both ends. Northward means from the South Island to the North Island, measured at Haywards. The daily energy-balance chart shows generation, power over the link, estimated load, and the leftover. Link losses sit on that drawing.
+Flow is metered at both ends. Northward means from the South Island to the North Island, measured at Haywards. An energy balance for a day is generation, power over the link, estimated load, and the leftover. Link losses sit in that balance.
 
-The half-hour megawatts are in the numbers, not as their own line on that drawing. The files do not say what the link's limit was that day, or whether the limit bound the market.
+Metered flow is a half-hour average. It is not the link's limit, and it does not say whether that limit bound the market.
 
-Wholesale prices at Haywards and Benmore, and the spread between them, sit on the [nodal pricing](/explainers/nodal-pricing/) page and on the daily price chart.
+Wholesale prices at Haywards and Benmore, and the spread between them, are on [nodal pricing](/explainers/nodal-pricing/).
 
 ## Visual
 
@@ -29,9 +29,7 @@ Energy balance for Monday 27 July 2026, including power over the Cook Strait lin
 
 On Monday 27 July 2026 the link ran north all day. Haywards received 21,493.034 megawatt-hours, 895.5 megawatts as a day average. The highest half-hour average was 1,098.0 megawatts, from 16:30 to 17:00. In the 17:30 to 18:00 half-hour it was 966.4 megawatts.
 
-Transfer had already dropped by the evening price spike. The energy-balance chart is the day's totals. The half-hour megawatts are in the prose.
-
-The daily page for [Monday 27 July 2026](/2026/07/27/) has that day's energy-balance chart.
+Transfer had already dropped by the evening price spike.
 
 ## Links to Gridwatch data and events
 

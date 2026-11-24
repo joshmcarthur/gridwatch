@@ -56,17 +56,15 @@ function htmlFor(names: readonly string[]): {
   };
 }
 
-test("splitExplainerHtml allows omitting Visual and Historical example", () => {
+test("splitExplainerHtml allows omitting Visual, Historical example, and Links", () => {
   const { html: mechanismHtml, headings: mechanismHeadings } = htmlFor([
     "Simple explanation",
     "A more technical explanation",
-    "Links to Gridwatch data and events",
   ]);
   const sections = splitExplainerHtml(mechanismHtml, mechanismHeadings);
   expect(sections.map((section) => section.heading)).toEqual([
     "Simple explanation",
     "A more technical explanation",
-    "Links to Gridwatch data and events",
   ]);
 });
 
@@ -138,6 +136,7 @@ test("nodal pricing copy follows site-copy.md", () => {
   expect(nodalBody).not.toMatch(/\bSI\b/);
   expect(nodalBody).not.toMatch(/Huntly/);
   expect(nodalBody).not.toMatch(/\$21,000/);
+  expect(nodalBody).not.toMatch(/\bthis site\b/i);
   expect(nodalBody).toMatch(/wholesale price/);
   expect(nodalBody).toMatch(/household bill/);
   expect(nodalBody).toMatch(/point of connection/);
@@ -164,6 +163,7 @@ function expectBannedTokens(body: string) {
   expect(body).not.toMatch(/\$21,000/);
   expect(body).not.toMatch(/1,170/);
   expect(body).not.toMatch(/83%/);
+  expect(body).not.toMatch(/\bthis site\b/i);
 }
 
 const illustrated = [
@@ -203,6 +203,10 @@ for (const page of illustrated) {
     expect(raw).toMatch(/example_date: "2026-07-27"/);
     expect(body).toContain("## Visual");
     expect(body).toContain("## Historical example");
+    expect(body).toContain("## Links to Gridwatch data and events");
+    expect(body).not.toMatch(
+      /The daily page for \[Monday 27 July 2026\]/,
+    );
     expect(body).toContain("/2026/07/27/");
     expect(body).toContain("/2026/07/27/events/394f75a3bfa948a3/");
     for (const figure of page.figures) {
@@ -219,6 +223,7 @@ for (const slug of mechanism) {
     expect(raw).not.toMatch(/example_date:/);
     expect(body).not.toContain("## Visual");
     expect(body).not.toContain("## Historical example");
+    expect(body).not.toContain("## Links to Gridwatch data and events");
     expect(body).not.toContain("2026-07-27");
     expect(body).not.toContain("/2026/07/27/");
     expectBannedTokens(body);

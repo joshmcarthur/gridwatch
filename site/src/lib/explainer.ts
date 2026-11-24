@@ -12,7 +12,6 @@ export type ExplainerHeading = (typeof EXPLAINER_HEADINGS)[number];
 export const REQUIRED_EXPLAINER_HEADINGS = [
   "Simple explanation",
   "A more technical explanation",
-  "Links to Gridwatch data and events",
 ] as const;
 
 export const VISUAL_HEADING: ExplainerHeading = "Visual";
@@ -53,9 +52,9 @@ function headingsInAllowedOrder(got: readonly string[]): boolean {
 }
 
 /**
- * Split Astro's rendered explainer HTML into brief §10 sections. Visual and
- * Historical example may be absent. Throws if required headings are missing,
- * extra, or out of order, so a bad file fails the build.
+ * Split Astro's rendered explainer HTML into brief §10 sections. Visual,
+ * Historical example, and Links may be absent. Throws if required headings are
+ * missing, extra, or out of order, so a bad file fails the build.
  */
 export function splitExplainerHtml(
   html: string,

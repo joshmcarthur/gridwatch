@@ -19,7 +19,7 @@ Power stations offer electricity in bulk. The market then sets a wholesale price
 
 A trading period is a 30-minute slice of the trading date, which is a calendar day in New Zealand time. Period 1 starts at midnight. A normal day has 48 periods. The price is in dollars per megawatt-hour ($/MWh). A megawatt-hour is 1,000 kilowatt-hours, the same kWh unit as the line on a power bill.
 
-This site charts three reference nodes, sample points used to watch the two islands:
+Three reference nodes are enough to watch the two islands:
 
 - `OTA2201`, Ōtāhuhu in Auckland, for the upper North Island
 - `HAY2201`, Haywards near Wellington, the North Island end of the Cook Strait cable
@@ -44,8 +44,6 @@ Monday 27 July 2026 is an ordinary 48-period winter weekday. In the half-hour fr
 Haywards sat with Ōtāhuhu, not with Benmore: the Haywards–Benmore spread was $2,281.97, and Ōtāhuhu–Haywards was $442.61. Ōtāhuhu minus Benmore was $2,724.58. The split was between the islands, with a further step up into Auckland.
 
 Those four evening half-hours from 17:30 to 19:30 were the spike, then the prices dropped. Across the whole day the averages were much lower: Ōtāhuhu $248.67, Haywards $214.72, Benmore $70.60.
-
-The daily page for [Monday 27 July 2026](/2026/07/27/) has that day's generation, prices, and charts.
 
 ## Links to Gridwatch data and events
 

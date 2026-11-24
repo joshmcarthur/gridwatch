@@ -127,6 +127,9 @@ for (const slug of mechanismSlugs) {
       expect(html).not.toContain('aria-labelledby="visual"');
       expect(html).not.toContain('aria-labelledby="historical-example"');
       expect(html).not.toContain("/2026/07/27/");
+      expect(html).not.toContain(
+        'aria-labelledby="links-to-gridwatch-data-and-events"',
+      );
     },
   );
 }

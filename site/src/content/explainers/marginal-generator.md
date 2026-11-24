@@ -13,10 +13,6 @@ A cheap hydro station can run all afternoon and still not set the price, if a de
 
 Each station, or each unit, offers a stack of megawatts at offer prices. The scheduling, pricing and dispatch process takes offers so that supply and demand balance at every node, without overloading lines, and so that reserve is covered too. The energy price at a node is the cost of one more megawatt there, given those limits.
 
-A plant can be generating and still not be marginal. A plant can be marginal at one node and not at another, if a full line sits between them. [Nodal pricing](/explainers/nodal-pricing/) covers why places can have different prices in the same half-hour. [Transmission constraints](/explainers/transmission-constraints/) covers what a full line does to that price.
+A plant can be generating and still not be marginal. A plant can be marginal at one node and not at another, if a full line sits between them. Places can have different prices in the same half-hour: [nodal pricing](/explainers/nodal-pricing/). A full line is what splits those prices: [transmission constraints](/explainers/transmission-constraints/).
 
-This site publishes what ran, by fuel and by plant, on the daily generation mix. It does not publish offer prices. Cleared offers say how many megawatts the market accepted. They do not say the price on the offer. So the pages can show who generated, and they cannot name the plant that set the wholesale price.
-
-## Links to Gridwatch data and events
-
-The daily pages show generation by fuel. [Wind and wholesale prices](/explainers/wind/) is one way that mix moves. [Instantaneous reserves](/explainers/instantaneous-reserves/) is the other product the market clears at the same time.
+Cleared offers say how many megawatts the market accepted. They do not say the price on the offer. Who generated is not the same as who set the wholesale price.

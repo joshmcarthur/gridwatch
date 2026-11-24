@@ -9,7 +9,7 @@ This supersedes the docs-only proposal in [#127](https://github.com/joshmcarthur
 ## Accepted defaults
 
 1. **First explainer: nodal pricing**, at `/explainers/nodal-pricing/`.
-2. **Structure: brief §10’s sections**, in one Markdown file in an Astro content collection under `site/`. Not a CMS. Visual and Historical example are optional.
+2. **Structure: brief §10’s sections**, in one Markdown file in an Astro content collection under `site/`. Not a CMS. Visual, Historical example, and Links are optional.
 3. **A day and a chart only when they show the concept.** Do not attach a neighbouring chart. Do not attach Monday 27 July 2026 when that day does not show the concept.
 4. **Charts are existing daily charts** (`PriceChart`, `ReserveChart`, `GenerationMixChart`, `EnergySankeyChart`). No nodal map ([#49](https://github.com/joshmcarthur/gridwatch/issues/49)).
 5. **Ship pages that teach the mechanism even when this site has no series for them.**
@@ -30,13 +30,13 @@ One collection, one file per topic, one page template.
 
 Markdown, not MDX, for v1. MDX is only worth adding if a later topic needs a diagram that is not already a daily chart.
 
-Each file uses these `h2` sections, in this order. Visual and Historical example may be absent.
+Each file uses these `h2` sections, in this order. Visual, Historical example, and Links may be absent.
 
 1. **Simple explanation.** What a curious reader needs in a few short paragraphs. First use of every term on the page.
 2. **A more technical explanation.** The mechanism, still in site-copy voice. What the data can show, and what it cannot.
 3. **Visual.** Only when `chart` is set. A one-sentence caption. The template draws the matching daily chart for `example_date` when that day exists. The prose must still make sense if the figure is missing.
 4. **Historical example.** Only when `example_date` is set. What that day shows, in a few numbers, with a link to `/YYYY/MM/DD/`.
-5. **Links to Gridwatch data and events.** The daily page and event page when the explainer has that day. Other explainers, About, or How when it does not.
+5. **Links to Gridwatch data and events.** Optional. The daily page and event page when the explainer has that day. Omit the section when the page only needs to teach the mechanism.
 
 Frontmatter, at minimum: `title`, `description`. `chart` is `price`, `reserve`, `generation`, or `sankey`, and requires `example_date` (`YYYY-MM-DD`). `example_date` may stand alone.
 
