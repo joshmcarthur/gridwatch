@@ -4,6 +4,7 @@ import { pageLead } from "./daily-page.ts";
 import {
   dayContext,
   gasCoalShare,
+  groupRecentDays,
   latestMarketUpdate,
   leadFact,
   leadFinding,
@@ -13,6 +14,7 @@ import {
   meanReservePrice,
   rankAgainstEarlier,
   recentDays,
+  shortDayLabel,
 } from "./market-conditions.ts";
 import { loadSiteDay, loadSiteIndex } from "./site-data.ts";
 
@@ -749,4 +751,32 @@ test("only the latest seven recent days carry a short finding, and none without 
   expect(days.slice(7).every((day) => day.lead === null)).toBe(true);
   expect(days[0]?.lead).toBe("Prices: one of the highest");
   expect(recentDays(series.index).every((day) => day.lead === null)).toBe(true);
+});
+
+test("groupRecentDays joins runs of the same finding and keeps breaks", () => {
+  const day = (date: string, lead: string | null) => ({
+    date,
+    href: `/${date}/`,
+    label: date,
+    complete: true,
+    lead,
+  });
+  const groups = groupRecentDays([
+    day("2026-11-21", "Reserve prices: one of the highest"),
+    day("2026-11-20", "Reserve prices: one of the highest"),
+    day("2026-11-19", "Reserve prices: one of the highest"),
+    day("2026-11-18", "Price gap: lower than most"),
+    day("2026-11-17", null),
+    day("2026-11-16", null),
+  ]);
+  expect(groups.map((g) => [g.lead, g.days.length])).toEqual([
+    ["Reserve prices: one of the highest", 3],
+    ["Price gap: lower than most", 1],
+    [null, 1],
+    [null, 1],
+  ]);
+});
+
+test("shortDayLabel is a compact weekday and date", () => {
+  expect(shortDayLabel("2026-11-21")).toMatch(/Sat.*21.*Nov/);
 });

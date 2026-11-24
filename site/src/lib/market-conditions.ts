@@ -606,3 +606,35 @@ function bandPhrase(band: RankBand, earlierCount: number): string {
 function formatReserveMoney(value: number): string {
   return Math.abs(value) < 10 ? moneyFine.format(value) : money.format(value);
 }
+
+export interface RecentDayGroup {
+  /** The shared finding, or null for days with none. */
+  lead: string | null;
+  days: RecentDay[];
+}
+
+/**
+ * Runs of consecutive days with the same finding become one group, so five days of
+ * "Reserve prices: one of the highest" read as one line, not five (ADR-0029).
+ */
+export function groupRecentDays(days: RecentDay[]): RecentDayGroup[] {
+  const groups: RecentDayGroup[] = [];
+  for (const day of days) {
+    const last = groups.at(-1);
+    if (last && day.lead !== null && last.lead === day.lead) {
+      last.days.push(day);
+    } else {
+      groups.push({ lead: day.lead, days: [day] });
+    }
+  }
+  return groups;
+}
+
+/** A short date for a list of days, for example `Sat 21 Nov`. */
+export function shortDayLabel(date: string): string {
+  return Temporal.PlainDate.from(date).toLocaleString("en-NZ", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
