@@ -575,9 +575,32 @@ export function dayBeats(day: SiteDay): DayStory {
     sent !== null &&
     sent !== undefined
   ) {
-    const parts = [
-      `The South Island made ${whole.format(south.generation_megawatt_hours)} MWh against an estimated load of ${whole.format(south.load_megawatt_hours)} MWh, and the cable carried ${whole.format(Math.abs(sent))} MWh ${sent <= 0 ? "north" : "south"}.`,
-    ];
+    // What the sending island exported is what left; the other island's import is what
+    // arrived after the cable's losses. Say both, so the beat agrees with half-hourly views.
+    const north = sent <= 0;
+    const northIsland = day.sankey?.islands.find(
+      (island) => island.island === "NI",
+    );
+    const northImport = northIsland?.hvdc_import_megawatt_hours ?? null;
+    const left = north ? -sent : northImport === null ? null : -northImport;
+    const arrived = north ? northImport : sent;
+    const sender = north ? "The South Island" : "The North Island";
+    const receiver = north ? "the North Island" : "the South Island";
+    const made = `The South Island made ${whole.format(south.generation_megawatt_hours)} MWh against an estimated load of ${whole.format(south.load_megawatt_hours)} MWh`;
+    const bothKnown =
+      left !== null && left > 0 && arrived !== null && arrived > 0;
+    const parts = north
+      ? [
+          bothKnown
+            ? `${made} and sent ${whole.format(left)} MWh north on the cable, of which ${whole.format(arrived)} MWh reached the North Island.`
+            : `${made} and sent ${whole.format(-sent)} MWh north on the cable.`,
+        ]
+      : [
+          `${made}.`,
+          bothKnown
+            ? `${sender} sent ${whole.format(left)} MWh south on the cable, of which ${whole.format(arrived)} MWh reached ${receiver}.`
+            : `${whole.format(sent)} MWh reached ${receiver} on the cable.`,
+        ];
     if (cheaperLine) parts.push(cheaperLine);
     beats.push(
       beat(

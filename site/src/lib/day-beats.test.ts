@@ -106,3 +106,23 @@ test("the beat that overlaps a written-up event links to it", () => {
   );
   expect(linked?.title).toBe("Evening price peak");
 });
+
+test("the cable beat says what was sent and what arrived", () => {
+  const cable = dayBeats(fixture(july27)).beats.find((b) => b.rule === "cable");
+  expect(cable?.text).toMatch(
+    /and sent 22,718 MWh north on the cable, of which [\d,]+ MWh reached the North Island\./,
+  );
+});
+
+test("a southward day names the North Island as the sender", () => {
+  const day = fixture(october29);
+  for (const island of day.sankey?.islands ?? []) {
+    if (island.hvdc_import_megawatt_hours !== null) {
+      island.hvdc_import_megawatt_hours = -island.hvdc_import_megawatt_hours;
+    }
+  }
+  const cable = dayBeats(day).beats.find((b) => b.rule === "cable");
+  expect(cable?.text).toMatch(
+    /The North Island sent [\d,]+ MWh south on the cable, of which [\d,]+ MWh reached the South Island\./,
+  );
+});
