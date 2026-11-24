@@ -268,7 +268,7 @@ export function sankeyTable(chart: EnergySankey): {
 }
 
 export function sankeyMissingCopy(): string {
-  return "Metered transfer on the inter-island cable (the HVDC link between Benmore and Haywards) is published about a month after the day. This day's energy balance is not published yet. This site does not guess the transfer.";
+  return "Metered transfer on the inter-island cable (the HVDC link between Benmore and Haywards) is published about a month after the day. This day's energy balance is not published yet.";
 }
 
 export function nodeId(
