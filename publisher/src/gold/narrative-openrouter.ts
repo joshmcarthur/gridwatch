@@ -4,7 +4,7 @@ import type { CompletenessView } from "../silver/completeness.ts";
 import { narrateCandidates } from "./narrate-candidates.ts";
 import {
   type CompleteNarrative,
-  DEFAULT_MODEL,
+  llmModel,
   NARRATIVE_CACHE_THREAD_ID,
 } from "./narrative.ts";
 
@@ -46,7 +46,7 @@ export async function narrateIfKeyed(ctx: {
     console.log("narratives: skip (no OPENROUTER_API_KEY)");
     return;
   }
-  const model = process.env.GRIDWATCH_LLM_MODEL ?? DEFAULT_MODEL;
+  const model = llmModel();
   const result = await narrateCandidates({
     ...ctx,
     complete: openRouterComplete(key, model),

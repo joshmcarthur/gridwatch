@@ -8,6 +8,16 @@ export const NARRATIVE_SCHEMA_VERSION = 1;
 export const PROMPT_VERSION = 1;
 export const DEFAULT_MODEL = "openai/gpt-6-luna";
 
+/**
+ * Compose sets `GRIDWATCH_LLM_MODEL` to `""` when the host does not set it.
+ * `??` would keep that empty string and OpenRouter would reply "No models provided".
+ */
+export const llmModel = (env: NodeJS.ProcessEnv = process.env): string => {
+  const value = env.GRIDWATCH_LLM_MODEL;
+  if (value === undefined || value.trim() === "") return DEFAULT_MODEL;
+  return value;
+};
+
 export interface PromptClaim {
   id: string;
   label: string;

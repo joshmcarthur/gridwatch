@@ -4,6 +4,7 @@ import {
   checkNarrative,
   DEFAULT_MODEL,
   generateNarrative,
+  llmModel,
   NARRATIVE_CACHE_THREAD_ID,
   NARRATIVE_SCHEMA_VERSION,
   PROMPT_VERSION,
@@ -68,6 +69,15 @@ test("the system prompt includes site copy and the glossary", () => {
 
 test("the cache thread id is stable across episodes", () => {
   expect(NARRATIVE_CACHE_THREAD_ID).toBe("gridwatch-narrative");
+});
+
+test("llmModel uses Luna when GRIDWATCH_LLM_MODEL is missing or blank", () => {
+  expect(llmModel({})).toBe(DEFAULT_MODEL);
+  expect(llmModel({ GRIDWATCH_LLM_MODEL: "" })).toBe(DEFAULT_MODEL);
+  expect(llmModel({ GRIDWATCH_LLM_MODEL: "  " })).toBe(DEFAULT_MODEL);
+  expect(llmModel({ GRIDWATCH_LLM_MODEL: "anthropic/claude-haiku-5.5" })).toBe(
+    "anthropic/claude-haiku-5.5",
+  );
 });
 
 test("the prompt carries claims, limits, links and NZ clock labels", () => {
