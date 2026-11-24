@@ -1,0 +1,27 @@
+---
+/**
+ * A page that used to stand alone and now lives inside a day page (ADR-0029: no nested
+ * pages). It keeps old links working on a static host.
+ */
+interface Props {
+  to: string;
+  title: string;
+}
+
+const { to, title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en-NZ">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta http-equiv="refresh" content={`0; url=${to}`} />
+    <link rel="canonical" href={to} />
+    <title>{title} · Gridwatch NZ</title>
+  </head>
+  <body>
+    <p>This has moved to <a href={to}>{title}</a>.</p>
+  </body>
+</html>

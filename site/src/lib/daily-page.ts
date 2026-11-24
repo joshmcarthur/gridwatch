@@ -76,7 +76,7 @@ export function dailyPath(date: string): string {
 }
 
 export function mapPath(date: string): string {
-  return `${dailyPath(date)}map/`;
+  return `${dailyPath(date)}#map`;
 }
 
 export function dateFromParams(

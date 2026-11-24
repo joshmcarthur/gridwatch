@@ -4,16 +4,21 @@ import type {
   SiteDay,
 } from "@gridwatch/publisher/site-contract";
 import coastlineJson from "../data/nz-coastline.json";
+import { FUEL_LABELS, STACK_ORDER } from "./generation-mix.ts";
+import { FUEL_COLOUR } from "./generation-mix-chart.ts";
 import {
   DOT_RADIUS,
   formatPrice,
   islandLabel,
   isOutlier,
+  type NodalMapBeat,
+  type NodalMapIsland,
   type NodalMapPayload,
   OUTLIER_RADIUS,
-  priceFill,
+  priceBandFill,
 } from "./nodal-map-scale.ts";
-import { clockLabeller, zonedAt } from "./period-clock.ts";
+import { clockLabeller12, zonedAt } from "./period-clock.ts";
+import { centsPerKwh } from "./price-regions.ts";
 
 export {
   DOT_RADIUS,
@@ -23,8 +28,9 @@ export {
   MISSING_FILL,
   type NodalMapRow,
   OUTLIER_RADIUS,
+  PRICE_BANDS,
   periodSummary,
-  priceFill,
+  priceBandFill,
   rowsForPeriod,
   sortRows,
 } from "./nodal-map-scale.ts";
@@ -62,6 +68,28 @@ export interface MapPeriod {
   time: string;
 }
 
+/** A reference place drawn and labelled on the map. */
+export interface MapPlace {
+  point_of_connection: string;
+  name: string;
+  cx: number;
+  cy: number;
+  /** Label offset from the dot, in map units. */
+  dx: number;
+  dy: number;
+  prices: Array<number | null>;
+}
+
+/** The Cook Strait cable as a day average (the site files have no half-hourly flow yet). */
+export interface MapCable {
+  d: string;
+  width: number;
+  labelX: number;
+  labelY: number;
+  label: string;
+  amount: string;
+}
+
 export interface NodalMapView {
   defaultPeriod: number;
   periods: MapPeriod[];
@@ -75,6 +103,66 @@ export interface NodalMapView {
   incomplete: boolean;
   plotted: number;
   priced: number;
+  places: MapPlace[];
+  cable: MapCable | null;
+  /** Null when generation for the day is missing. */
+  islands: NodalMapIsland[] | null;
+}
+
+/**
+ * The three reference places. Haywards and Benmore have no coordinates in the mapping
+ * files, so their positions are fixed here (approximate substation locations).
+ */
+const REFERENCE_PLACES = [
+  { poc: "OTA2201", name: "Ōtāhuhu", lon: 174.85, lat: -36.95, dx: -7, dy: 0 },
+  {
+    poc: "HAY2201",
+    name: "Haywards",
+    lon: 174.95,
+    lat: -41.15,
+    dx: -7,
+    dy: -8,
+  },
+  { poc: "BEN2201", name: "Benmore", lon: 170.2, lat: -44.56, dx: -7, dy: -12 },
+] as const;
+
+/** Cable ends: Marlborough (South Island) to the Wellington coast (North Island). */
+const CABLE_SOUTH = [173.95, -41.7] as const;
+const CABLE_NORTH = [174.9, -41.2] as const;
+
+const megawattsWhole = new Intl.NumberFormat("en-NZ", {
+  maximumFractionDigits: 0,
+});
+
+function islandGeneration(day: SiteDay): NodalMapIsland[] | null {
+  const section = day.generation;
+  if (section.state === "missing" || section.series.length === 0) return null;
+  const count = day.periods.length;
+  const gaps = new Set(section.missing_periods);
+  return (["NI", "SI"] as const).map((island) => ({
+    key: island === "NI" ? "north" : "south",
+    fuels: STACK_ORDER.flatMap((fuel) => {
+      const rows = section.series.filter(
+        (row) => row.island === island && row.fuel === fuel,
+      );
+      if (rows.length === 0) return [];
+      const megawatts = Array.from({ length: count }, (_, index) => {
+        if (gaps.has(day.periods[index]?.period ?? index + 1)) return null;
+        let sum = 0;
+        for (const row of rows) sum += (row.megawatt_hours[index] ?? 0) * 2;
+        return sum;
+      });
+      if (!megawatts.some((value) => value !== null && value > 0)) return [];
+      return [
+        {
+          fuel,
+          label: FUEL_LABELS[fuel],
+          colour: FUEL_COLOUR[fuel],
+          megawatts,
+        },
+      ];
+    }),
+  }));
 }
 
 export function loadCoastline(): GeoJson {
@@ -180,7 +268,43 @@ export function nodalMapView(
   const section = day.nodal_map;
   if (!section || section.state === "missing") return null;
   const { project, landPaths } = makeProjector(coastline);
-  const label = clockLabeller(day);
+  const label = clockLabeller12(day);
+  const places = REFERENCE_PLACES.flatMap((place) => {
+    const node = day.prices.nodes.find(
+      (item) => item.point_of_connection === place.poc,
+    );
+    if (!node) return [];
+    const [cx, cy] = project(place.lon, place.lat);
+    return [
+      {
+        point_of_connection: place.poc,
+        name: place.name,
+        cx,
+        cy,
+        dx: place.dx,
+        dy: place.dy,
+        prices: node.price,
+      },
+    ];
+  });
+  const south = day.sankey?.islands.find((island) => island.island === "SI");
+  const sent = south?.hvdc_import_megawatt_hours ?? null;
+  let cable: MapCable | null = null;
+  if (sent !== null && sent !== 0) {
+    const [sx, sy] = project(CABLE_SOUTH[0], CABLE_SOUTH[1]);
+    const [nx, ny] = project(CABLE_NORTH[0], CABLE_NORTH[1]);
+    const north = sent < 0;
+    const [ax, ay, bx, by] = north ? [sx, sy, nx, ny] : [nx, ny, sx, sy];
+    const average = Math.abs(sent) / 24;
+    cable = {
+      d: `M${ax.toFixed(1)},${ay.toFixed(1)} Q${((sx + nx) / 2 + 6).toFixed(1)},${((sy + ny) / 2 + 10).toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`,
+      width: Math.min(8, Math.max(2, average / 120)),
+      labelX: nx + 8,
+      labelY: ny + 22,
+      label: `Cable ${north ? "north" : "south"}`,
+      amount: `about ${megawattsWhole.format(average)} MW`,
+    };
+  }
   return {
     defaultPeriod: defaultPeriod(day),
     periods: day.periods.map((period) => ({
@@ -209,6 +333,9 @@ export function nodalMapView(
     incomplete: section.state === "incomplete",
     plotted: section.pocs.length,
     priced: section.pocs.length + section.unlocated.length,
+    places,
+    cable,
+    islands: islandGeneration(day),
   };
 }
 
@@ -218,8 +345,6 @@ export function renderMapSvg(
   labels: { id: string; title: string; summary: string },
 ): string {
   const i = period - 1;
-  const min = view.min[i] ?? null;
-  const max = view.max[i] ?? null;
   const p05 = view.p05[i] ?? null;
   const p95 = view.p95[i] ?? null;
   const land = view.landPaths
@@ -234,7 +359,7 @@ export function renderMapSvg(
       const outlier = isOutlier(price, p05, p95);
       const r = outlier ? OUTLIER_RADIUS : DOT_RADIUS;
       const title = `${poc.point_of_connection}, ${formatPrice(price)} dollars per megawatt-hour`;
-      return `<circle data-poc="${escapeAttr(poc.point_of_connection)}" cx="${poc.cx.toFixed(2)}" cy="${poc.cy.toFixed(2)}" r="${r}" fill="${priceFill(price, min, max)}" stroke="var(--color-ink)" stroke-width="0.4"><title>${escapeText(title)}</title></circle>`;
+      return `<circle data-poc="${escapeAttr(poc.point_of_connection)}" cx="${poc.cx.toFixed(2)}" cy="${poc.cy.toFixed(2)}" r="${r}" fill="${priceBandFill(price)}" stroke="var(--color-ink)" stroke-width="0.4"><title>${escapeText(title)}</title></circle>`;
     })
     .join("");
   return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${MAP_WIDTH} ${MAP_HEIGHT}" role="img" aria-labelledby="${labels.id}-title ${labels.id}-summary" id="${labels.id}">
@@ -242,10 +367,33 @@ export function renderMapSvg(
 <desc id="${labels.id}-summary">${escapeText(labels.summary)}</desc>
 <g class="land">${land}</g>
 <g class="nodes">${dots}</g>
+${cableSvg(view.cable)}
+<g class="places">${view.places.map((place) => placeSvg(place, i)).join("")}</g>
 </svg>`;
 }
 
-export function clientPayload(view: NodalMapView): NodalMapPayload {
+function cableSvg(cable: MapCable | null): string {
+  if (!cable) return "";
+  const lines = [cable.label, cable.amount, "day average"]
+    .map(
+      (line, index) =>
+        `<text x="${cable.labelX.toFixed(1)}" y="${(cable.labelY + index * 11).toFixed(1)}" class="map-note${index === 2 ? " muted" : ""}">${escapeText(line)}</text>`,
+    )
+    .join("");
+  return `<g class="cable"><defs><marker id="cable-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--color-ink)"/></marker></defs><path d="${cable.d}" fill="none" stroke="var(--color-ink)" stroke-opacity="0.75" stroke-width="${cable.width.toFixed(1)}" stroke-linecap="round" marker-end="url(#cable-arrow)"/>${lines}</g>`;
+}
+
+function placeSvg(place: MapPlace, index: number): string {
+  const price = place.prices[index] ?? null;
+  const x = (place.cx + place.dx).toFixed(1);
+  const y = place.cy + place.dy;
+  return `<g data-place="${escapeAttr(place.point_of_connection)}"><circle cx="${place.cx.toFixed(1)}" cy="${place.cy.toFixed(1)}" r="3.2" fill="var(--color-ink)" stroke="#fff" stroke-width="1.2"/><text x="${x}" y="${y.toFixed(1)}" text-anchor="end" class="place-name">${escapeText(place.name)}</text><text x="${x}" y="${(y + 14).toFixed(1)}" text-anchor="end" class="place-price" data-place-price>${price === null ? "No data" : centsPerKwh(price)}</text></g>`;
+}
+
+export function clientPayload(
+  view: NodalMapView,
+  beats: NodalMapBeat[] = [],
+): NodalMapPayload {
   const pocOf = (poc: {
     point_of_connection: string;
     island: Island | null;
@@ -260,6 +408,12 @@ export function clientPayload(view: NodalMapView): NodalMapPayload {
   return {
     defaultPeriod: view.defaultPeriod,
     periods: view.periods,
+    places: view.places.map((place) => ({
+      point_of_connection: place.point_of_connection,
+      prices: place.prices,
+    })),
+    beats,
+    islands: view.islands ?? [],
     p05: view.p05,
     p95: view.p95,
     min: view.min,
@@ -294,4 +448,66 @@ export function coverageSentence(view: NodalMapView): string {
     return `The map plots all ${plotted} named places that have a wholesale price and a map location.`;
   }
   return `The map plots ${plotted} of ${priced} named places that have a wholesale price. The other ${skipped} have no coordinates in the public mapping files, so they are in the table only. Grid substations such as Haywards and Benmore often have no coordinates.`;
+}
+
+const SPARK_WIDTH = 320;
+const SPARK_HEIGHT = 76;
+const SPARK_PAD = 4;
+const SPARK_COLOUR: Record<string, string> = {
+  OTA2201: "var(--color-island-north)",
+  HAY2201: "#6fb3ba",
+  BEN2201: "var(--color-island-south)",
+};
+
+/**
+ * The day's prices at the three reference places, with beat windows shaded and a cursor
+ * the client moves. Decorative: the beats list and the table carry the same facts.
+ */
+export function sparklineSvg(
+  view: NodalMapView,
+  beats: Array<{ from: number; to: number }>,
+  period: number,
+): string {
+  const count = view.periods.length;
+  const width = SPARK_WIDTH - SPARK_PAD * 2;
+  const x = (index: number) =>
+    SPARK_PAD + (count > 1 ? (index / (count - 1)) * width : 0);
+  const values = view.places.flatMap((place) =>
+    place.prices.filter((value): value is number => value !== null),
+  );
+  const top = Math.max(1, ...values);
+  const y = (value: number) =>
+    SPARK_HEIGHT -
+    SPARK_PAD -
+    (Math.max(0, value) / top) * (SPARK_HEIGHT - SPARK_PAD * 2);
+  const bands = beats
+    .filter((beat) => !(beat.from === 1 && beat.to === count))
+    .map(
+      (beat) =>
+        `<rect x="${x(beat.from - 1).toFixed(1)}" y="0" width="${Math.max(2, x(beat.to - 1) - x(beat.from - 1)).toFixed(1)}" height="${SPARK_HEIGHT}" fill="var(--color-ink)" opacity="0.06"/>`,
+    )
+    .join("");
+  const lines = view.places
+    .map((place) => {
+      const segments: string[] = [];
+      let current: string[] = [];
+      place.prices.forEach((value, index) => {
+        if (value === null) {
+          if (current.length > 1) segments.push(current.join(" "));
+          current = [];
+          return;
+        }
+        current.push(`${x(index).toFixed(1)},${y(value).toFixed(1)}`);
+      });
+      if (current.length > 1) segments.push(current.join(" "));
+      return segments
+        .map(
+          (points) =>
+            `<polyline points="${points}" fill="none" stroke="${SPARK_COLOUR[place.point_of_connection] ?? "var(--color-ink)"}" stroke-width="1.6"/>`,
+        )
+        .join("");
+    })
+    .join("");
+  const cx = x(period - 1).toFixed(1);
+  return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}" class="spark" aria-hidden="true" focusable="false">${bands}${lines}<line data-spark-cursor data-x0="${SPARK_PAD}" data-width="${width}" x1="${cx}" x2="${cx}" y1="0" y2="${SPARK_HEIGHT}" stroke="var(--color-ink)" stroke-width="1.5"/></svg>`;
 }

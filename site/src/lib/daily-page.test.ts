@@ -70,8 +70,8 @@ test("dailyPath is a trailing-slash YYYY/MM/DD route", () => {
   expect(dailyPath("2026-09-27")).toBe("/2026/09/27/");
 });
 
-test("mapPath is the daily path plus map/", () => {
-  expect(mapPath("2026-09-27")).toBe("/2026/09/27/map/");
+test("mapPath is the map section of the daily page", () => {
+  expect(mapPath("2026-09-27")).toBe("/2026/09/27/#map");
 });
 
 test("dateFromParams round-trips a padded calendar date", () => {

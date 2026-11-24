@@ -1,13 +1,20 @@
 import type { Island } from "@gridwatch/publisher/site-contract";
+import { centsPerKwh } from "./price-regions.ts";
 
 export const MISSING_FILL = "#b7c5c0";
 export const DOT_RADIUS = 3.5;
 export const OUTLIER_RADIUS = 5.5;
 
-type Rgb = [number, number, number];
-const LOW: Rgb = [31, 111, 120];
-const MID: Rgb = [242, 181, 68];
-const HIGH: Rgb = [183, 121, 31];
+/**
+ * Fixed price bands in $/MWh, so a colour means the same thing at every time of day
+ * (ADR-0029). `below` is exclusive; the last band has no upper limit.
+ */
+export const PRICE_BANDS = [
+  { label: "Very cheap", range: "under 3c", below: 30, fill: "#4fa89a" },
+  { label: "Usual", range: "3c to 8c", below: 80, fill: "#9fb3ae" },
+  { label: "High", range: "8c to 20c", below: 200, fill: "#e0a23a" },
+  { label: "Very high", range: "20c and over", below: null, fill: "#c8553d" },
+] as const;
 
 export interface NodalMapRow {
   point_of_connection: string;
@@ -25,10 +32,32 @@ export interface NodalMapPayloadPoc {
   proxy_periods: number[];
 }
 
+/** One beat as the browser needs it (ADR-0029). Text only; the page renders it. */
+export interface NodalMapBeat {
+  at: number;
+  from: number;
+  to: number;
+}
+
+/** One island's generation by fuel, average MW per period. Null in a gap. */
+export interface NodalMapIsland {
+  key: "north" | "south";
+  fuels: Array<{
+    fuel: string;
+    label: string;
+    colour: string;
+    megawatts: Array<number | null>;
+  }>;
+}
+
 /** What the page sends to the browser as JSON. Plain data, no coastline. */
 export interface NodalMapPayload {
   defaultPeriod: number;
   periods: Array<{ period: number; time: string }>;
+  /** Reference places drawn and labelled on the map, with their prices. */
+  places: Array<{ point_of_connection: string; prices: Array<number | null> }>;
+  beats: NodalMapBeat[];
+  islands: NodalMapIsland[];
   p05: Array<number | null>;
   p95: Array<number | null>;
   min: Array<number | null>;
@@ -60,28 +89,13 @@ export function formatPrice(value: number | null): string {
   }).format(value);
 }
 
-function hex(rgb: Rgb): string {
-  return `#${rgb.map((c) => Math.round(c).toString(16).padStart(2, "0")).join("")}`;
-}
-
-function mix(a: Rgb, b: Rgb, t: number): Rgb {
-  return [
-    a[0] + (b[0] - a[0]) * t,
-    a[1] + (b[1] - a[1]) * t,
-    a[2] + (b[2] - a[2]) * t,
-  ];
-}
-
-/** Sequential fill from tarn (low) through solar (mid) to amber (high). */
-export function priceFill(
-  price: number | null,
-  min: number | null,
-  max: number | null,
-): string {
-  if (price === null || min === null || max === null) return MISSING_FILL;
-  if (max <= min) return hex(MID);
-  const t = Math.min(1, Math.max(0, (price - min) / (max - min)));
-  return hex(t < 0.5 ? mix(LOW, MID, t * 2) : mix(MID, HIGH, (t - 0.5) * 2));
+/** Fill for a dot: its fixed price band, or grey when the price is missing. */
+export function priceBandFill(price: number | null): string {
+  if (price === null) return MISSING_FILL;
+  const band = PRICE_BANDS.find(
+    (item) => item.below === null || price < item.below,
+  );
+  return band?.fill ?? MISSING_FILL;
 }
 
 export function isOutlier(
@@ -121,10 +135,10 @@ export function periodSummary(
   const i = period - 1;
   const min = view.min[i];
   const max = view.max[i];
-  if (min === null || max === null) {
-    return `Trading period ${period} (${clock}). Wholesale prices for this slice are missing.`;
+  if (min === null || max === null || min === undefined || max === undefined) {
+    return `At ${clock}, wholesale prices for this half-hour are missing.`;
   }
-  return `Trading period ${period} (${clock}). Wholesale prices range from ${formatPrice(min)} to ${formatPrice(max)} dollars per megawatt-hour.`;
+  return `At ${clock}, wholesale prices on the grid ranged from ${centsPerKwh(min)} to ${centsPerKwh(max)} per kWh.`;
 }
 
 export function rowsForPeriod(
