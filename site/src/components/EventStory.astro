@@ -2,6 +2,7 @@
 import type { SiteDay, SiteEvent } from "@gridwatch/publisher/site-contract";
 import { episodeClockRange } from "../lib/episode-copy";
 import {
+  AI_LABEL,
   CONFIDENCE_LEVELS,
   claimAnchor,
   claimFigure,
@@ -10,7 +11,6 @@ import {
   eventHeadline,
   eventWindowChart,
   linkClaims,
-  REVIEW_LABEL,
   requireCheckedEvent,
 } from "../lib/event-page";
 import { placeName } from "../lib/price-regions";
@@ -36,7 +36,7 @@ const scope = event.episode_id;
 
 <article class="event" id={id} aria-labelledby={`${id}-title`}>
   <header>
-    <p class="review">{REVIEW_LABEL} write-up · {clock}</p>
+    <p class="review">{AI_LABEL} · {clock}</p>
     <h3 id={`${id}-title`}>{headline}</h3>
   </header>
 
@@ -56,11 +56,11 @@ const scope = event.episode_id;
   </div>
 
   <details class="more">
-    <summary>How sure is this, and the numbers behind it</summary>
+    <summary>What this was written from</summary>
     <p>
-      A language model drafted this write-up from the figures below, and nobody
-      has reviewed it yet. The figures come straight from the market files,
-      each labelled by how sure it is:
+      The model wrote this from the figures below and nothing else, and a
+      program checked every number in the text against them. Each figure says
+      how sure it is. <a href="/how/#ai">How this site uses AI</a>
     </p>
     <dl class="confidence">
       {

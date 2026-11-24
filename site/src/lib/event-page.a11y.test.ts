@@ -31,7 +31,10 @@ test.skipIf(!existsSync(dailyPage))(
     const scope = "394f75a3bfa948a3";
     expect(html).toContain('id="day-events"');
     expect(html).toContain(`id="event-${scope}"`);
-    expect(html).toMatch(/Unreviewed write-up/);
+    expect(html).toMatch(/Written by AI ·/);
+    expect(html).not.toMatch(/Unreviewed/);
+    expect(html).toContain("What this was written from");
+    expect(html).toContain('href="/how/#ai"');
     expect(html).toContain(`id="event-${scope}-what"`);
     expect(html).toContain(`id="event-${scope}-why"`);
     expect(html).toContain(`id="event-${scope}-means"`);
