@@ -486,7 +486,7 @@ test("thirty earlier complete days produce a rank band in past tense", () => {
   ).toBe(true);
   expect(
     cards.every((card) =>
-      card.bandNote?.includes("30 earlier complete days on this site"),
+      card.bandNote?.includes("30 earlier days on this site"),
     ),
   ).toBe(true);
   expect(cards.every((card) => card.date === dates[30])).toBe(true);
@@ -578,9 +578,9 @@ test("dayContext ranks a day against earlier days and says the change from the d
   const price = context.find((entry) => entry.id === "price");
   const power = context.find((entry) => entry.id === "power");
   expect(price?.line).toBe(
-    "Wholesale prices were one of the highest of the 40 earlier complete days on this site.",
+    "Wholesale prices were one of the highest of the 40 earlier days on this site.",
   );
-  expect(price?.change).toBe("Up $150 per megawatt-hour from the day before.");
+  expect(price?.change).toBe("Up 15c per kWh from the day before.");
   expect(power?.line).toMatch(/^Generation was lower than most of the 40/);
   expect(power?.change).toBe("Down 39 MWh from the day before.");
 });
@@ -620,7 +620,7 @@ test("leadFact picks the figure furthest from usual and says nothing about cause
   });
   const sentence = leadFact(index, lastDate, (date) => byDate[date] as SiteDay);
   expect(sentence).toBe(
-    "Wholesale prices were one of the highest of the 40 earlier complete days on this site.",
+    "Wholesale prices were one of the highest of the 40 earlier days on this site.",
   );
   expect(sentence).not.toMatch(/because|caused|due to/i);
 });
@@ -631,7 +631,7 @@ test("leadFact says a day was ordinary when no figure is far from normal", () =>
     meanPrices: [50, 50, 50],
   });
   expect(leadFact(index, lastDate, (date) => byDate[date] as SiteDay)).toBe(
-    "None of the day's main figures was far from normal against the 40 earlier complete days on this site.",
+    "None of the day's main figures was far from usual for the 40 earlier days on this site.",
   );
 });
 

@@ -64,10 +64,6 @@ const publishedEvents = eventsOnDay(day);
       <h1>{titleDate}</h1>
       {story.headline && <p class="headline">{story.headline}</p>}
       {story.lede ? <p>{story.lede}</p> : lead && <p>{lead}</p>}
-      <p class="places">
-        Prices here come from three places: Ōtāhuhu in Auckland, Haywards near
-        Wellington, and Benmore in the South Island.
-      </p>
       <dl class="stats">
         {
           headline.stats.map((stat) => (
@@ -122,18 +118,14 @@ const publishedEvents = eventsOnDay(day);
       ) : null
     }
 
-    <section class="slot" aria-labelledby="detected-episodes">
-      <h2 id="detected-episodes">What stood out</h2>
-      <p>
-        Stretches of the day that looked unusual in the public files. Not a
-        written-up public event yet.
-      </p>
-      {
-        day.episodes === undefined || day.episodes.state === "missing" ? (
-          <p>The list of unusual stretches is not ready for this day yet.</p>
-        ) : day.episodes.items.length === 0 ? (
-          <p>No unusual stretches were detected on this day.</p>
-        ) : (
+    {
+      day.episodes && day.episodes.items.length > 0 ? (
+        <section class="slot" aria-labelledby="detected-episodes">
+          <h2 id="detected-episodes">What stood out</h2>
+          <p>
+            Stretches of the day that looked unusual in the public files. Not a
+            written-up public event yet.
+          </p>
           <ol class="episodes">
             {day.episodes.items.map((episode) => (
               <li id={`episode-${episode.episode_id}`}>
@@ -146,9 +138,9 @@ const publishedEvents = eventsOnDay(day);
               </li>
             ))}
           </ol>
-        )
-      }
-    </section>
+        </section>
+      ) : null
+    }
 
     <section class="slot" aria-labelledby="generation-mix">
       <h2 id="generation-mix">What made the power</h2>

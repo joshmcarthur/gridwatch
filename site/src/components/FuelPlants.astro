@@ -11,9 +11,7 @@ const view = fuelPlants(day);
 ---
 
 {
-  view.kind === "missing" ? (
-    <p>{view.message}</p>
-  ) : (
+  view.kind === "missing" ? null : (
     <div class="plants">
       <h3 id="fuel-plants">Which plants made it</h3>
       <p>
