@@ -52,6 +52,8 @@ export interface Beat {
   text: string;
   /** Episodes joined to this beat. */
   episodeIds: string[];
+  /** The site's line for each episode joined to this beat, shown under the text. */
+  flags: string[];
   link: { href: string; label: string } | null;
 }
 
@@ -203,9 +205,33 @@ function fuelWord(fuel: StackFuel): string {
   return FUEL_LABELS[fuel].toLowerCase();
 }
 
+/** "hydro rose by 830 MW and gas by 120 MW, while solar fell by 230 MW" */
+function movesSentence(
+  moves: Array<{ fuel: StackFuel; change: number }>,
+): string | null {
+  const list = (items: typeof moves, verb: string) =>
+    joinAnd(
+      items.map(
+        (move, at) =>
+          `${fuelWord(move.fuel)}${at === 0 ? ` ${verb}` : ""} by ${megawatts(Math.abs(move.change))}`,
+      ),
+    );
+  const up = moves.filter((move) => move.change > 0);
+  const down = moves.filter((move) => move.change < 0);
+  if (up.length > 0 && down.length > 0) {
+    return `${list(up, "rose")}, while ${list(down, "fell")}`;
+  }
+  if (up.length > 0) return list(up, "rose");
+  if (down.length > 0) return list(down, "fell");
+  return null;
+}
+
 function beat(
   clocks: Clocks,
-  fields: Omit<Beat, "from" | "to" | "at" | "when" | "episodeIds" | "link"> & {
+  fields: Omit<
+    Beat,
+    "from" | "to" | "at" | "when" | "episodeIds" | "flags" | "link"
+  > & {
     fromIndex: number;
     toIndex: number;
     atIndex: number;
@@ -221,6 +247,7 @@ function beat(
     at: periodOf(atIndex),
     when: clocks.when(fromIndex, toIndex),
     episodeIds: [],
+    flags: [],
     link: link ?? null,
   };
 }
@@ -278,17 +305,12 @@ export function dayBeats(day: SiteDay): DayStory {
       const benAt = ben?.[pk];
       const parts = [
         benAt !== null && benAt !== undefined
-          ? `Ōtāhuhu reached ${centsPerKwh(peak)} per kWh at ${clocks.start(pk)}, while Benmore was ${centsPerKwh(benAt)}.`
-          : `Ōtāhuhu reached ${centsPerKwh(peak)} per kWh at ${clocks.start(pk)}.`,
+          ? `Ōtāhuhu peaked at ${centsPerKwh(peak)} per kWh at ${clocks.start(pk)}, while Benmore was ${centsPerKwh(benAt)}.`
+          : `Ōtāhuhu peaked at ${centsPerKwh(peak)} per kWh at ${clocks.start(pk)}.`,
       ];
-      if (moves.length > 0) {
-        const words = moves.map(
-          (move) =>
-            `${fuelWord(move.fuel)} ${move.change > 0 ? "rose" : "fell"} by ${megawatts(Math.abs(move.change))}`,
-        );
-        parts.push(
-          `From ${clocks.start(ref)} to ${clocks.start(pk)}, ${joinAnd(words)}.`,
-        );
+      const moved = movesSentence(moves);
+      if (moved) {
+        parts.push(`Between ${clocks.start(ref)} and the peak, ${moved}.`);
       }
       beats.push(
         beat(
@@ -342,16 +364,17 @@ export function dayBeats(day: SiteDay): DayStory {
         }
       }
     }
-    const parts = [
-      `${PLACE[cheapest.poc]} was cheapest at ${clocks.start(cheapest.index)}, at ${centsPerKwh(cheapest.value)} per kWh.`,
-    ];
     const otaAt = ota?.[cheapest.index];
-    if (cheapest.poc !== OTAHUHU && otaAt !== null && otaAt !== undefined) {
-      parts[0] = `${parts[0].slice(0, -1)}, while Ōtāhuhu was ${centsPerKwh(otaAt)}.`;
-    }
+    const compare =
+      cheapest.poc !== OTAHUHU && otaAt !== null && otaAt !== undefined
+        ? `, when Ōtāhuhu was ${centsPerKwh(otaAt)}`
+        : "";
+    const parts = [
+      `The cheapest half-hour was ${clocks.start(cheapest.index)} at ${PLACE[cheapest.poc]}, ${centsPerKwh(cheapest.value)} per kWh${compare}.`,
+    ];
     if (atHigh.length > 0) {
       parts.push(
-        `${joinAnd(atHigh.map((fuel) => FUEL_LABELS[fuel]))} was near its highest output of the day.`,
+        `${joinAnd(atHigh.map((fuel) => FUEL_LABELS[fuel]))} was close to its peak for the day.`,
       );
     }
     beats.push(
@@ -391,21 +414,18 @@ export function dayBeats(day: SiteDay): DayStory {
       let b = i;
       while (a > 0 && near(a - 1)) a--;
       while (b < count - 1 && near(b + 1)) b++;
-      const parts = [
-        `At ${clocks.start(i)}, ${fuelWord(fuel)} made ${megawatts(value)}, ${percent.format(share)} of all generation.`,
-      ];
       const otaAt = ota?.[i];
       const benAt = ben?.[i];
-      if (
+      const prices =
         otaAt !== null &&
         otaAt !== undefined &&
         benAt !== null &&
         benAt !== undefined
-      ) {
-        parts.push(
-          `Ōtāhuhu was ${centsPerKwh(otaAt)} per kWh and Benmore ${centsPerKwh(benAt)}.`,
-        );
-      }
+          ? `, when Ōtāhuhu was ${centsPerKwh(otaAt)} per kWh and Benmore ${centsPerKwh(benAt)}`
+          : "";
+      const parts = [
+        `${FUEL_LABELS[fuel]} peaked at ${clocks.start(i)} with ${megawatts(value)}, ${percent.format(share)} of everything generated${prices}.`,
+      ];
       beats.push(
         beat(
           clocks,
@@ -461,7 +481,7 @@ export function dayBeats(day: SiteDay): DayStory {
             toIndex: Math.min(count - 1, best.at + 1),
             fuels: ["geothermal"],
             places: [],
-            text: `Geothermal ${down ? "fell" : "rose"} by about ${megawatts(Math.abs(best.change))} around ${clocks.start(best.at)} and stayed ${down ? "lower" : "higher"} for the rest of the day. The day files show the change but not its cause.`,
+            text: `Geothermal output ${down ? "dropped" : "jumped"} by about ${megawatts(Math.abs(best.change))} around ${clocks.start(best.at)} and stayed ${down ? "down" : "up"} for the rest of the day. The files show the change, but not what caused it.`,
           },
           periodOf,
         ),
@@ -481,7 +501,7 @@ export function dayBeats(day: SiteDay): DayStory {
         episode.end_trading_period >= b.from,
     );
     if (host) {
-      host.text = `${host.text} ${line}`;
+      host.flags.push(line);
       host.episodeIds.push(episode.episode_id);
       continue;
     }
@@ -543,7 +563,7 @@ export function dayBeats(day: SiteDay): DayStory {
     if (compared > 0) {
       cheaperLine =
         cheaper === compared
-          ? "Benmore was cheaper than Ōtāhuhu in every half-hour."
+          ? "Benmore was cheaper than Ōtāhuhu all day."
           : `Benmore was cheaper than Ōtāhuhu in ${cheaper} of ${compared} half-hours.`;
     }
   }
@@ -601,31 +621,41 @@ export function dayBeats(day: SiteDay): DayStory {
       }
     }
   }
-  const fuelSentence = topFuel
-    ? `${topFuel.label} made ${percent.format(topFuel.share)} of generation`
+  const fuelClause = topFuel
+    ? `${topFuel.label} made ${percent.format(topFuel.share)} of the day's electricity`
     : null;
-  let headline: string | null = fuelSentence;
   const otaValues = ota ? present(ota) : [];
   const benValues = ben ? present(ben) : [];
   const first = peaks[0];
+  const firstPrice = first === undefined ? null : (ota?.[first] ?? null);
+  let headline: string | null = fuelClause;
+  let spike = false;
   if (otaValues.length > 0) {
     const top = Math.max(...otaValues);
     const gap = benValues.length > 0 ? mean(otaValues) - mean(benValues) : 0;
     if (first !== undefined && top >= t.spikeTimesMedian * median(otaValues)) {
-      headline = `Ōtāhuhu reached ${centsPerKwh(top)} per kWh at ${clocks.start(first)}`;
+      headline = `Ōtāhuhu hit ${centsPerKwh(top)} per kWh at ${clocks.start(first)}`;
+      spike = true;
     } else if (gap >= t.gapDollarsPerMwh) {
-      headline = `Benmore averaged ${centsPerKwh(mean(benValues))} per kWh, Ōtāhuhu ${centsPerKwh(mean(otaValues))}`;
+      headline = `Power averaged ${centsPerKwh(mean(benValues))} per kWh at Benmore and ${centsPerKwh(mean(otaValues))} at Ōtāhuhu`;
     } else if (headline === null) {
-      headline = `Ōtāhuhu averaged ${centsPerKwh(mean(otaValues))} per kWh`;
+      headline = `Power averaged ${centsPerKwh(mean(otaValues))} per kWh at Ōtāhuhu`;
     }
   }
-  const lede = [
-    fuelSentence ? `${fuelSentence}.` : null,
-    first !== undefined && ota?.[first] != null
-      ? `Ōtāhuhu was most expensive at ${clocks.start(first)} (${centsPerKwh(ota[first] ?? 0)} per kWh).`
-      : null,
-    cheaperLine,
-  ]
+  // The headline already gives a spike's peak, so the lede doesn't repeat it.
+  const peakClause =
+    !spike && first !== undefined && firstPrice !== null
+      ? `prices at Ōtāhuhu peaked at ${centsPerKwh(firstPrice)} per kWh at ${clocks.start(first)}`
+      : null;
+  const opening =
+    fuelClause && peakClause
+      ? `${fuelClause}, and ${peakClause}.`
+      : fuelClause
+        ? `${fuelClause}.`
+        : peakClause
+          ? `${peakClause.charAt(0).toUpperCase()}${peakClause.slice(1)}.`
+          : null;
+  const lede = [opening, cheaperLine]
     .filter((part): part is string => part !== null)
     .join(" ");
 
