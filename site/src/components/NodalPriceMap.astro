@@ -164,7 +164,7 @@ const islandsNow = (view?.islands ?? []).map((island) => {
                     {island.name}{" "}
                     <span data-island-total>
                       {island.known
-                        ? `${megawatts.format(island.total)} MW made`
+                        ? `${megawatts.format(island.total)} MW generating`
                         : "No numbers for this half-hour"}
                     </span>
                   </h3>
@@ -226,12 +226,11 @@ const islandsNow = (view?.islands ?? []).map((island) => {
           The moments beside the map come from fixed rules run over the day's
           numbers (the highest and lowest prices, when wind or solar peaked,
           lasting shifts in geothermal output, unusual stretches, and the
-          cable), so they describe what the numbers show rather than why it
-          happened.
+          cable).
         </p>
         <p>
           Source: Electricity Authority wholesale prices at each named place on
-          the grid. Prices can be revised after the day. Coordinates come from
+          the grid. Coordinates come from
           the Authority's public list of where local networks meet the grid.
           Contains data sourced from the LINZ Data Service licensed for reuse
           under CC BY 4.0. LINZ is Land Information New Zealand. CC BY 4.0 is

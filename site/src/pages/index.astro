@@ -146,7 +146,7 @@ const leadBeats = (story?.beats ?? []).filter(
         <summary>How these cards work</summary>
         <p>
           Each card is one number from the latest day with complete files for
-          it. There is no single score for the day. A card ranks its number
+          it. A card ranks its number
           against earlier complete days on this site, up to a year back, not
           against a fixed threshold.
         </p>
@@ -232,7 +232,7 @@ const leadBeats = (story?.beats ?? []).filter(
     events.length > 0 ? (
       <section class="card" aria-labelledby="recent-events-heading">
         <h2 id="recent-events-heading">Recent events</h2>
-        <p>Write-ups of unusual stretches. Each one is still Unreviewed.</p>
+        <p>Write-ups of unusual stretches. None has been reviewed yet.</p>
         <ol class="episodes">
           {events.map(({ date, event }) => (
             <li>
@@ -249,8 +249,7 @@ const leadBeats = (story?.beats ?? []).filter(
   <section class="card" aria-labelledby="recent-episodes-heading">
     <h2 id="recent-episodes-heading">Recently detected</h2>
     <p>
-      Stretches of the day that looked unusual in the public files. Not a written-up public
-      event yet.
+      Stretches of the day that looked unusual in the public files.
     </p>
     {
       episodes.length === 0 ? (

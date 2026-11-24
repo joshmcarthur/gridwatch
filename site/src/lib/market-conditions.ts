@@ -14,17 +14,6 @@ const WEEK_DAYS = 7;
 const HAY = "HAY2201";
 const BEN = "BEN2201";
 
-const money = new Intl.NumberFormat("en-NZ", {
-  style: "currency",
-  currency: "NZD",
-  maximumFractionDigits: 0,
-});
-const moneyFine = new Intl.NumberFormat("en-NZ", {
-  style: "currency",
-  currency: "NZD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 const percent = new Intl.NumberFormat("en-NZ", {
   style: "percent",
   maximumFractionDigits: 0,
@@ -349,7 +338,7 @@ export function dayContext(
     const band = rankAgainstEarlier(value, earlier);
     const line = band
       ? `${spec.subject} ${bandPhrase(band, earlier.length)}.`
-      : "Not enough earlier days yet to compare.";
+      : null;
     let change: string | null = null;
     if (
       spec.change &&
@@ -413,7 +402,7 @@ function pricesCard(index: SiteIndex, loadDay: DayLoader): MarketConditionCard {
     loadDay,
     metricFrom: meanReferencePrice,
     figure: (value) =>
-      `Across three sample places (Ōtāhuhu, Haywards and Benmore), wholesale prices averaged ${money.format(value)} per megawatt-hour.`,
+      `At Ōtāhuhu, Haywards and Benmore, wholesale prices averaged ${centsPerKwh(value)} per kWh.`,
     empty: "No complete wholesale-prices day yet.",
     noFigure: "Wholesale prices for this day have no figure.",
   });
@@ -428,8 +417,7 @@ function supplyCard(index: SiteIndex, loadDay: DayLoader): MarketConditionCard {
     section: "generation",
     loadDay,
     metricFrom: gasCoalShare,
-    figure: (value) =>
-      `Gas and coal made ${percent.format(value)} of generation.`,
+    figure: (value) => `Gas and coal made ${shareOf(value)} of generation.`,
     empty: "No complete generation day yet.",
     noFigure: "Generation for this day has no gas and coal share.",
   });
@@ -448,7 +436,7 @@ function reservesCard(
     loadDay,
     metricFrom: meanReservePrice,
     figure: (value) =>
-      `Reserve prices, the cost of backup generation kept ready if something trips, averaged ${formatReserveMoney(value)} per megawatt-hour, counting every kind of reserve in both islands.`,
+      `Reserve prices, the cost of backup generation kept ready if something trips, averaged ${centsPerKwh(value)} per kWh across both islands and every kind of reserve.`,
     empty:
       "Reserve prices, the cost of backup generation kept ready if something trips, have not been published yet.",
     noFigure: "Reserve prices for this day have no figure.",
@@ -468,7 +456,7 @@ function regionalCard(
     loadDay,
     metricFrom: meanIslandSpread,
     figure: (value) =>
-      `Wholesale prices in the Lower North Island (Haywards, near Wellington) and the South Island (Benmore, in the Waitaki) differed by ${money.format(value)} per megawatt-hour, on average.`,
+      `Wholesale prices at Haywards, near Wellington, and Benmore, in the South Island, differed by ${centsPerKwh(value)} per kWh on average.`,
     empty: "No complete wholesale-prices day yet.",
     noFigure: "Regional price differences for this day have no figure.",
   });
@@ -562,11 +550,7 @@ function sectionIsComplete(
 }
 
 function bandLabel(band: RankBand | null, earlierCount: number): string | null {
-  if (band === null) {
-    return earlierCount < RANK_MINIMUM
-      ? "Not enough complete days yet to compare with the past year."
-      : null;
-  }
+  if (band === null) return null;
   return `That was ${bandPhrase(band, earlierCount)}.`;
 }
 
@@ -603,8 +587,9 @@ function bandPhrase(band: RankBand, earlierCount: number): string {
     : `one of the highest of ${span}`;
 }
 
-function formatReserveMoney(value: number): string {
-  return Math.abs(value) < 10 ? moneyFine.format(value) : money.format(value);
+/** A share that rounds to 0% but is not zero reads as "under 1%". */
+function shareOf(value: number): string {
+  return value > 0 && value < 0.005 ? "under 1%" : percent.format(value);
 }
 
 export interface RecentDayGroup {

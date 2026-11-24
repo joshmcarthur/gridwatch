@@ -147,9 +147,9 @@ test("headline names the kind of day without a unit lecture", () => {
     },
     {
       id: "price",
-      label: "Wholesale price",
+      label: "Average wholesale price",
       href: "#word-wholesale-price",
-      value: "2.0c to 7.3c per kWh",
+      value: "2.0c (Benmore) to 7.3c (Ōtāhuhu) per kWh",
     },
     {
       id: "islands",
@@ -327,7 +327,7 @@ test("pageLead uses the first episode line when the day has episodes", () => {
       "Wholesale prices were one of the highest.",
     ),
   ).toBe(
-    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu reached $410 per megawatt-hour, above the recent typical level of about $80.",
+    "From 4:00pm to 6:30pm, wholesale prices at Ōtāhuhu reached 41c per kWh, compared with about 8.0c on recent days.",
   );
 });
 
@@ -371,8 +371,8 @@ test("two consecutive days with different episodes get different ledes", () => {
     null,
   );
   expect(saturday).not.toBe(sunday);
-  expect(saturday).toMatch(/Ōtāhuhu reached \$410/);
-  expect(sunday).toMatch(/Benmore fell to \$5/);
+  expect(saturday).toMatch(/Ōtāhuhu reached 41c/);
+  expect(sunday).toMatch(/Benmore fell to 0.5c/);
 });
 
 test("a quiet day uses the history lead, then the kind of day", () => {

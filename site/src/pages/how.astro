@@ -37,9 +37,8 @@ import Layout from "../layouts/Layout.astro";
               <strong>Generation output</strong>
               <p>
                 Metered energy from each plant, in kilowatt-hours per half hour.
-                One file covers a calendar month. This is the preferred source
-                for generation numbers, once it is published. It lags the
-                trading day by weeks.
+                One file covers a calendar month. Gridwatch uses this file for
+                generation once it is out, usually a few weeks after the day.
               </p>
             </li>
             <li>
@@ -114,8 +113,8 @@ import Layout from "../layouts/Layout.astro";
         tidies them, and builds ordinary web pages from them.
       </p>
       <p>
-        The work has three stages, labelled bronze, silver, and gold. Those
-        names only say how raw the data still is.
+        The work has three stages, labelled bronze, silver, and gold. The
+        names say how far each file is through the process.
       </p>
     </div>
 
@@ -193,7 +192,6 @@ import Layout from "../layouts/Layout.astro";
       <p>
         Once a day, after the Authority has put yesterday's files up (usually
         the next morning), Gridwatch rebuilds the pages from those gold files.
-        Tomorrow's prices aren't in these files.
       </p>
     </div>
   </article>

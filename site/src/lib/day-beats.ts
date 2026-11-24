@@ -637,9 +637,9 @@ export function dayBeats(day: SiteDay): DayStory {
       headline = `Ōtāhuhu hit ${centsPerKwh(top)} per kWh at ${clocks.start(first)}`;
       spike = true;
     } else if (gap >= t.gapDollarsPerMwh) {
-      headline = `Power averaged ${centsPerKwh(mean(benValues))} per kWh at Benmore and ${centsPerKwh(mean(otaValues))} at Ōtāhuhu`;
+      headline = `Wholesale prices averaged ${centsPerKwh(mean(benValues))} per kWh at Benmore and ${centsPerKwh(mean(otaValues))} at Ōtāhuhu`;
     } else if (headline === null) {
-      headline = `Power averaged ${centsPerKwh(mean(otaValues))} per kWh at Ōtāhuhu`;
+      headline = `Wholesale prices averaged ${centsPerKwh(mean(otaValues))} per kWh at Ōtāhuhu`;
     }
   }
   // The headline already gives a spike's peak, so the lede doesn't repeat it.
@@ -647,11 +647,13 @@ export function dayBeats(day: SiteDay): DayStory {
     !spike && first !== undefined && firstPrice !== null
       ? `prices at Ōtāhuhu peaked at ${centsPerKwh(firstPrice)} per kWh at ${clocks.start(first)}`
       : null;
+  // Nor does it repeat a fuel headline.
+  const fuelLine = headline === fuelClause ? null : fuelClause;
   const opening =
-    fuelClause && peakClause
-      ? `${fuelClause}, and ${peakClause}.`
-      : fuelClause
-        ? `${fuelClause}.`
+    fuelLine && peakClause
+      ? `${fuelLine}, and ${peakClause}.`
+      : fuelLine
+        ? `${fuelLine}.`
         : peakClause
           ? `${peakClause.charAt(0).toUpperCase()}${peakClause.slice(1)}.`
           : null;

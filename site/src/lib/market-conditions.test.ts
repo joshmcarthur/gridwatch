@@ -423,9 +423,11 @@ test("each condition card uses its own latest complete date and has no composite
   expect(cards.find((card) => card.id === "supply")?.date).toBe("2026-10-20");
   expect(cards.find((card) => card.id === "reserves")?.date).toBe("2026-11-18");
   expect(cards.find((card) => card.id === "regional")?.date).toBe("2026-11-18");
-  expect(cards.find((card) => card.id === "prices")?.figure).toMatch(/\$200/);
   expect(cards.find((card) => card.id === "prices")?.figure).toMatch(
-    /three sample places/,
+    /20c per kWh/,
+  );
+  expect(cards.find((card) => card.id === "prices")?.figure).toMatch(
+    /Ōtāhuhu, Haywards and Benmore/,
   );
   expect(cards.find((card) => card.id === "supply")?.figure).toMatch(/50%/);
   expect(cards.find((card) => card.id === "reserves")?.figure).toMatch(
@@ -435,9 +437,7 @@ test("each condition card uses its own latest complete date and has no composite
     /Haywards/,
   );
   expect(cards.every((card) => card.band === null)).toBe(true);
-  expect(
-    cards.every((card) => card.bandNote?.includes("Not enough complete days")),
-  ).toBe(true);
+  expect(cards.every((card) => card.bandNote === null)).toBe(true);
 });
 
 test("thirty earlier complete days produce a rank band in past tense", () => {
@@ -600,19 +600,14 @@ test("two days with different price levels get different comparison lines", () =
   expect(line(dear)).toMatch(/one of the highest/);
 });
 
-test("dayContext says so when there are too few earlier days", () => {
+test("dayContext leaves the line out when there are too few earlier days", () => {
   const { index, byDate, lastDate } = daySeries(10, { primary: 1000 });
   const context = dayContext(
     index,
     lastDate,
     (date) => byDate[date] as SiteDay,
   );
-  expect(context.every((entry) => entry.line !== null)).toBe(true);
-  expect(context.map((entry) => entry.line)).toEqual([
-    "Not enough earlier days yet to compare.",
-    "Not enough earlier days yet to compare.",
-    "Not enough earlier days yet to compare.",
-  ]);
+  expect(context.map((entry) => entry.line)).toEqual([null, null, null]);
 });
 
 test("leadFact picks the figure furthest from usual and says nothing about cause", () => {
@@ -709,7 +704,7 @@ test("the latest update leads with the episode line when that day has one", () =
     (date) => long.byDate[date] as SiteDay,
   );
   expect(update.summary).toBe(pageLead(last, quietLead));
-  expect(update.summary).toMatch(/Ōtāhuhu reached \$410/);
+  expect(update.summary).toMatch(/Ōtāhuhu reached 41c/);
   expect(update.summary).not.toMatch(/because|caused|due to/i);
 });
 

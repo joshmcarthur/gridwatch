@@ -9,7 +9,7 @@ import type {
 import { episodeHeadline } from "./episode-copy.ts";
 import { FUEL_LABELS, type StackFuel } from "./generation-mix.ts";
 import { clockLabeller12, zonedAt } from "./period-clock.ts";
-import { centsPerKwh } from "./price-regions.ts";
+import { centsPerKwh, placeName } from "./price-regions.ts";
 
 const energyFormat = new Intl.NumberFormat("en-NZ", {
   maximumFractionDigits: 0,
@@ -152,13 +152,14 @@ export function monthGroups(
 
 export function dayHeadline(day: HeadlineSource): DayHeadline {
   const fuel = topFuelLabel(day);
-  const means = meanPrices(day);
+  const places = meanPrices(day);
+  const means = places.map((place) => place.price);
   const agreement = islandAgreement(means);
   return {
     sentence: kindOfDay(day, fuel, agreement),
     stats: [
       powerStat(day),
-      priceStat(day, means, agreement),
+      priceStat(day, places, agreement),
       islandsStat(day, agreement),
     ],
   };
@@ -304,9 +305,10 @@ function powerStat(day: HeadlineSource): DayStat {
 
 function priceStat(
   day: HeadlineSource,
-  means: number[],
+  places: PlacePrice[],
   agreement: IslandAgreement | null,
 ): DayStat {
+  const means = places.map((place) => place.price);
   let value = "No numbers yet";
   if (means.length === 1) {
     value = `${centsPerKwh(means[0] ?? 0)} per kWh`;
@@ -314,13 +316,16 @@ function priceStat(
     const typical = means.reduce((sum, price) => sum + price, 0) / means.length;
     value = `${centsPerKwh(typical)} per kWh`;
   } else if (means.length > 1) {
-    const low = centsPerKwh(Math.min(...means));
-    const high = centsPerKwh(Math.max(...means));
-    value = `${low} to ${high} per kWh`;
+    const sorted = [...places].sort((a, b) => a.price - b.price);
+    const low = sorted[0];
+    const high = sorted[sorted.length - 1];
+    if (low && high) {
+      value = `${centsPerKwh(low.price)} (${low.place}) to ${centsPerKwh(high.price)} (${high.place}) per kWh`;
+    }
   }
   return {
     id: "price",
-    label: "Wholesale price",
+    label: "Average wholesale price",
     href: "#word-wholesale-price",
     value:
       day.prices.state === "missing" && means.length === 0
@@ -390,11 +395,20 @@ function topFuelLabel(day: HeadlineSource): string | null {
   return FUEL_LABELS[best.fuel as StackFuel] ?? best.fuel;
 }
 
-function meanPrices(day: HeadlineSource): number[] {
+type PlacePrice = { place: string; price: number };
+
+function meanPrices(day: HeadlineSource): PlacePrice[] {
   if (day.prices.state === "missing") return [];
-  return day.prices.nodes
-    .map((node) => node.daily.mean_price)
-    .filter((price): price is number => typeof price === "number");
+  return day.prices.nodes.flatMap((node) =>
+    typeof node.daily.mean_price === "number"
+      ? [
+          {
+            place: placeName(node.price_region),
+            price: node.daily.mean_price,
+          },
+        ]
+      : [],
+  );
 }
 
 function capitalize(text: string): string {

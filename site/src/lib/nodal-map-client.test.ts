@@ -146,13 +146,13 @@ test("the island bars follow the slider", () => {
   const total = () =>
     document.querySelector("[data-island-total]")?.textContent ?? "";
   const gas = document.querySelector<HTMLElement>('[data-fuel="gas"]');
-  expect(total()).toBe("400 MW made");
+  expect(total()).toBe("400 MW generating");
   expect(gas?.hidden).toBe(false);
   const slider = document.querySelector<HTMLInputElement>("#nodal-period");
   if (!slider) throw new Error("missing slider");
   slider.value = "2";
   slider.dispatchEvent(new Event("input"));
-  expect(total()).toBe("100 MW made");
+  expect(total()).toBe("100 MW generating");
   expect(gas?.hidden).toBe(true);
   expect(
     document.querySelector<HTMLElement>('[data-segment="hydro"]')?.style

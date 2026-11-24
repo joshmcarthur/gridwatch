@@ -34,7 +34,9 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).not.toMatch(/earlier complete days on this site/);
     expect(html).not.toMatch(/sample points?/i);
     expect(html).not.toMatch(/Otahuhu/);
-    expect(html).toMatch(/<h2 id="reserve-prices"[^>]*>What backup cost<\/h2>/);
+    expect(html).toMatch(
+      /<h2 id="reserve-prices"[^>]*>What reserve cost<\/h2>/,
+    );
     if (html.includes('href="#reserve-prices"')) {
       expect(html).toContain('id="reserve-prices"');
     }
@@ -44,7 +46,7 @@ test.skipIf(!existsSync(builtPage))(
         html.includes('id="reserve-chart-title"') ||
         html.includes("Reserve prices are not ready for this day yet."),
     ).toBe(true);
-    expect(html).toContain("Not enough earlier days yet to compare.");
+    expect(html).not.toContain("Not enough earlier days");
     expect(html.indexOf('id="detected-episodes"')).toBeGreaterThan(-1);
     expect(html.indexOf('id="detected-episodes"')).toBeLessThan(
       html.indexOf('id="generation-mix"'),

@@ -11,8 +11,8 @@ A cheap hydro station can run all afternoon and still not set the price, if a mo
 
 ## A more technical explanation
 
-Each station, or each unit, offers a stack of megawatts at offer prices. The scheduling, pricing and dispatch process takes offers so that supply and demand balance at every named place on the grid, without overloading lines, and so that reserve is covered too. The energy price at a place is the cost of one more megawatt there, given those limits.
+Each station, or each unit, offers a stack of megawatts at offer prices. The market takes offers so that supply and demand balance at every named place on the grid, without overloading lines, and so that reserve is covered too. The energy price at a place is the cost of one more megawatt there, given those limits.
 
-A plant can be generating and still not be marginal. A plant can be marginal at one place and not at another, if a full line sits between them. Places can have different prices in the same half-hour: [nodal pricing](/explainers/nodal-pricing/). A full line is what splits those prices: [transmission constraints](/explainers/transmission-constraints/).
+A plant can be generating and still not be marginal, and it can be marginal at one place but not at another if a full line sits between them. Places can have different prices in the same half-hour: [nodal pricing](/explainers/nodal-pricing/). A full line is what splits those prices: [transmission constraints](/explainers/transmission-constraints/).
 
-Cleared offers say how many megawatts the market accepted. They do not say the price on the offer. Who generated is not the same as who set the wholesale price.
+Cleared offers say how many megawatts the market accepted, but not the price on each offer. They show who generated, not who set the wholesale price.
