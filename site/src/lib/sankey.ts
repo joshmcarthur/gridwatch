@@ -104,7 +104,7 @@ export function energySankey(day: SiteDay): EnergySankey | null {
 
   for (const row of day.generation.daily) {
     if (row.island === null || row.megawatt_hours <= 0) continue;
-    const fuelId = nodeId("fuel", row.fuel);
+    const fuelId = nodeId("fuel", row.fuel, row.island);
     addNode({
       id: fuelId,
       kind: row.fuel === "battery" ? "battery" : "fuel",
@@ -214,14 +214,31 @@ export function sankeySummary(chart: EnergySankey): string {
     loadTotal > 0
       ? `Estimated load was ${energyFormat.format(loadTotal)} megawatt-hours.`
       : "Estimated load is missing.";
+  const directionText = directionSentence(netCableDirection(chart));
   if (residuals.length === 0) {
-    return `${loadText} Generation, the inter-island cable and estimated load balanced for the day.`;
+    return `${loadText}${directionText} Generation, the inter-island cable and estimated load balanced for the day.`;
   }
   const share =
     loadTotal > 0
       ? ` ${percentFormat.format((Math.abs(residualTotal) / loadTotal) * 100)} percent of estimated load.`
       : "";
-  return `${loadText} A residual of ${energyFormat.format(residualTotal)} megawatt-hours is shown as its own band.${share}`;
+  return `${loadText}${directionText} A residual of ${energyFormat.format(residualTotal)} megawatt-hours is shown as its own band.${share}`;
+}
+
+export function sankeyCaption(chart: EnergySankey): string {
+  const direction = netCableDirection(chart);
+  switch (direction) {
+    case "north":
+      return "Energy for the whole day, from each island's own fuels, across the cable northward, then to estimated load.";
+    case "south":
+      return "Energy for the whole day, from each island's own fuels, across the cable southward, then to estimated load.";
+    case null:
+      return "Energy for the whole day, from each island's own fuels, then to estimated load.";
+    default: {
+      const _exhaustive: never = direction;
+      return _exhaustive;
+    }
+  }
 }
 
 export function sankeyTable(chart: EnergySankey): {
@@ -254,7 +271,11 @@ export function sankeyMissingCopy(): string {
   return "Metered transfer on the inter-island cable (the HVDC link between Benmore and Haywards) is published about a month after the day. This day's energy balance is not published yet. This site does not guess the transfer.";
 }
 
-export function nodeId(kind: "fuel", fuel: FuelCategory): string;
+export function nodeId(
+  kind: "fuel",
+  fuel: FuelCategory,
+  island: Island,
+): string;
 export function nodeId(
   kind: "island" | "load" | "residual",
   island: Island,
@@ -262,8 +283,44 @@ export function nodeId(
 export function nodeId(
   kind: "fuel" | "island" | "load" | "residual",
   key: FuelCategory | Island,
+  island?: Island,
 ): string {
+  if (kind === "fuel") return `${kind}:${key}:${island}`;
   return `${kind}:${key}`;
+}
+
+export function fuelFromNodeId(id: string): FuelCategory {
+  const fuel = id.slice("fuel:".length).split(":")[0];
+  return fuel as FuelCategory;
+}
+
+export function netCableDirection(
+  chart: EnergySankey,
+): "north" | "south" | null {
+  const ni = chart.islands.find((island) => island.island === "NI");
+  const si = chart.islands.find((island) => island.island === "SI");
+  const niImport = ni?.hvdcImport;
+  const siImport = si?.hvdcImport;
+  if (niImport === undefined || niImport === null) return null;
+  if (siImport === undefined || siImport === null) return null;
+  if (niImport > 0 && siImport < 0) return "north";
+  if (niImport < 0 && siImport > 0) return "south";
+  return null;
+}
+
+function directionSentence(direction: "north" | "south" | null): string {
+  switch (direction) {
+    case "north":
+      return " The cable ran northward.";
+    case "south":
+      return " The cable ran southward.";
+    case null:
+      return "";
+    default: {
+      const _exhaustive: never = direction;
+      return _exhaustive;
+    }
+  }
 }
 
 function goldIsland(row: SankeyIsland): SankeyGoldIsland {
@@ -283,9 +340,10 @@ function orderNodes(nodes: SankeyNode[]): SankeyNode[] {
     switch (node.kind) {
       case "fuel":
       case "battery": {
-        const fuel = node.id.slice("fuel:".length) as FuelCategory;
+        const fuel = fuelFromNodeId(node.id);
         const at = fuelOrder.indexOf(fuel);
-        return at < 0 ? 50 : at;
+        const islandRank = node.id.endsWith(":SI") ? 10 : 0;
+        return (at < 0 ? 50 : at) + islandRank;
       }
       case "island":
         return 100 + (node.id.endsWith(":SI") ? 1 : 0);
