@@ -1,0 +1,195 @@
+---
+import type { SiteDay, SiteEvent } from "@gridwatch/publisher/site-contract";
+import { episodeClockRange } from "../lib/episode-copy";
+import {
+  CONFIDENCE_LEVELS,
+  claimAnchor,
+  claimFigure,
+  confidenceLabel,
+  eventAnchor,
+  eventHeadline,
+  eventWindowChart,
+  linkClaims,
+  REVIEW_LABEL,
+  requireCheckedEvent,
+} from "../lib/event-page";
+import { placeName } from "../lib/price-regions";
+import ChartFigure from "./ChartFigure.astro";
+
+/**
+ * One event's narrative (ADR-0027) inside the day page (ADR-0029: no nested pages).
+ * The LLM text is the only prose on the day page that says why something happened.
+ */
+interface Props {
+  event: SiteEvent;
+  day: SiteDay;
+}
+
+const { event, day } = Astro.props;
+requireCheckedEvent(event);
+const id = eventAnchor(event.episode_id);
+const headline = eventHeadline(event, day);
+const clock = episodeClockRange(event, day);
+const charts = eventWindowChart(event);
+const scope = event.episode_id;
+---
+
+<article class="event" id={id} aria-labelledby={`${id}-title`}>
+  <header>
+    <p class="review">{REVIEW_LABEL} write-up · {clock}</p>
+    <h3 id={`${id}-title`}>{headline}</h3>
+  </header>
+
+  <div class="parts">
+    <section aria-labelledby={`${id}-what`}>
+      <h4 id={`${id}-what`}>What happened</h4>
+      <p set:html={linkClaims(event.what_happened, event, scope)} />
+    </section>
+    <section aria-labelledby={`${id}-why`}>
+      <h4 id={`${id}-why`}>Why it happened</h4>
+      <p set:html={linkClaims(event.why, event, scope)} />
+    </section>
+    <section aria-labelledby={`${id}-means`}>
+      <h4 id={`${id}-means`}>What it means</h4>
+      <p set:html={linkClaims(event.what_it_means, event, scope)} />
+    </section>
+  </div>
+
+  <details class="more">
+    <summary>How sure is this, and the numbers behind it</summary>
+    <p>
+      This write-up was drafted by a language model from the figures below, and
+      no person has reviewed it yet. The figures come from the market files.
+      The labels mean:
+    </p>
+    <dl class="confidence">
+      {
+        CONFIDENCE_LEVELS.map((level) => (
+          <div>
+            <dt>{level.label}</dt>
+            <dd>{level.meaning}</dd>
+          </div>
+        ))
+      }
+    </dl>
+    <ul class="claims">
+      {
+        event.claims.map((claim) => (
+          <li id={claimAnchor(claim.id, scope)}>
+            <strong>{claim.label}</strong>
+            {`: ${claimFigure(claim)}. ${confidenceLabel(claim.confidence)}.`}
+          </li>
+        ))
+      }
+    </ul>
+  </details>
+
+  {
+    charts ? (
+      <details class="more">
+        <summary>Prices during this stretch</summary>
+        <ChartFigure
+          plots={[charts.priceSvg, charts.reserveSvg].filter(
+            (svg): svg is string => svg !== null,
+          )}
+          tableCaptionId={`${id}-prices-table-caption`}
+          tableCaption="Wholesale prices in $/MWh for each 30-minute slice of this stretch."
+          headers={charts.headers}
+          rows={charts.rows}
+          legendLabel="Lines in the charts for this stretch"
+        >
+          <Fragment slot="legend">
+            {event.window.prices.map((node) => (
+              <li>{placeName(node.point_of_connection)}</li>
+            ))}
+            {charts.reserveSvg ? <li>North Island reserve price</li> : null}
+          </Fragment>
+          <Fragment slot="caption">
+            <p>
+              Ōtāhuhu is Auckland, Haywards is near Wellington, Benmore is in
+              the South Island. The reserve line is the cost of backup kept
+              ready in the North Island.
+            </p>
+          </Fragment>
+        </ChartFigure>
+      </details>
+    ) : null
+  }
+</article>
+
+<style>
+  .event {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    scroll-margin-top: var(--space-5);
+  }
+
+  header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .review {
+    margin: 0;
+    font-size: var(--text-label);
+    font-weight: 700;
+    color: var(--color-caution);
+  }
+
+  h3 {
+    margin: 0;
+    font-size: var(--text-heading);
+  }
+
+  .parts {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  @media (min-width: 56rem) {
+    .parts {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  h4 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-body);
+  }
+
+  .parts p {
+    margin: 0;
+  }
+
+  .more {
+    font-size: var(--text-label);
+  }
+
+  .more > summary {
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .confidence,
+  .claims {
+    margin: var(--space-3) 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .claims {
+    padding-left: 1.5rem;
+  }
+
+  .confidence dt {
+    font-weight: 700;
+  }
+
+  .confidence dd {
+    margin: 0.25rem 0 0;
+  }
+</style>

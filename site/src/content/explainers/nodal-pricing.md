@@ -49,4 +49,4 @@ Those four evening half-hours from 17:30 to 19:30 were the spike, then the price
 
 The daily page for this example is [Monday 27 July 2026](/2026/07/27/).
 
-The written-up event for this evening is [high wholesale prices and high reserve prices on Monday 27 July 2026](/2026/07/27/events/394f75a3bfa948a3/).
+The written-up event for this evening is [high wholesale prices and high reserve prices on Monday 27 July 2026](/2026/07/27/#event-394f75a3bfa948a3).
