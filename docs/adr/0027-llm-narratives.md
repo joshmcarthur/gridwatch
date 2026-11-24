@@ -46,7 +46,7 @@ Luna is the default because live 27 July drafts used clocks and place names, did
 
 ### API key
 
-The key is a file on the home server ([ADR-0002](0002-daily-run-data-and-site-hosting.md)). The process reads it as `OPENROUTER_API_KEY`. The image and this repository do not contain the key. Compose passes `OPENROUTER_API_KEY` and `GRIDWATCH_LLM_MODEL` from the host into `updater` and `publisher`. Empty values skip generation. On the server:
+The key is a file on the home server ([ADR-0002](0002-daily-run-data-and-site-hosting.md)). The process reads it as `OPENROUTER_API_KEY`. The image and this repository do not contain the key. Compose passes `OPENROUTER_API_KEY` and `GRIDWATCH_LLM_MODEL` from the host into `updater` and `publisher`. An empty key skips generation. An empty `GRIDWATCH_LLM_MODEL` uses the default. On the server:
 
 ```bash
 export OPENROUTER_API_KEY=$(cat /path/to/openrouter-key)

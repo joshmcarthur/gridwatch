@@ -5,8 +5,8 @@ import { parseArgs } from "node:util";
 import { dataPaths } from "../data-root.ts";
 import {
   checkNarrative,
-  DEFAULT_MODEL,
   generateNarrative,
+  llmModel,
   type PromptPackage,
   promptPayload,
   serializeNarrative,
@@ -46,7 +46,7 @@ if (key === undefined || key === "") {
   process.exit(2);
 }
 
-const model = process.env.GRIDWATCH_LLM_MODEL ?? DEFAULT_MODEL;
+const model = llmModel();
 const bytes = await readFile(evidencePath);
 const pkg = JSON.parse(bytes.toString("utf8")) as PromptPackage;
 const record = await generateNarrative(pkg, {
