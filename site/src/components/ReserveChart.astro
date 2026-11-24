@@ -57,7 +57,7 @@ const band = reserveHasEpisodeBand(day);
         </li>
         {
           lineMode ? (
-            band && <li>Shaded band: a stretch of unusual backup prices</li>
+            band && <li>Shaded band: a stretch of unusual reserve prices</li>
           ) : (
             <li>Dot: the day's average</li>
           )
@@ -89,8 +89,8 @@ const band = reserveHasEpisodeBand(day);
           )
         }
         <p>
-          The reserve price shows what backup cost. This page does not say
-          whether the grid was secure.
+          The reserve price is what spare capacity cost. This page does not
+          say whether the grid was secure.
         </p>
         <p>
           Source: Electricity Authority reserve prices.

@@ -263,7 +263,7 @@ function reserveBands(day: ReservePlotDay): NonNullable<LinePlot["bands"]> {
     .map((episode) => ({
       start: new Date(episode.start_utc),
       end: new Date(episode.end_utc),
-      title: `Backup prices, ${episodeClockRange(episode, day)}`,
+      title: `Reserve prices, ${episodeClockRange(episode, day)}`,
     }));
 }
 

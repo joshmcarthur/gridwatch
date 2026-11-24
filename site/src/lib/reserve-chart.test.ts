@@ -197,7 +197,7 @@ test("a reserve episode shades its clock window on both plots", () => {
   ];
   const chart = reserveChart(dayWith("complete", classes)) as ReserveChart;
   const plots = reservePlots(plotDay(classes, backupEpisode()), chart);
-  expect(plots.join("")).toContain("Backup prices, 12:00am–1:00am");
+  expect(plots.join("")).toContain("Reserve prices, 12:00am–1:00am");
   expect(plots.join("")).toMatch(/<rect/i);
 });
 

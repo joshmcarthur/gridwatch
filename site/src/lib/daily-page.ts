@@ -222,6 +222,44 @@ export function gapNote(day: GapSource): string | null {
     : "Some of the market files for this day are incomplete.";
 }
 
+export type TotalsSource = Pick<SiteDay, "sankey"> & {
+  generation: {
+    state: SectionState;
+    totals: { primary_megawatt_hours: number } | null;
+  };
+};
+
+/**
+ * The day's totals in one or two sentences (ADR-0031): what was generated, and what the
+ * cable sent and what arrived. It replaces the stat cards. Null when there is nothing to say.
+ */
+export function totalsSentence(day: TotalsSource): string | null {
+  const parts: string[] = [];
+  const totals = day.generation.totals;
+  if (day.generation.state !== "missing" && totals) {
+    parts.push(
+      `The two islands generated ${energyFormat.format(totals.primary_megawatt_hours)} MWh over the day.`,
+    );
+  }
+  const islands = day.sankey?.islands ?? [];
+  const sender = islands.find(
+    (island) => (island.hvdc_import_megawatt_hours ?? 0) < 0,
+  );
+  const receiver = islands.find((island) => island !== sender);
+  const sent = sender?.hvdc_import_megawatt_hours ?? null;
+  if (sender && sent !== null) {
+    const name = sender.island === "SI" ? "South Island" : "North Island";
+    const direction = sender.island === "SI" ? "north" : "south";
+    const arrived = receiver?.hvdc_import_megawatt_hours ?? null;
+    parts.push(
+      arrived !== null && arrived > 0
+        ? `The ${name} sent ${energyFormat.format(-sent)} MWh ${direction} on the cable, and ${energyFormat.format(arrived)} MWh arrived.`
+        : `The ${name} sent ${energyFormat.format(-sent)} MWh ${direction} on the cable.`,
+    );
+  }
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
 /** Trading periods as clock ranges, for example `3:00pm to 3:30pm and 7:00pm to 8:00pm`. */
 function clockRanges(day: Pick<SiteDay, "periods">, periods: number[]): string {
   const label = clockLabeller12(day);

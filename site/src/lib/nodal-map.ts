@@ -9,6 +9,7 @@ import {
   type Lane,
   type LaneTick,
   priceLaneSentence,
+  reserveLaneSentence,
 } from "./day-lanes.ts";
 import { FUEL_LABELS, STACK_ORDER } from "./generation-mix.ts";
 import { FUEL_COLOUR } from "./generation-mix-chart.ts";
@@ -601,4 +602,68 @@ export function laneAxis(day: SiteDay): LaneTick[] {
   });
   ticks.push({ index: day.periods.length, label: "12am" });
   return ticks;
+}
+
+/**
+ * Lanes under the map that show only on days that call for them (ADR-0031). Reserve shows
+ * when an episode had high reserve prices.
+ */
+export function conditionalLanes(day: SiteDay, view: NodalMapView): Lane[] {
+  const lanes: Lane[] = [];
+  const highReserve = (day.episodes?.items ?? []).some((episode) =>
+    episode.observation_types.includes("reserve_price_high"),
+  );
+  const classes =
+    day.reserves && day.reserves.state !== "missing"
+      ? day.reserves.classes
+      : [];
+  const north = (reserveClass: "FIR" | "SIR") =>
+    classes.find(
+      (item) => item.reserve_class === reserveClass && item.island === "NI",
+    )?.price ?? null;
+  const fast = north("FIR");
+  const slow = north("SIR");
+  if (highReserve && (fast || slow)) {
+    const count = view.periods.length;
+    const higher = Array.from({ length: count }, (_, index) => {
+      const values = [fast?.[index] ?? null, slow?.[index] ?? null].filter(
+        (value): value is number => value !== null,
+      );
+      return values.length === 0 ? null : Math.max(...values);
+    });
+    lanes.push({
+      id: "reserve",
+      name: "Reserve",
+      sentence: reserveLaneSentence(
+        higher,
+        view.periods.map((item) => item.time),
+      ),
+      unit: "price",
+      stacked: false,
+      series: [
+        {
+          key: "reserve",
+          label: "Reserve, North Island",
+          colour: "var(--color-ink)",
+          values: higher,
+        },
+      ],
+      gap: null,
+      extra: [
+        {
+          key: "SIR",
+          label: "Slow reserve (60 seconds)",
+          colour: "",
+          values: slow ?? new Array<number | null>(count).fill(null),
+        },
+        {
+          key: "FIR",
+          label: "Fast reserve (6 seconds)",
+          colour: "",
+          values: fast ?? new Array<number | null>(count).fill(null),
+        },
+      ],
+    });
+  }
+  return lanes;
 }

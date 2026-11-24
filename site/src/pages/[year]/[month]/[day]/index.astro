@@ -11,10 +11,10 @@ import {
   dailyPath,
   dailyStaticPaths,
   dateFromParams,
-  dayHeadline,
   gapNote,
   monthGroups,
   neighbouringDays,
+  totalsSentence,
 } from "../../../../lib/daily-page";
 import { dayBeats } from "../../../../lib/day-beats";
 import {
@@ -22,7 +22,7 @@ import {
   episodeHeadline,
 } from "../../../../lib/episode-copy";
 import { eventsOnDay } from "../../../../lib/event-page";
-import { dayContext, leadFact } from "../../../../lib/market-conditions";
+import { leadFact } from "../../../../lib/market-conditions";
 import {
   formatTradingDate,
   loadSiteDay,
@@ -40,9 +40,8 @@ const date = dateFromParams(year, month, dayParam);
 const index = loadSiteIndex();
 const day = loadSiteDay(date, index);
 const titleDate = formatTradingDate(date);
-const headline = dayHeadline(day);
 const loadEarlier = (earlier: string) => loadSiteDayCached(earlier, index);
-const context = dayContext(index, date, loadEarlier);
+const totals = totalsSentence(day);
 const lead = leadFact(index, date, loadEarlier);
 const story = dayBeats(day);
 const gap = gapNote(day);
@@ -64,32 +63,11 @@ const publishedEvents = eventsOnDay(day);
       <h1>{titleDate}</h1>
       {story.headline && <p class="headline">{story.headline}</p>}
       {story.lede ? <p>{story.lede}</p> : lead && <p>{lead}</p>}
-      <dl class="stats">
-        {
-          headline.stats.map((stat) => (
-            <div>
-              <dt>
-                <a href={stat.href}>{stat.label}</a>
-              </dt>
-              <dd>{stat.value}</dd>
-              {context
-                .filter((entry) => entry.id === stat.id)
-                .map((entry) => (
-                  <>
-                    {entry.line ? <dd class="context">{entry.line}</dd> : null}
-                    {entry.change ? (
-                      <dd class="context">{entry.change}</dd>
-                    ) : null}
-                  </>
-                ))}
-            </div>
-          ))
-        }
-      </dl>
     </header>
 
     <section class="slot" id="map" aria-label="Wholesale prices on the map">
       {gap && <p class="gap">{gap}</p>}
+      {totals && <p class="totals">{totals}</p>}
       <NodalPriceMap day={day} story={story} />
     </section>
 
@@ -104,50 +82,53 @@ const publishedEvents = eventsOnDay(day);
       ) : null
     }
 
-    {
-      day.episodes && day.episodes.items.length > 0 ? (
-        <section class="slot" aria-labelledby="detected-episodes">
-          <h2 id="detected-episodes">What stood out</h2>
-          <p>
-            Stretches of the day that looked unusual in the public files. Not a
-            written-up public event yet.
-          </p>
-          <ol class="episodes">
-            {day.episodes.items.map((episode) => (
-              <li id={`episode-${episode.episode_id}`}>
-                <p>{episodeHeadline(episode, day)}</p>
-                {episodeEvidenceLinks(episode).map((link) => (
-                  <p>
-                    <a href={link.href}>{link.label}</a>
-                  </p>
-                ))}
-              </li>
-            ))}
-          </ol>
-        </section>
-      ) : null
-    }
+    <details class="slot numbers" id="numbers">
+      <summary>The numbers behind this</summary>
 
-    <section class="slot" aria-labelledby="generation-mix">
-      <h2 id="generation-mix">Generation through the day</h2>
-      <DayCompare day={day} date={date} index={index} />
-      <FuelPlants day={day} />
-    </section>
+      {
+        day.episodes && day.episodes.items.length > 0 ? (
+          <section aria-labelledby="detected-episodes">
+            <h3 id="detected-episodes">What stood out</h3>
+            <p>
+              Stretches of the day that looked unusual in the public files.
+            </p>
+            <ol class="episodes">
+              {day.episodes.items.map((episode) => (
+                <li id={`episode-${episode.episode_id}`}>
+                  <p>{episodeHeadline(episode, day)}</p>
+                  {episodeEvidenceLinks(episode).map((link) => (
+                    <p>
+                      <a href={link.href}>{link.label}</a>
+                    </p>
+                  ))}
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null
+      }
 
-    <section class="slot" aria-labelledby="wholesale-prices">
-      <h2 id="wholesale-prices">What it sold for</h2>
-      <PriceChart day={day} />
-    </section>
+      <section aria-labelledby="generation-mix">
+        <h3 id="generation-mix">Generation through the day</h3>
+        <DayCompare day={day} date={date} index={index} />
+        <FuelPlants day={day} />
+      </section>
 
-    <section class="slot" aria-labelledby="reserve-prices">
-      <h2 id="reserve-prices">What reserve cost</h2>
-      <ReserveChart day={day} />
-    </section>
+      <section aria-labelledby="wholesale-prices">
+        <h3 id="wholesale-prices">What it sold for</h3>
+        <PriceChart day={day} />
+      </section>
 
-    <section class="slot" aria-labelledby="energy-flow">
-      <h2 id="energy-flow">Where the energy went</h2>
-      <EnergySankeyChart day={day} />
-    </section>
+      <section aria-labelledby="reserve-prices">
+        <h3 id="reserve-prices">What reserve cost</h3>
+        <ReserveChart day={day} />
+      </section>
+
+      <section aria-labelledby="energy-flow">
+        <h3 id="energy-flow">Where the energy went</h3>
+        <EnergySankeyChart day={day} />
+      </section>
+    </details>
 
     <nav class="days" aria-label="Other days">
       <div class="turn">
@@ -233,14 +214,35 @@ const publishedEvents = eventsOnDay(day);
         <div id="word-reserve-price">
           <dt>Reserve price</dt>
           <dd>
-            The cost of backup generation kept ready if something trips. Fast
-            reserve acts within 6 seconds and slow reserve within 60 seconds.
+            What the market paid to keep spare generating capacity ready in
+            case a plant trips. Fast reserve acts within 6 seconds and slow
+            reserve within 60 seconds.
           </dd>
         </div>
       </dl>
     </details>
   </article>
 </Layout>
+
+<script>
+  // A link into "The numbers behind this" opens it first, so the target is visible.
+  const openTarget = () => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    const target = id ? document.getElementById(id) : null;
+    let parent = target?.parentElement ?? null;
+    let opened = false;
+    while (parent) {
+      if (parent instanceof HTMLDetailsElement && !parent.open) {
+        parent.open = true;
+        opened = true;
+      }
+      parent = parent.parentElement;
+    }
+    if (opened) target?.scrollIntoView();
+  };
+  openTarget();
+  addEventListener("hashchange", openTarget);
+</script>
 
 <style>
   article.prose {
@@ -285,41 +287,30 @@ const publishedEvents = eventsOnDay(day);
     padding: var(--space-5);
   }
 
-  .stats {
+  .totals {
     margin: 0;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--space-4);
+    max-width: 46rem;
   }
 
-  .stats div {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .stats dt {
-    font-size: var(--text-label);
+  .numbers > summary {
+    cursor: pointer;
+    font-size: var(--text-heading);
     font-weight: 700;
   }
 
-  .stats dd {
+  .numbers[open] {
+    gap: var(--space-6);
+  }
+
+  .numbers section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .numbers h3 {
     margin: 0;
     font-size: var(--text-heading);
-    font-variant-numeric: tabular-nums;
-    color: var(--color-ink);
-  }
-
-  .stats dd.context {
-    font-size: var(--text-label);
-    font-weight: 400;
-    color: var(--color-ink-muted);
-  }
-
-  @media (min-width: 40rem) {
-    .stats {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
   }
 
   .turn {
