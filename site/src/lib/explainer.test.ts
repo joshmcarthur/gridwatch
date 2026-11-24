@@ -137,6 +137,7 @@ test("nodal pricing copy follows site-copy.md", () => {
   expect(nodalBody).not.toMatch(/Huntly/);
   expect(nodalBody).not.toMatch(/\$21,000/);
   expect(nodalBody).not.toMatch(/\bthis site\b/i);
+  expect(nodalBody).not.toMatch(/\bdear(?:er|est)?\b/i);
   expect(nodalBody).toMatch(/wholesale price/);
   expect(nodalBody).toMatch(/household bill/);
   expect(nodalBody).toMatch(/point of connection/);
@@ -164,6 +165,7 @@ function expectBannedTokens(body: string) {
   expect(body).not.toMatch(/1,170/);
   expect(body).not.toMatch(/83%/);
   expect(body).not.toMatch(/\bthis site\b/i);
+  expect(body).not.toMatch(/\bdear(?:er|est)?\b/i);
 }
 
 const illustrated = [
@@ -196,12 +198,21 @@ const mechanism = [
   "wholesale-and-the-bill",
 ] as const;
 
+const illustratedDiagrams = {
+  "transmission-constraints": "When a line is full, prices come apart",
+  "instantaneous-reserves": "What instantaneous reserve is for",
+  "hvdc-link": "How the Cook Strait link carries power",
+  wind: "When the wind drops, other stations run",
+} as const;
+
 for (const page of illustrated) {
   test(`${page.slug} uses the 27 July chart and gold figures`, () => {
     const { raw, body } = readExplainer(page.slug);
     expect(raw).toMatch(new RegExp(`chart: ${page.chart}`));
     expect(raw).toMatch(/example_date: "2026-07-27"/);
     expect(body).toContain("## Visual");
+    expect(body).toContain('<figure class="diagram">');
+    expect(body).toContain(illustratedDiagrams[page.slug]);
     expect(body).toContain("## Historical example");
     expect(body).toContain("## Links to Gridwatch data and events");
     expect(body).not.toMatch(

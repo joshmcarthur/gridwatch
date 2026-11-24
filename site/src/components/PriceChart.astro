@@ -118,7 +118,7 @@ const anyProxy = chart?.nodes.some((node) => node.proxy.some(Boolean)) ?? false;
     <ChartFigure
       plots={plots}
       tableCaptionId="wholesale-prices-table-caption"
-      tableCaption="Wholesale prices in $/MWh for each 30-minute period. A spread is the first place minus the second, so a positive spread means the first place is dearer."
+      tableCaption="Wholesale prices in $/MWh for each 30-minute period. A spread is the first place minus the second, so a positive spread means the first place is more expensive."
       headers={table.headers}
       rows={table.rows}
       legendLabel="Lines in the price and spread charts"

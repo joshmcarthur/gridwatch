@@ -28,13 +28,13 @@ One collection, one file per topic, one page template.
 | Copy | Hand-written. Follow [`site-copy.md`](site-copy.md) |
 | Nav | Footer link to `/explainers/`. Do not rewrite the homepage ([#29](https://github.com/joshmcarthur/gridwatch/issues/29)) |
 
-Markdown, not MDX, for v1. MDX is only worth adding if a later topic needs a diagram that is not already a daily chart.
+Markdown, not MDX, for v1. A Visual section may include an HTML diagram. The template still injects the matching daily chart when `chart` is set. MDX is only worth adding if a later topic cannot use HTML or an existing daily chart.
 
 Each file uses these `h2` sections, in this order. Visual, Historical example, and Links may be absent.
 
 1. **Simple explanation.** What a curious reader needs in a few short paragraphs. First use of every term on the page.
 2. **A more technical explanation.** The mechanism, still in site-copy voice. What the data can show, and what it cannot.
-3. **Visual.** Only when `chart` is set. A one-sentence caption. The template draws the matching daily chart for `example_date` when that day exists. The prose must still make sense if the figure is missing.
+3. **Visual.** Only when the page needs a picture. An HTML diagram in the Markdown when the topic is a mechanism the daily charts do not show on their own. A one-sentence caption is enough when the daily chart is the picture. The template draws the matching daily chart for `example_date` when `chart` is set and that day exists. The prose must still make sense if a figure is missing.
 4. **Historical example.** Only when `example_date` is set. What that day shows, in a few numbers, with a link to `/YYYY/MM/DD/`.
 5. **Links to Gridwatch data and events.** Optional. The daily page and event page when the explainer has that day. Omit the section when the page only needs to teach the mechanism.
 
@@ -46,7 +46,7 @@ Frontmatter, at minimum: `title`, `description`. `chart` is `price`, `reserve`, 
 | --- | --- | --- |
 | `nodal-pricing` | 27 July 2026, `price` | Three reference-node prices and the island spread |
 | `transmission-constraints` | 27 July 2026, `price` | The same spread, read as a full line |
-| `instantaneous-reserves` | 27 July 2026, `reserve` | North Island slow reserve was dear that evening |
+| `instantaneous-reserves` | 27 July 2026, `reserve` | North Island slow reserve was expensive that evening |
 | `hvdc-link` | 27 July 2026, `sankey` | Northward Cook Strait flow sits in the energy balance |
 | `wind` | 27 July 2026, `generation` | A low-wind weekday in the mix |
 | `marginal-generator` | none | Offer prices are not on this site |

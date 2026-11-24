@@ -76,18 +76,22 @@ const illustratedBuilt = [
   {
     slug: "transmission-constraints",
     chartIds: ["price-chart-title"],
+    diagram: "When a line is full, prices come apart",
   },
   {
     slug: "instantaneous-reserves",
     chartIds: ["reserve-fast-title", "reserve-chart-title"],
+    diagram: "What instantaneous reserve is for",
   },
   {
     slug: "hvdc-link",
     chartIds: ["energy-sankey-chart-title"],
+    diagram: "How the Cook Strait link carries power",
   },
   {
     slug: "wind",
     chartIds: ["generation-mix-chart-title"],
+    diagram: "When the wind drops, other stations run",
   },
 ] as const;
 
@@ -113,6 +117,7 @@ for (const page of illustratedBuilt) {
         true,
       );
       expect(html).toContain('aria-labelledby="visual"');
+      expect(html).toContain(page.diagram);
       expect(html).toContain('href="/2026/07/27/"');
     },
   );

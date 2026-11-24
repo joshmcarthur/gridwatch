@@ -27,7 +27,7 @@ Three reference nodes are enough to watch the two islands:
 
 The cable is a high-voltage direct current (HVDC) link. It joins the islands but does not make them one market all the time. If it is full, or one island is short of power, the wholesale price on one side can pull away from the other.
 
-Haywards minus Benmore is the North Island / South Island spread. A spread is one node's price minus the other's in the same trading period. A positive Haywards–Benmore spread means the North Island is dearer. Ōtāhuhu minus Haywards is the step inside the North Island. Ōtāhuhu minus Benmore is in the numbers table, not drawn as its own line, because it is the other two added together.
+Haywards minus Benmore is the North Island / South Island spread. A spread is one node's price minus the other's in the same trading period. A positive Haywards–Benmore spread means the North Island is more expensive. Ōtāhuhu minus Haywards is the step inside the North Island. Ōtāhuhu minus Benmore is in the numbers table, not drawn as its own line, because it is the other two added together.
 
 The files behind the chart are dispatch energy prices: the published wholesale price at each node. They can still be revised after the day. They are not a household bill, and they are not a forecast of tomorrow.
 

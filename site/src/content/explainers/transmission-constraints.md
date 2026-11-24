@@ -15,17 +15,33 @@ That split is a transmission constraint showing up in the price. The price does 
 
 ## A more technical explanation
 
-The market sets a wholesale price at every node so that supply and demand balance, without sending more power along a line than that line can take. If a line is at its limit, the next megawatt on the cheap side cannot reach the dear side, and the two prices pull apart.
+The market sets a wholesale price at every node so that supply and demand balance, without sending more power along a line than that line can take. If a line is at its limit, the next megawatt on the cheaper side cannot reach the more expensive side, and the two prices pull apart.
 
 Three places are enough to watch that split: Ōtāhuhu in Auckland, Haywards near Wellington, and Benmore in the Waitaki. Haywards minus Benmore is the North Island / South Island spread. Ōtāhuhu minus Haywards is the step inside the North Island.
 
-The Cook Strait cable is one path that can fill up. Other lines on each island can fill up too. The spread says the prices came apart. It does not say which line was full, or how much spare capacity was left.
+The Cook Strait cable is one path that can reach its limit. Other lines on each island can too. The spread says the prices came apart. It does not say which line was full, or how much spare capacity was left.
 
 What a node is, and why Auckland, Wellington, and the South Island can differ in the same half-hour, is on [nodal pricing](/explainers/nodal-pricing/).
 
 ## Visual
 
-Wholesale prices at Ōtāhuhu, Haywards and Benmore, and the Haywards–Benmore spread, in each half-hour of Monday 27 July 2026.
+<figure class="diagram">
+  <figcaption>When a line is full, prices come apart</figcaption>
+  <ol class="flow">
+    <li>
+      <strong>Cheaper side</strong>
+      <span class="flow-edge">electricity that cannot all get through</span>
+    </li>
+    <li>
+      <strong>Line at its limit</strong>
+      <span class="flow-edge">no spare capacity on that path</span>
+    </li>
+    <li>
+      <strong>More expensive side</strong>
+      <span class="flow-edge">local plants cover the rest</span>
+    </li>
+  </ol>
+</figure>
 
 ## Historical example
 

@@ -13,13 +13,29 @@ A wholesale price is what generators and retailers pay each other in a short sli
 
 ## A more technical explanation
 
-Wind output moves with the weather, half-hour to half-hour. Hydro can often ramp to cover a gap. Gas plants and the Huntly units that burn coal or gas can ramp too, and they tend to be dearer.
+Wind output moves with the weather, half-hour to half-hour. Hydro can often ramp to cover a gap. Gas plants and the Huntly units that burn coal or gas can ramp too, and they tend to cost more.
 
 What ran is not the same as a wind forecast, and it does not name which plant set the wholesale price. Low wind on one evening is one reason other fuels ran harder. It is not, by itself, the whole story of a price spike. The last megawatt taken is on [what makes a generator marginal](/explainers/marginal-generator/).
 
 ## Visual
 
-Generation mix by fuel on Monday 27 July 2026.
+<figure class="diagram">
+  <figcaption>When the wind drops, other stations run</figcaption>
+  <ol class="flow">
+    <li>
+      <strong>Still day</strong>
+      <span class="flow-edge">wind farms make less electricity</span>
+    </li>
+    <li>
+      <strong>Other stations</strong>
+      <span class="flow-edge">hydro, gas, and coal-or-gas cover the gap</span>
+    </li>
+    <li>
+      <strong>Wholesale price</strong>
+      <span class="flow-edge">those other stations often cost more to run</span>
+    </li>
+  </ol>
+</figure>
 
 ## Historical example
 

@@ -64,6 +64,7 @@ Diagrams are allowed, and they should carry some of the explanation when they ca
 
 - How we do this: sources → processing → published data, and bronze / silver / gold treatment on the paragraphs that explain those layers (raw files, cleaned tables, published site data, or whatever the repo actually means).
 - About: a small sketch of the market is fine (stations → wholesale → retailer → bill; or Authority / Transpower / this site).
+- Explainers: a small sketch of the mechanism is fine (two sides of a full line; the Cook Strait cable; a trip and spare capacity; wind dropping so other stations run).
 - Terms: a small use / don't-use split is fine. Don't put the pipeline there.
 
 ## Prefer
@@ -72,6 +73,6 @@ this site, Gridwatch, files, pages, retailer, wholesale price, bill, Electricity
 
 ## Don't
 
-I, we (in body copy), observatory, evidence-led, hostile, "the gap", "exists because of that", "headlines hide", "rewrite your bill", pretty, serves as, it's not X it's Y, unexplained acronyms, "work there" when you mean the industry, trading-period numbers in public sentences, POC codes in daily body copy, "dataset", "grouped readings", "sample points", "Power made" (it is energy, not power), "trading day" on the home and daily pages (How we do this explains it), claims about the two islands drawn from the three places
+I, we (in body copy), observatory, evidence-led, hostile, "the gap", "exists because of that", "headlines hide", "rewrite your bill", pretty, serves as, it's not X it's Y, unexplained acronyms, "work there" when you mean the industry, trading-period numbers in public sentences, POC codes in daily body copy, "dataset", "grouped readings", "sample points", "Power made" (it is energy, not power), "trading day" on the home and daily pages (How we do this explains it), claims about the two islands drawn from the three places, dear, dearer, dearest (say more expensive)
 
 Run published copy through the humanize skill before it ships.

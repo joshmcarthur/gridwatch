@@ -30,7 +30,7 @@ Plain-language meanings of the terms used in this repository. Each entry says wh
 
 **Reserve.** The market prices and clears reserve as well as energy. The brief lists reserve prices as something the site should explain. See FIR and SIR for the two classes. The site explains it as spare generating capacity held ready in case a power station trips.
 
-**Reserve price.** What the market paid to keep reserve ready. The site shows the day's lowest, average and highest price for each island and class (`ReservesClassDay`). It is a price, not a security measure: a high reserve price means backup was dear, not that the grid was at risk. See [ADR-0013](adr/0013-gold-reserve-prices.md).
+**Reserve price.** What the market paid to keep reserve ready. The site shows the day's lowest, average and highest price for each island and class (`ReservesClassDay`). It is a price, not a security measure: a high reserve price means backup was expensive, not that the grid was at risk. See [ADR-0013](adr/0013-gold-reserve-prices.md).
 
 **Spread.** The price at one reference node minus the price at another, in a trading period. A positive spread means the first node costs more. See [ADR-0012](adr/0012-gold-prices.md).
 
