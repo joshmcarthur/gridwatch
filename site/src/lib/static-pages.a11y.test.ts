@@ -85,6 +85,9 @@ test.skipIf(!existsSync(howPage))(
     expect(html).not.toMatch(/tomorrow's prices aren't in these files/i);
     expect(html).not.toMatch(/runs New Zealand's wholesale electricity market/);
     expect(html).not.toMatch(/keep the lights on/);
+    expect(html).toContain('id="ai"');
+    expect(html).toMatch(/How this site uses AI/);
+    expect(html).toMatch(/still published/);
   },
 );
 

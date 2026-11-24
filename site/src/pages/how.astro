@@ -194,6 +194,31 @@ import Layout from "../layouts/Layout.astro";
         the next morning), Gridwatch rebuilds the pages from those gold files.
       </p>
     </div>
+
+    <section class="prose" id="ai" aria-labelledby="ai-heading">
+      <h2 id="ai-heading">How this site uses AI</h2>
+      <p>
+        A large language model, a kind of artificial intelligence (AI), writes
+        the write-ups of unusual stretches on the day pages. Each one carries a
+        "Written by AI" label and lists the figures it was written from.
+      </p>
+      <p>
+        The model gets the figures for that stretch and nothing else, each
+        labelled by how sure it is. It doesn't search the web. Its instructions
+        say to add no fact beyond those figures, and to hedge any cause that
+        isn't confirmed.
+      </p>
+      <p>
+        A program then checks every number in the write-up against those
+        figures. If a number doesn't match, the program logs a warning and the
+        write-up is still published. Nobody reviews the write-ups by hand, so
+        read any "why" in them as a likely explanation, not a finding.
+      </p>
+      <p>
+        Everything else on this site comes from fixed rules, not AI: the map,
+        the charts, the moments in each day, the headlines and the tables.
+      </p>
+    </section>
   </article>
 </Layout>
 

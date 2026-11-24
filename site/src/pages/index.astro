@@ -232,7 +232,7 @@ const leadBeats = (story?.beats ?? []).filter(
     events.length > 0 ? (
       <section class="card" aria-labelledby="recent-events-heading">
         <h2 id="recent-events-heading">Recent events</h2>
-        <p>Write-ups of unusual stretches. None has been reviewed yet.</p>
+        <p>Write-ups of unusual stretches, written by AI.</p>
         <ol class="episodes">
           {events.map(({ date, event }) => (
             <li>

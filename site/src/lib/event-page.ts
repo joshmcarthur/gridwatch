@@ -19,7 +19,7 @@ import {
 import { NODE_STYLE, type PriceIsland } from "./price-chart.ts";
 import { placeName } from "./price-regions.ts";
 
-export const REVIEW_LABEL = "Unreviewed";
+export const AI_LABEL = "Written by AI";
 
 export const CONFIDENCE_LEVELS: Array<{
   id: "confirmed" | "strong_evidence" | "possible_explanation";
