@@ -15,9 +15,14 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain('aria-labelledby="latest-heading"');
     expect(html).toContain('aria-labelledby="conditions-heading"');
     expect(html).toContain('aria-labelledby="recent-days-heading"');
-    expect(html).toMatch(
-      /<h2 id="latest-heading"[^>]*>Latest market update<\/h2>/,
+    // The latest day's story leads, with a still map at its main moment.
+    expect(html).toMatch(/<h2 id="latest-heading"[^>]*>[^<]+<\/h2>/);
+    expect(html).toContain('aria-label="Moments in the day"');
+    expect(html).toContain('id="home-map"');
+    expect(html.indexOf('id="latest-heading"')).toBeLessThan(
+      html.indexOf('id="about-heading"'),
     );
+    expect(html).not.toMatch(/Incomplete\./);
     expect(html).toMatch(
       /<h2 id="conditions-heading"[^>]*>Market conditions<\/h2>/,
     );
