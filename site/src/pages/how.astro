@@ -26,8 +26,8 @@ import Layout from "../layouts/Layout.astro";
     <figure class="diagram">
       <figcaption>What Gridwatch downloads</figcaption>
       <p>
-        Seven kinds of file, all from that store. Four of them feed the daily
-        pages; the other three are downloaded and tidied, then left for later.
+        Seven kinds of file, all from that store. Six of them feed the daily
+        pages. Cleared offers are downloaded and tidied, then left for later.
       </p>
       <div class="source-groups">
         <section>
@@ -37,8 +37,19 @@ import Layout from "../layouts/Layout.astro";
               <strong>Generation output</strong>
               <p>
                 Metered energy from each plant, in kilowatt-hours per half hour.
-                One file covers a calendar month. This is what the generation
-                numbers on the site are built from.
+                One file covers a calendar month. This is the preferred source
+                for generation numbers, once it is published. It lags the
+                trading day by weeks.
+              </p>
+            </li>
+            <li>
+              <strong>Nodal prices and volumes</strong>
+              <p>
+                A node is a named place on the grid. This file has load and
+                generation at each node, in five-minute slices. Recent daily
+                pages use those generation figures until the monthly meter file
+                is published. The pages use dispatch energy prices for the
+                price at a place, not this file.
               </p>
             </li>
             <li>
@@ -83,15 +94,6 @@ import Layout from "../layouts/Layout.astro";
         <section>
           <h2>Downloaded, not on the pages yet</h2>
           <ul class="sources">
-            <li>
-              <strong>Nodal prices and volumes</strong>
-              <p>
-                A node is a named place on the grid. This file has load and
-                generation at each node, in five-minute slices. Downloaded and
-                tidied. The pages use dispatch energy prices for the price at a
-                place, not this file.
-              </p>
-            </li>
             <li>
               <strong>Cleared offers</strong>
               <p>

@@ -204,6 +204,21 @@ test("completenessNotice labels missing reserve prices", () => {
   expect(text).not.toMatch(/dispatch_reserve_prices/);
 });
 
+test("completenessNotice labels missing nodal prices and volumes", () => {
+  const day = {
+    complete: false,
+    datasets: {
+      nodal_prices_and_volumes: { status: "missing" as const },
+      generation_md: { status: "complete" as const },
+    },
+    generation: { state: "incomplete" as const },
+    prices: { state: "complete" as const },
+  };
+  const text = completenessNotice(day)?.paragraphs.join(" ");
+  expect(text).toMatch(/nodal prices and volumes/i);
+  expect(text).not.toMatch(/nodal_prices_and_volumes/);
+});
+
 test("headline falls back when generation or prices are missing", () => {
   const day: HeadlineSource = {
     generation: { state: "missing", totals: null, daily: [] },

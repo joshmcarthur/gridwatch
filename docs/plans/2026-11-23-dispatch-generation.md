@@ -27,7 +27,7 @@ Reuse: `publisher/src/gold/generation.ts`, `grid-load.ts` latest-case SQL, `fuel
 
 1. Entity unit→plant join and `UNIT_PLANT_OVERRIDES` (ADR-0008 amendment). Testable without gold. Done in working tree.
 2. Gold overlay: metered if MD exists, else dispatch from nodal. ADR-0011 amendment, ADR-0028. Done in working tree.
-3. Site contract `generation.source`, copy, lag note. ADR-0014 amendment. Next.
+3. Site contract `generation.source`, copy, lag note. ADR-0014 amendment. Done in working tree.
 
 ## Closed Considerations
 

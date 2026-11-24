@@ -26,6 +26,8 @@ export type FuelCategory =
   | "battery"
   | "other"
   | "unmapped";
+/** Gold generation path. Absence means metered (ADR-0014, ADR-0028). */
+export type GenerationSource = "metered" | "dispatch";
 
 /** One trading period. The end is `start_utc` plus 30 minutes. */
 export interface SitePeriod {
@@ -104,6 +106,11 @@ export interface GenerationSection extends SectionBase {
     primary_megawatt_hours: number;
     battery_megawatt_hours: number;
   } | null;
+  /**
+   * Optional. Absence means metered Generation_MD. `dispatch` is nodal unit megawatts for
+   * days the monthly meter file has not reached (ADR-0028).
+   */
+  source?: GenerationSource;
 }
 
 export interface PricesSection extends SectionBase {
@@ -423,6 +430,7 @@ const DATASET_STATES: readonly DatasetState[] = [
   "invalid",
 ];
 const ISLANDS: readonly Island[] = ["NI", "SI"];
+const GENERATION_SOURCES: readonly GenerationSource[] = ["metered", "dispatch"];
 const RESERVE_CLASSES: readonly ReserveClass[] = ["FIR", "SIR"];
 const REVIEW_STATUSES: readonly ReviewStatus[] = ["unreviewed", "reviewed"];
 const CLAIM_CONFIDENCES: readonly ClaimConfidence[] = [
@@ -624,6 +632,8 @@ function checkGeneration(
       number(row.average_megawatts, `${at}.average_megawatts`);
     });
   }
+  if (section.source !== undefined)
+    oneOf(section.source, GENERATION_SOURCES, `${path}.source`);
   if (base.state === "missing") {
     if (section.totals !== null)
       fail(`${path}.totals`, "a missing section has null totals");

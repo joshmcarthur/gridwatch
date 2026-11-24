@@ -10,6 +10,7 @@ import {
   batteryPointTitle,
   generationMix,
   generationMixBatterySummary,
+  generationMixSourceNote,
   generationMixSummary,
   generationMixTable,
   type MixPoint,
@@ -63,6 +64,16 @@ function valuedPoint(point: MixPoint | undefined) {
   }
   return point;
 }
+
+test("a dispatch mix has a source note; metered and omitted source do not", () => {
+  expect(generationMixSourceNote(fixture.generation)).toBeNull();
+  expect(
+    generationMixSourceNote({ ...fixture.generation, source: "metered" }),
+  ).toBeNull();
+  expect(
+    generationMixSourceNote({ ...fixture.generation, source: "dispatch" }),
+  ).toMatch(/market dispatch, not meters/i);
+});
 
 test("fixture period 1 splits the real fuel mix into average MW", () => {
   const mix = generationMix(fixture);

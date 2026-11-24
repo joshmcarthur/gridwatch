@@ -299,6 +299,26 @@ test("latest market update uses the newest complete prices day and notes missing
   expect(update.generationLag?.latest?.href).toBe("/2026/10/31/");
 });
 
+test("latest market update has no generation lag when the prices day has a dispatch mix", () => {
+  const prices = stubDay({
+    date: "2026-11-18",
+    generationState: "complete",
+  });
+  prices.generation.source = "dispatch";
+  const update = latestMarketUpdate(
+    indexOf([
+      {
+        date: "2026-11-18",
+        prices: "complete",
+        generation: "complete",
+        complete: true,
+      },
+    ]),
+    () => prices,
+  );
+  expect(update.generationLag).toBeNull();
+});
+
 test("recent days are the last 14, newest first, with an incomplete note flag", () => {
   const days = Array.from({ length: 16 }, (_, i) => {
     const date = Temporal.PlainDate.from("2026-09-01")

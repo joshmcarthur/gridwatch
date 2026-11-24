@@ -4,11 +4,14 @@ import { goldPartitionPath } from "../gold/common.ts";
 import {
   INPUTS as GENERATION_INPUTS,
   TABLES as GENERATION_TABLES,
+  INPUTS_BY_SOURCE,
 } from "../gold/generation.ts";
+import { lit } from "../silver/common.ts";
 import type { CompletenessView } from "../silver/completeness.ts";
 import type {
   FuelCategory,
   GenerationSection,
+  GenerationSource,
   Island,
   SiteDay,
 } from "./contract.ts";
@@ -19,10 +22,10 @@ import {
 } from "./export-common.ts";
 import {
   numberOrNull,
-  readStamp,
   round,
   roundOrNull,
   rowsOf,
+  type Stamp,
 } from "./gold-read.ts";
 
 export const GENERATION_SECTION: Section = {
@@ -38,17 +41,22 @@ export async function buildGeneration(
   completeness: CompletenessView,
   axis: SiteDay["periods"],
 ): Promise<GenerationSection> {
-  const section = GENERATION_SECTION;
-  const base = {
-    silver_tables: section.inputs.map((input) => input.table),
-    gold_tables: [...GENERATION_TABLES],
-    datasets: sectionDatasets(section),
-  };
-  const stamp = await readStamp(
-    connection,
-    goldPartitionPath(goldDir, section.sentinel, date),
+  const sentinel = goldPartitionPath(
+    goldDir,
+    GENERATION_SECTION.sentinel,
+    date,
   );
-  const state = sectionState(stamp, section, completeness, date);
+  const stamp = await readGenerationStamp(connection, sentinel);
+  const path = {
+    ...GENERATION_SECTION,
+    inputs: stamp ? INPUTS_BY_SOURCE[stamp.source] : GENERATION_INPUTS,
+  };
+  const base = {
+    silver_tables: path.inputs.map((input) => input.table),
+    gold_tables: [...GENERATION_TABLES],
+    datasets: [...new Set(sectionDatasets(path))],
+  };
+  const state = sectionState(stamp, path, completeness, date);
   if (!stamp)
     return {
       ...base,
@@ -158,5 +166,38 @@ export async function buildGeneration(
       primary_megawatt_hours: round(primary, 3),
       battery_megawatt_hours: round(battery, 3),
     },
+    source: stamp.source,
   };
+}
+
+async function readGenerationStamp(
+  connection: DuckDBConnection,
+  path: string,
+): Promise<(Stamp & { source: GenerationSource }) | null> {
+  if (!existsSync(path)) return null;
+  const reader = await connection.runAndReadAll(
+    `SELECT any_value(analysis_version) AS analysis_version,
+       any_value(inputs_sha256) AS inputs_sha256,
+       bool_and(inputs_complete) AS inputs_complete,
+       any_value(source) AS source
+     FROM read_parquet(${lit(path)})`,
+  );
+  const [row] = reader.getRowObjectsJson() as Array<{
+    analysis_version: unknown;
+    inputs_sha256: unknown;
+    inputs_complete: unknown;
+    source: unknown;
+  }>;
+  if (!row || typeof row.inputs_sha256 !== "string") return null;
+  return {
+    analysis_version: Number(row.analysis_version),
+    inputs_sha256: row.inputs_sha256,
+    inputs_complete: row.inputs_complete === true,
+    source: generationSource(row.source),
+  };
+}
+
+function generationSource(value: unknown): GenerationSource {
+  if (value === "metered" || value === "dispatch") return value;
+  throw new TypeError(`generation source ${String(value)}`);
 }

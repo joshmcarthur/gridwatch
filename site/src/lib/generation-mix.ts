@@ -187,6 +187,23 @@ export function generationMixBatterySummary(mix: GenerationMix): string {
   return `Batteries sent about ${megawattsWhole.format(average)} megawatts on average. That power is stored, not new generation.`;
 }
 
+/** Method note when the mix is dispatch, not meters. Null for metered and older files. */
+export function generationMixSourceNote(
+  section: GenerationSection,
+): string | null {
+  switch (section.source) {
+    case "dispatch":
+      return "These numbers are the market dispatch, not meters. They will change when the monthly meter file is published.";
+    case "metered":
+    case undefined:
+      return null;
+    default: {
+      const _exhaustive: never = section.source;
+      return _exhaustive;
+    }
+  }
+}
+
 /** One sentence for the chart text alternative. Uses the periods that have data. */
 export function generationMixSummary(mix: GenerationMix): string {
   const data = valuedPoints(mix.points);

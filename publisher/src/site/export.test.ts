@@ -174,6 +174,33 @@ test("a valid day passes, with and without the optional extensions", () => {
   ).not.toThrow();
 });
 
+test("the validator accepts generation.source metered or dispatch, and omits it", () => {
+  const day = sampleDay();
+  expect(() => assertSiteDay(day)).not.toThrow();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      generation: { ...day.generation, source: "metered" },
+    }),
+  ).not.toThrow();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      generation: { ...day.generation, source: "dispatch" },
+    }),
+  ).not.toThrow();
+});
+
+test("the validator rejects an unknown generation.source", () => {
+  const day = sampleDay();
+  expect(() =>
+    assertSiteDay({
+      ...day,
+      generation: { ...day.generation, source: "live" },
+    } as unknown),
+  ).toThrow("generation.source: expected one of metered, dispatch");
+});
+
 test("the validator rejects a missing generation section that carries plants", () => {
   const day = sampleDay();
   expect(() =>
@@ -474,18 +501,20 @@ async function writeGeneration(
     day = [],
     plants = null,
     stamp = {},
+    source = "metered",
   }: {
     period?: Row[];
     day?: Row[];
     plants?: Row[] | null;
     stamp?: Row;
+    source?: "metered" | "dispatch";
   } = {},
 ) {
   await writeGold(
     "generation_by_plant_period",
     date,
-    { trading_period: "INTEGER" },
-    [{ trading_period: 1, ...stamp }],
+    { trading_period: "INTEGER", source: "VARCHAR" },
+    [{ trading_period: 1, source, ...stamp }],
   );
   if (plants !== null) {
     await writeGold(
@@ -817,6 +846,7 @@ test("generation pivots by fuel and island, and the totals split battery from pr
     day.generation.series.find((s) => s.fuel === "unmapped")?.island,
   ).toBeNull();
   expect(day.generation.plants).toEqual([]);
+  expect(day.generation.source).toBe("metered");
 });
 
 test("generation.plants lists gold plant-day rows, largest first", async () => {

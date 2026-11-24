@@ -75,8 +75,31 @@ export const DISPATCH_INPUTS: GoldInput[] = [
   UNITS,
   POINTS_OF_CONNECTION,
 ];
-/** Metered path. The exporter lists these until the site-contract slice. */
-export const INPUTS: GoldInput[] = METERED_INPUTS;
+export const INPUTS_BY_SOURCE = {
+  metered: METERED_INPUTS,
+  dispatch: DISPATCH_INPUTS,
+} as const;
+
+function uniqueByTable(
+  ...lists: ReadonlyArray<readonly GoldInput[]>
+): GoldInput[] {
+  const seen = new Set<string>();
+  const out: GoldInput[] = [];
+  for (const list of lists) {
+    for (const input of list) {
+      if (seen.has(input.table)) continue;
+      seen.add(input.table);
+      out.push(input);
+    }
+  }
+  return out;
+}
+
+/** Unique-by-table of both paths. The exporter lists these on a missing day. */
+export const INPUTS: GoldInput[] = uniqueByTable(
+  METERED_INPUTS,
+  DISPATCH_INPUTS,
+);
 
 /**
  * Publish the generation gold tables for one trading date, one partition for each table in
