@@ -83,12 +83,6 @@ const islandsNow = (view?.islands ?? []).map((island) => {
     </p>
   ) : (
     <div class="story-map" data-nodal-map>
-      {view.incomplete && (
-        <p>
-          Some wholesale price numbers are incomplete, so a place can be
-          missing a colour for a half-hour.
-        </p>
-      )}
       <div class="layout">
         <figure class="map">
           <Fragment set:html={svg} />

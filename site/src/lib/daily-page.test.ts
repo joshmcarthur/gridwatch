@@ -7,12 +7,12 @@ import type {
 } from "@gridwatch/publisher/site-contract";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import {
-  completenessNotice,
   dailyPath,
   dailyStaticPaths,
   dateFromParams,
   dayHeadline,
   defaultMixCompareDay,
+  gapNote,
   type HeadlineSource,
   mapPath,
   mixCompareDays,
@@ -160,63 +160,44 @@ test("headline names the kind of day without a unit lecture", () => {
   ]);
 });
 
-test("completenessNotice is omitted for a complete day", () => {
-  expect(completenessNotice(loadSiteDay("2026-09-27"))).toBeNull();
+test("gapNote is omitted for a complete day", () => {
+  expect(gapNote(loadSiteDay("2026-09-27"))).toBeNull();
 });
 
-test("completenessNotice names incomplete datasets in plain language", () => {
-  const day = {
+test("gapNote names missing half-hours as merged clock ranges", () => {
+  const day = loadSiteDay("2026-10-29");
+  const note = gapNote({
+    ...day,
     complete: false,
-    datasets: {
-      dispatch_energy_prices: { status: "partial" as const },
-      generation_md: { status: "complete" as const },
-      entity_mappings: { status: "missing" as const },
+    prices: {
+      ...day.prices,
+      state: "incomplete",
+      missing_periods: [31, 32, 40],
     },
-    generation: { state: "incomplete" as const },
-    prices: { state: "incomplete" as const },
-  };
-  const notice = completenessNotice(day);
-  expect(notice?.tone).toBe("warn");
-  const text = notice?.paragraphs.join(" ") ?? "";
-  expect(text).toMatch(/incomplete/i);
-  expect(text).toMatch(/wholesale energy prices/i);
-  expect(text).toMatch(/only partial/i);
-  expect(text).toMatch(/plant names and locations/i);
-  expect(text).toMatch(/missing/i);
-  expect(text).not.toMatch(/dispatch_energy_prices/);
-  expect(text).not.toMatch(/household bill/);
+  });
+  expect(note).toBe(
+    "The market files have no wholesale prices for 3:00pm to 4:00pm and 7:30pm to 8:00pm.",
+  );
 });
 
-test("completenessNotice labels missing reserve prices", () => {
-  const day = {
+test("gapNote says when a whole section is not in the files yet", () => {
+  const day = loadSiteDay("2026-10-29");
+  const note = gapNote({
+    ...day,
     complete: false,
-    datasets: {
-      dispatch_reserve_prices: { status: "missing" as const },
-      dispatch_energy_prices: { status: "complete" as const },
-      generation_md: { status: "partial" as const },
-    },
-    generation: { state: "incomplete" as const },
-    prices: { state: "complete" as const },
-  };
-  const text = completenessNotice(day)?.paragraphs.join(" ");
-  expect(text).toMatch(/reserve prices/i);
-  expect(text).toMatch(/standing ready/i);
-  expect(text).not.toMatch(/dispatch_reserve_prices/);
+    generation: { ...day.generation, state: "missing", missing_periods: [] },
+    prices: { ...day.prices, state: "incomplete", missing_periods: [48] },
+  });
+  expect(note).toBe(
+    "The market files have no wholesale prices for 11:30pm to 12:00am. Generation figures for this day aren't in the files yet.",
+  );
 });
 
-test("completenessNotice labels missing nodal prices and volumes", () => {
-  const day = {
-    complete: false,
-    datasets: {
-      nodal_prices_and_volumes: { status: "missing" as const },
-      generation_md: { status: "complete" as const },
-    },
-    generation: { state: "incomplete" as const },
-    prices: { state: "complete" as const },
-  };
-  const text = completenessNotice(day)?.paragraphs.join(" ");
-  expect(text).toMatch(/nodal prices and volumes/i);
-  expect(text).not.toMatch(/nodal_prices_and_volumes/);
+test("gapNote falls back to one plain line when no half-hour is named", () => {
+  const day = loadSiteDay("2026-10-29");
+  expect(gapNote({ ...day, complete: false })).toBe(
+    "Some of the market files for this day are incomplete.",
+  );
 });
 
 test("headline falls back when generation or prices are missing", () => {

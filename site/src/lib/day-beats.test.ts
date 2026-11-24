@@ -77,7 +77,9 @@ test("missing generation still gives price beats and a price headline", () => {
   const story = dayBeats(day);
   expect(story.beats.some((b) => b.rule === "price_peak")).toBe(true);
   expect(story.beats.some((b) => b.rule === "fuel_high")).toBe(false);
-  expect(story.headline).toBe("Power averaged 2.0c per kWh at Benmore and 7.3c at Ōtāhuhu");
+  expect(story.headline).toBe(
+    "Power averaged 2.0c per kWh at Benmore and 7.3c at Ōtāhuhu",
+  );
 });
 
 test("no beat states a cause", () => {

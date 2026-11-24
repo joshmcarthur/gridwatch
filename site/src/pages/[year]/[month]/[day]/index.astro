@@ -8,11 +8,11 @@ import PriceChart from "../../../../components/PriceChart.astro";
 import ReserveChart from "../../../../components/ReserveChart.astro";
 import Layout from "../../../../layouts/Layout.astro";
 import {
-  completenessNotice,
   dailyPath,
   dailyStaticPaths,
   dateFromParams,
   dayHeadline,
+  gapNote,
   monthGroups,
   neighbouringDays,
 } from "../../../../lib/daily-page";
@@ -45,7 +45,7 @@ const loadEarlier = (earlier: string) => loadSiteDayCached(earlier, index);
 const context = dayContext(index, date, loadEarlier);
 const lead = leadFact(index, date, loadEarlier);
 const story = dayBeats(day);
-const notice = completenessNotice(day);
+const gap = gapNote(day);
 const neighbours = neighbouringDays(index, date);
 const months = monthGroups(index);
 const publishedEvents = eventsOnDay(day);
@@ -88,22 +88,9 @@ const publishedEvents = eventsOnDay(day);
       </dl>
     </header>
 
-    {
-      notice && (
-        <section
-          class:list={["notice", notice.tone]}
-          aria-labelledby="completeness-heading"
-        >
-          <h2 id="completeness-heading">How complete is this day?</h2>
-          {notice.paragraphs.map((paragraph) => (
-            <p>{paragraph}</p>
-          ))}
-        </section>
-      )
-    }
-
     <section class="slot" id="map" aria-labelledby="map-heading">
       <h2 id="map-heading">The day on the map</h2>
+      {gap && <p class="gap">{gap}</p>}
       <NodalPriceMap day={day} story={story} />
     </section>
 
@@ -275,8 +262,15 @@ const publishedEvents = eventsOnDay(day);
     max-width: 40rem;
   }
 
+  .gap {
+    margin: 0;
+    font-size: var(--text-label);
+    color: var(--color-ink-muted);
+    border-left: 3px solid var(--color-caution);
+    padding-left: var(--space-3);
+  }
+
   .lede,
-  .notice,
   .slot,
   .days,
   .words {
@@ -285,18 +279,12 @@ const publishedEvents = eventsOnDay(day);
     gap: var(--space-4);
   }
 
-  .notice,
   .slot,
   .days,
   .words {
     background: var(--color-card);
     border-radius: var(--radius-card);
     padding: var(--space-5);
-  }
-
-  .notice.warn {
-    outline: 2px solid var(--color-caution);
-    outline-offset: -2px;
   }
 
   .stats {
