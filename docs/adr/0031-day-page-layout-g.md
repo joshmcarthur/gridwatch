@@ -60,6 +60,8 @@ The model writes from a package, the same way an event narrative does ([ADR-0027
 - **Day package**: the `dayBeats` output (titles, times, text, fuels, places, episodes), the totals, the fuel shares, and the half-hour prices and reserve prices the beats point to. Never a dispatch maximum.
 - **Week package**: the last seven days, each cut to its headline, fuel shares, Ōtāhuhu and Benmore averages, highest beat, episode types and an incomplete-files flag.
 
+`dayBeats` and the helpers it uses (episode copy, fuel labels, clock labels, cents) move from `site/src/lib/` to `publisher/src/story/`, and the site imports them as `@gridwatch/publisher/story/*`. The publisher can then build the day package from the same beats the page shows (owner, 2026-11-25). The write-up step runs after the event narratives, writes `gold/evidence/<date>/day.json` and `gold/narratives/<date>/day.json`, and the export copies the text into the day file as an optional `narrative` field. Without a range it writes the latest 7 days only, so a first run stays cheap.
+
 `checkNarrative` checks every number and clock time against the package. A second check counts sentences, words and numbers. Text over budget is not published, and the rule-based lede shows instead. Text that fails the number check is published with a warning, as for events ([ADR-0030](0030-ai-text-labelled-not-reviewed.md); owner, 2026-11-25).
 
 Each write-up carries the "Written by AI" label and a "What this was written from" disclosure that links to `/how/#ai`.

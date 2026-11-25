@@ -1,6 +1,7 @@
 import { chat } from "@tanstack/ai";
 import { createOpenRouterText } from "@tanstack/ai-openrouter";
 import type { CompletenessView } from "../silver/completeness.ts";
+import { narrateDays } from "../site/narrate-days.ts";
 import { narrateCandidates } from "./narrate-candidates.ts";
 import {
   type CompleteNarrative,
@@ -58,4 +59,16 @@ export async function narrateIfKeyed(ctx: {
     }`,
   );
   for (const line of result.failed) console.warn(`narratives: ${line}`);
+  // Day write-ups come after the events, so a day's package sees its events (ADR-0031).
+  const days = await narrateDays({
+    ...ctx,
+    complete: openRouterComplete(key, model),
+    model,
+  });
+  console.log(
+    `day write-ups: wrote ${days.written}, skipped ${days.skipped}${
+      days.failed.length > 0 ? `, failed ${days.failed.length}` : ""
+    }`,
+  );
+  for (const line of days.failed) console.warn(`day write-ups: ${line}`);
 }

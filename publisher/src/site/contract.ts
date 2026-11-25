@@ -376,6 +376,24 @@ export interface SiteDay {
   nodal_map?: NodalMapSection;
   /** Optional. Absence means not built. The exporter writes it on every day, `missing` when ranking gold is absent. */
   events?: EventsSection;
+  /**
+   * The day write-up by AI (ADR-0031). Optional: absent when there is none, or when the text
+   * was over its length budget. Adding it did not change the contract version (ADR-0014).
+   */
+  narrative?: SiteDayNarrative;
+}
+
+/** A day write-up and what it was written from, for the "What this was written from" list. */
+export interface SiteDayNarrative {
+  text: string;
+  model: string;
+  generated_at: string;
+  /** The day's moments the model was given. */
+  moments: Array<{ title: string; when: string }>;
+  /** Whether the package held the cable, the reserve peak, and an incomplete-files flag. */
+  cable: boolean;
+  reserve: boolean;
+  incomplete: boolean;
 }
 
 export interface SiteIndexDay {
@@ -1025,6 +1043,22 @@ export function assertSiteDay(value: unknown): asserts value is SiteDay {
   for (const id of sectionDatasets)
     if (!(id in datasets))
       fail("datasets", `${id} is read by a section but is not a key`);
+  if (day.narrative !== undefined) checkDayNarrative(day.narrative);
+}
+
+function checkDayNarrative(value: unknown): void {
+  const narrative = record(value, "narrative");
+  text(narrative.text, "narrative.text");
+  text(narrative.model, "narrative.model");
+  text(narrative.generated_at, "narrative.generated_at");
+  list(narrative.moments, "narrative.moments").forEach((item, i) => {
+    const moment = record(item, `narrative.moments[${i}]`);
+    text(moment.title, `narrative.moments[${i}].title`);
+    text(moment.when, `narrative.moments[${i}].when`);
+  });
+  flag(narrative.cable, "narrative.cable");
+  flag(narrative.reserve, "narrative.reserve");
+  flag(narrative.incomplete, "narrative.incomplete");
 }
 
 /** Throws a `TypeError` with the path of the first field that does not match the contract. */

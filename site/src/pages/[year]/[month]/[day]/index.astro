@@ -1,4 +1,5 @@
 ---
+import AiWriteup from "../../../../components/AiWriteup.astro";
 import DayCompare from "../../../../components/DayCompare.astro";
 import EnergySankeyChart from "../../../../components/EnergySankeyChart.astro";
 import EventStory from "../../../../components/EventStory.astro";
@@ -11,6 +12,8 @@ import {
   dailyPath,
   dailyStaticPaths,
   dateFromParams,
+  daySources,
+  eventLinkLabels,
   gapNote,
   monthGroups,
   neighbouringDays,
@@ -21,7 +24,7 @@ import {
   episodeEvidenceLinks,
   episodeHeadline,
 } from "@gridwatch/publisher/story/episode-copy.ts";
-import { eventsOnDay } from "../../../../lib/event-page";
+import { eventAnchor, eventsOnDay } from "../../../../lib/event-page";
 import { leadFact } from "../../../../lib/market-conditions";
 import {
   formatTradingDate,
@@ -48,6 +51,14 @@ const gap = gapNote(day);
 const neighbours = neighbouringDays(index, date);
 const months = monthGroups(index);
 const publishedEvents = eventsOnDay(day);
+// The day write-up links to the first event's full write-up, which sits in a disclosure.
+const firstEvent = publishedEvents[0];
+const eventLink = firstEvent
+  ? {
+      href: `#${eventAnchor(firstEvent.episode_id)}`,
+      label: eventLinkLabels(firstEvent.start_utc).link,
+    }
+  : null;
 ---
 
 <Layout
@@ -62,7 +73,25 @@ const publishedEvents = eventsOnDay(day);
     <header class="lede">
       <h1>{titleDate}</h1>
       {story.headline && <p class="headline">{story.headline}</p>}
-      {story.lede ? <p>{story.lede}</p> : lead && <p>{lead}</p>}
+      {
+        day.narrative ? (
+          <AiWriteup
+            text={day.narrative.text}
+            sources={daySources(day.narrative)}
+            link={eventLink}
+          />
+        ) : (
+          <p>
+            {story.lede ?? lead}
+            {eventLink && (
+              <>
+                {" "}
+                <a href={eventLink.href}>{eventLink.label}</a>.
+              </>
+            )}
+          </p>
+        )
+      }
     </header>
 
     <section class="slot" id="map" aria-label="Wholesale prices on the map">
@@ -72,14 +101,15 @@ const publishedEvents = eventsOnDay(day);
     </section>
 
     {
-      publishedEvents.length > 0 ? (
-        <section class="slot" aria-labelledby="day-events">
-          <h2 id="day-events">What happened</h2>
-          {publishedEvents.map((event) => (
-            <EventStory event={event} day={day} />
-          ))}
-        </section>
-      ) : null
+      publishedEvents.map((event) => (
+        <details class="slot event-more">
+          <summary>
+            <span class="ai">Written by AI</span>{" "}
+            {eventLinkLabels(event.start_utc).summary}
+          </summary>
+          <EventStory event={event} day={day} />
+        </details>
+      ))
     }
 
     <details class="slot numbers" id="numbers">
@@ -290,6 +320,18 @@ const publishedEvents = eventsOnDay(day);
   .totals {
     margin: 0;
     max-width: 46rem;
+  }
+
+  .event-more > summary {
+    cursor: pointer;
+    font-size: var(--text-heading);
+    font-weight: 700;
+  }
+
+  .event-more .ai {
+    font-size: var(--text-label);
+    color: var(--color-caution);
+    margin-right: var(--space-2);
   }
 
   .numbers > summary {
