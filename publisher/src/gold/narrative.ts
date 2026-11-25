@@ -5,7 +5,7 @@ import { clockText12, periodClockRange, periodToUtc } from "../trading-time.ts";
 import type { ClaimValue, Confidence, InputStatus } from "./evidence.ts";
 
 export const NARRATIVE_SCHEMA_VERSION = 1;
-export const PROMPT_VERSION = 1;
+export const PROMPT_VERSION = 2;
 export const DEFAULT_MODEL = "openai/gpt-6-luna";
 
 /**
