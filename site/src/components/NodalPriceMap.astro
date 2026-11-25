@@ -1,9 +1,10 @@
 ---
 import type { SiteDay } from "@gridwatch/publisher/site-contract";
 import type { DayStory } from "../lib/day-beats";
-import { isSqueezed, laneSvg } from "../lib/day-lanes";
+import DayLane from "./DayLane.astro";
 import {
   clientPayload,
+  conditionalLanes,
   coverageSentence,
   dayLanes,
   formatPrice,
@@ -36,6 +37,7 @@ const peak = beats
   )[0];
 const period = peak?.at ?? view?.defaultPeriod ?? 1;
 const lanes = view ? dayLanes(day, view, beats) : [];
+const wideLanes = view ? conditionalLanes(day, view) : [];
 const axis = laneAxis(day);
 const payload = view
   ? {
@@ -44,7 +46,7 @@ const payload = view
         beats.map(({ at, from, to, fuels }) => ({ at, from, to, fuels })),
       ),
       defaultPeriod: period,
-      lanes,
+      lanes: [...lanes, ...wideLanes],
     }
   : null;
 const rows = payload ? rowsForPeriod(payload, period) : [];
@@ -217,64 +219,33 @@ const islandsNow = (view?.islands ?? []).map((island) => {
 
           <div class="lanes">
             {lanes.map((lane, index) => (
-              <section class="lane" aria-labelledby={`lane-${lane.id}-name`}>
-                <p class="lane-lead">
-                  <span class="lane-name" id={`lane-${lane.id}-name`}>
-                    {lane.name}
-                  </span>{" "}
-                  {lane.sentence}
-                </p>
-                <ul class="lane-key" aria-label={`Key, ${lane.name.toLowerCase()}`}>
-                  {lane.series.map((series) => (
-                    <li
-                      data-legend-fuel={lane.stacked ? series.key : undefined}
-                      class:list={[{ dim: lane.stacked && dim(series.key) }]}
-                    >
-                      <span
-                        class="swatch"
-                        style={`background:${series.colour}`}
-                      />
-                      {series.label}
-                    </li>
-                  ))}
-                  {lane.gap && (
-                    <li>
-                      <span class="swatch gap" />
-                      {lane.gap.label}
-                    </li>
-                  )}
-                  {isSqueezed(lane) && (
-                    <li>
-                      <span class="swatch squeeze" />
-                      Above 40c the scale is squeezed
-                    </li>
-                  )}
-                  <li class="unit">
-                    {lane.unit === "price" ? "cents per kWh" : "MW"}
-                  </li>
-                </ul>
-                <div
-                  class="lane-plot"
-                  data-lane={lane.id}
-                  tabindex="0"
-                  role="group"
-                  aria-label={`${lane.name} through the day. Use the left and right arrow keys to move through the half-hours.`}
-                >
-                  <Fragment
-                    set:html={laneSvg(
-                      lane,
-                      beats,
-                      period,
-                      index === lanes.length - 1 ? axis : null,
-                    )}
-                  />
-                  <div class="lane-tip" data-lane-tip role="status" hidden />
-                </div>
-              </section>
+              <DayLane
+                lane={lane}
+                beats={beats}
+                period={period}
+                axis={index === lanes.length - 1 ? axis : null}
+                lit={litFuels}
+              />
             ))}
           </div>
         </div>
       </div>
+
+      {wideLanes.length > 0 && (
+        <section class="through" aria-labelledby="through-the-day">
+          <h3 id="through-the-day">Through the day</h3>
+          {wideLanes.map((lane) => (
+            <DayLane
+              lane={lane}
+              beats={beats}
+              period={period}
+              axis={axis}
+              lit={null}
+              wide
+            />
+          ))}
+        </section>
+      )}
 
       <details class="more">
         <summary>How to read this</summary>
@@ -519,200 +490,28 @@ const islandsNow = (view?.islands ?? []).map((island) => {
     }
   }
 
+  .through {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .through h3 {
+    margin: 0;
+    font-size: var(--text-heading);
+  }
+
+  .islands li.dim,
+  .bar span.dim {
+    opacity: 0.35;
+  }
+
   .lanes {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
   }
 
-  .lane {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .lane-lead {
-    margin: 0;
-    font-size: var(--text-label);
-  }
-
-  .lane-name {
-    font-size: var(--text-caption);
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
-    margin-right: var(--space-1);
-  }
-
-  .lane-key {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 var(--space-3);
-    font-size: var(--text-caption);
-    color: var(--color-ink-muted);
-  }
-
-  .lane-key .unit {
-    font-style: italic;
-  }
-
-  .swatch.gap {
-    background: color-mix(in srgb, var(--color-island-north) 25%, white);
-    border: 1px solid var(--color-rule);
-  }
-
-  .swatch.squeeze {
-    background: color-mix(in srgb, var(--color-ink) 6%, white);
-    border: 1px solid var(--color-rule);
-  }
-
-  .lane-plot {
-    position: relative;
-    border-radius: 4px;
-    touch-action: pan-y;
-  }
-
-  .lane-plot :global(.lane-svg) {
-    width: 100%;
-    height: auto;
-    display: block;
-    overflow: visible;
-    cursor: crosshair;
-  }
-
-  .lane-plot :global(.lane-beat) {
-    fill: var(--color-brand);
-    fill-opacity: 0.08;
-  }
-
-  .lane-plot :global(.lane-squeeze) {
-    fill: var(--color-ink);
-    fill-opacity: 0.045;
-  }
-
-  .lane-plot :global(.lane-grid) {
-    stroke: var(--color-rule);
-    stroke-width: 0.6;
-  }
-
-  .lane-plot :global(.lane-grid.dashed) {
-    stroke: var(--color-ink-muted);
-    stroke-dasharray: 3 3;
-  }
-
-  .lane-plot :global(.lane-tick) {
-    font-size: 9px;
-    fill: var(--color-ink-muted);
-  }
-
-  .lane-plot :global(.lane-gap) {
-    fill-opacity: 0.14;
-  }
-
-  .lane-plot :global(.lane-halo) {
-    fill: none;
-    stroke: var(--color-card);
-    stroke-width: 4;
-    stroke-linejoin: round;
-  }
-
-  .lane-plot :global(.lane-line) {
-    stroke-width: 1.8;
-    stroke-linejoin: round;
-  }
-
-  .lane-plot :global(.lane-edge) {
-    fill: none;
-    stroke: var(--color-card);
-    stroke-width: 0.8;
-  }
-
-  .lane-plot :global(.lane-top) {
-    fill: none;
-    stroke: var(--color-ink);
-    stroke-width: 1.1;
-  }
-
-  .lane-plot :global(.lane-cursor) {
-    stroke: var(--color-ink);
-    stroke-width: 1.5;
-  }
-
-  .lane-plot :global(.lane-hover) {
-    stroke: var(--color-ink-muted);
-    stroke-width: 1;
-    stroke-dasharray: 2 2;
-  }
-
-  .lane-plot :global([data-lane-fuel]) {
-    transition: opacity 0.2s;
-  }
-
-  .lane-plot :global([data-lane-fuel].dim) {
-    opacity: 0.22;
-  }
-
-  .lane-key li.dim,
-  .islands li.dim,
-  .bar span.dim {
-    opacity: 0.35;
-  }
-
-  .lane-tip {
-    position: absolute;
-    bottom: calc(100% + var(--space-1));
-    transform: translateX(-50%);
-    z-index: 2;
-    min-width: 11rem;
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-card);
-    border: 1px solid var(--color-rule);
-    border-radius: var(--radius-chip);
-    box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
-    font-size: var(--text-caption);
-    pointer-events: none;
-  }
-
-  .lane-tip.flip {
-    transform: translateX(-90%);
-  }
-
-  .lane-tip :global(.lane-tip-time) {
-    margin: 0 0 var(--space-1);
-    font-weight: 700;
-  }
-
-  .lane-tip :global(ul) {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .lane-tip :global(.swatch) {
-    display: inline-block;
-    width: 0.65rem;
-    height: 0.65rem;
-    border-radius: 2px;
-    margin-right: var(--space-1);
-    vertical-align: -1px;
-  }
-
-  .lane-tip :global(.lane-tip-note) {
-    color: var(--color-ink-muted);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .lane-plot :global([data-lane-fuel]) {
-      transition: none;
-    }
-  }
 
   #nodal-play {
     align-self: flex-start;

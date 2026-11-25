@@ -35,7 +35,7 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).not.toMatch(/sample points?/i);
     expect(html).not.toMatch(/Otahuhu/);
     expect(html).toMatch(
-      /<h2 id="reserve-prices"[^>]*>What reserve cost<\/h2>/,
+      /<h3 id="reserve-prices"[^>]*>What reserve cost<\/h3>/,
     );
     if (html.includes('href="#reserve-prices"')) {
       expect(html).toContain('id="reserve-prices"');
@@ -103,7 +103,7 @@ test.skipIf(!existsSync(builtPage))(
     const html = readFileSync(builtPage, "utf8");
     expect(html).toContain('aria-labelledby="wholesale-prices"');
     expect(html).toMatch(
-      /<h2 id="wholesale-prices"[^>]*>What it sold for<\/h2>/,
+      /<h3 id="wholesale-prices"[^>]*>What it sold for<\/h3>/,
     );
     expect(html).toContain(
       'aria-labelledby="price-chart-title price-chart-summary"',
@@ -142,11 +142,17 @@ test.skipIf(!existsSync(builtPage))(
 );
 
 test.skipIf(!existsSync(builtPage))(
-  "every stat link on the built daily page points at an id on the page",
+  "the built daily page has a totals sentence, one numbers disclosure and working anchors",
   () => {
     const html = readFileSync(builtPage, "utf8");
-    const stats = html.match(/<dl class="stats[\s\S]*?<\/dl>/)?.[0] ?? "";
-    const targets = [...stats.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
+    expect(html).not.toContain('class="stats');
+    expect(html).toMatch(/The two islands generated [\d,]+ MWh over the day\./);
+    expect(html).toContain('<details class="slot numbers" id="numbers"');
+    expect(html).toContain("The numbers behind this");
+    expect(html.indexOf('id="numbers"')).toBeLessThan(
+      html.indexOf('id="reserve-prices"'),
+    );
+    const targets = [...html.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
     expect(targets.length).toBeGreaterThan(0);
     for (const target of targets) {
       expect(html).toContain(`id="${target}"`);

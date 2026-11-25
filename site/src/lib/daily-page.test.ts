@@ -20,6 +20,7 @@ import {
   monthGroups,
   neighbouringDays,
   pageLead,
+  totalsSentence,
 } from "./daily-page.ts";
 import { loadSiteDay, loadSiteIndex } from "./site-data.ts";
 
@@ -430,5 +431,27 @@ test("defaultMixCompareDay prefers the previous mix day", () => {
 test("defaultMixCompareDay falls forward when no earlier mix day exists", () => {
   expect(defaultMixCompareDay(threeDayIndex, "2026-09-26")?.date).toBe(
     "2026-09-27",
+  );
+});
+
+test("totalsSentence gives generation, then what the cable sent and what arrived", () => {
+  const day = {
+    generation: {
+      state: "complete" as const,
+      totals: { primary_megawatt_hours: 102764.4 },
+    },
+    sankey: {
+      islands: [
+        { island: "NI" as const, hvdc_import_megawatt_hours: 17888 },
+        { island: "SI" as const, hvdc_import_megawatt_hours: -18733 },
+      ],
+    },
+  } as unknown as Parameters<typeof totalsSentence>[0];
+  expect(totalsSentence(day)).toBe(
+    "The two islands generated 102,764 MWh over the day. The South Island sent 18,733 MWh north on the cable, and 17,888 MWh arrived.",
+  );
+  const noCable = { ...day, sankey: undefined } as typeof day;
+  expect(totalsSentence(noCable)).toBe(
+    "The two islands generated 102,764 MWh over the day.",
   );
 });

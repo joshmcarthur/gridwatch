@@ -10,8 +10,12 @@ import { centsPerKwh } from "./price-regions.ts";
 export const LANE_CAP = 400;
 export const LANE_PLOT_WIDTH = 320;
 export const LANE_TICK_WIDTH = 40;
+/** A lane across the full card, under the map. */
+export const WIDE_PLOT_WIDTH = 1000;
 const LANE_HEIGHT = 68;
 const LANE_HEIGHT_SQUEEZED = 86;
+const WIDE_HEIGHT = 110;
+const WIDE_HEIGHT_SQUEEZED = 130;
 const AXIS_HEIGHT = 14;
 const PAD_TOP = 6;
 const PAD_BOTTOM = 4;
@@ -99,9 +103,15 @@ export function isSqueezed(lane: Lane): boolean {
   return lane.unit === "price" && laneMax(lane) > LANE_CAP;
 }
 
-export function laneScale(lane: Lane): LaneScale {
+export function laneScale(lane: Lane, wide = false): LaneScale {
   const squeezed = isSqueezed(lane);
-  const height = squeezed ? LANE_HEIGHT_SQUEEZED : LANE_HEIGHT;
+  const height = wide
+    ? squeezed
+      ? WIDE_HEIGHT_SQUEEZED
+      : WIDE_HEIGHT
+    : squeezed
+      ? LANE_HEIGHT_SQUEEZED
+      : LANE_HEIGHT;
   const top = PAD_TOP;
   const bottom = height - PAD_BOTTOM;
   const max = laneMax(lane);
@@ -177,16 +187,18 @@ export function laneSvg(
   beats: LaneBeat[],
   period: number,
   axis: LaneTick[] | null = null,
+  wide = false,
 ): string {
   const count = lane.series[0]?.values.length ?? 0;
-  const scale = laneScale(lane);
+  const scale = laneScale(lane, wide);
+  const plotWidth = wide ? WIDE_PLOT_WIDTH : LANE_PLOT_WIDTH;
   const plotBottom = scale.height;
   const height = plotBottom + (axis ? AXIS_HEIGHT : 0);
-  const width = LANE_PLOT_WIDTH + LANE_TICK_WIDTH;
-  const band = count > 0 ? LANE_PLOT_WIDTH / count : 0;
+  const width = plotWidth + LANE_TICK_WIDTH;
+  const band = count > 0 ? plotWidth / count : 0;
   const x0 = (index: number) => index * band;
   const xc = (index: number) => (index + 0.5) * band;
-  const right = LANE_PLOT_WIDTH;
+  const right = plotWidth;
 
   const shading = beats
     .filter((beat) => !(beat.from === 1 && beat.to === count))
@@ -280,18 +292,26 @@ export function laneSvg(
     : "";
 
   const cx = xc(period - 1).toFixed(1);
-  return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${width} ${height}" class="lane-svg" data-lane-svg data-count="${count}" aria-hidden="true" focusable="false">${shading}${squeeze}${grid}${body}${axisLabels}<line data-lane-hover x1="0" x2="0" y1="0" y2="${plotBottom}" class="lane-hover" visibility="hidden"/><line data-lane-cursor x1="${cx}" x2="${cx}" y1="0" y2="${plotBottom}" class="lane-cursor"/></svg>`;
+  return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${width} ${height}" class="lane-svg${wide ? " wide" : ""}" data-lane-svg data-count="${count}" data-plot-width="${plotWidth}" aria-hidden="true" focusable="false">${shading}${squeeze}${grid}${body}${axisLabels}<line data-lane-hover x1="0" x2="0" y1="0" y2="${plotBottom}" class="lane-hover" visibility="hidden"/><line data-lane-cursor x1="${cx}" x2="${cx}" y1="0" y2="${plotBottom}" class="lane-cursor"/></svg>`;
 }
 
 /** x of a half-hour's centre, as a share of the whole SVG width (plot plus ticks). */
-export function laneCentreShare(index: number, count: number): number {
-  const band = count > 0 ? LANE_PLOT_WIDTH / count : 0;
-  return ((index + 0.5) * band) / (LANE_PLOT_WIDTH + LANE_TICK_WIDTH);
+export function laneCentreShare(
+  index: number,
+  count: number,
+  plotWidth = LANE_PLOT_WIDTH,
+): number {
+  const band = count > 0 ? plotWidth / count : 0;
+  return ((index + 0.5) * band) / (plotWidth + LANE_TICK_WIDTH);
 }
 
 /** Which half-hour (0-based) a point at `share` of the SVG width falls in. */
-export function laneIndexAt(share: number, count: number): number {
-  const plotShare = LANE_PLOT_WIDTH / (LANE_PLOT_WIDTH + LANE_TICK_WIDTH);
+export function laneIndexAt(
+  share: number,
+  count: number,
+  plotWidth = LANE_PLOT_WIDTH,
+): number {
+  const plotShare = plotWidth / (plotWidth + LANE_TICK_WIDTH);
   const index = Math.floor((share / plotShare) * count);
   return Math.min(count - 1, Math.max(0, index));
 }
@@ -396,4 +416,18 @@ export function generationLaneSentence(
   });
   if (low === -1) return "No generation numbers were published.";
   return `It ran from ${megawatts.format(totals[low] ?? 0)} MW at ${times[low]} to ${megawatts.format(totals[high] ?? 0)} MW at ${times[high]}.`;
+}
+
+/** One sentence for the reserve lane: the North Island's highest half-hour. */
+export function reserveLaneSentence(
+  values: Array<number | null>,
+  times: string[],
+): string {
+  let high = -1;
+  values.forEach((value, index) => {
+    if (value === null) return;
+    if (high === -1 || value > (values[high] ?? 0)) high = index;
+  });
+  if (high === -1) return "No reserve prices were published.";
+  return `The North Island reserve price reached ${centsPerKwh(values[high] ?? 0)} per kWh at ${times[high]}.`;
 }

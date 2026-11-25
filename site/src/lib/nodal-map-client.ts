@@ -277,7 +277,9 @@ export function bindNodalMap(root: ParentNode = document): void {
     if (svgSummary) svgSummary.textContent = periodSummary(payload, period);
     for (const svg of root.querySelectorAll<SVGSVGElement>("[data-lane-svg]")) {
       const line = svg.querySelector<SVGLineElement>("[data-lane-cursor]");
-      if (line) moveLine(line, laneCentreShare(period - 1, count), svg);
+      const plotWidth = Number(svg.dataset.plotWidth) || undefined;
+      if (line)
+        moveLine(line, laneCentreShare(period - 1, count, plotWidth), svg);
     }
     const active = activeBeat();
     const fuels = beats[active]?.fuels;
@@ -384,9 +386,10 @@ export function bindNodalMap(root: ParentNode = document): void {
     const tip = plot.querySelector<HTMLElement>("[data-lane-tip]");
     const hover = svg?.querySelector<SVGLineElement>("[data-lane-hover]");
     if (!lane || !svg || !tip) continue;
+    const plotWidth = Number(svg.dataset.plotWidth) || undefined;
     const show = (index: number) => {
       fillTip(doc, tip, lane, index, timeOf(index));
-      const share = laneCentreShare(index, count);
+      const share = laneCentreShare(index, count, plotWidth);
       tip.hidden = false;
       tip.style.left = `${(share * 100).toFixed(1)}%`;
       tip.classList.toggle("flip", share > 0.55);
@@ -404,6 +407,7 @@ export function bindNodalMap(root: ParentNode = document): void {
       return laneIndexAt(
         box.width > 0 ? (clientX - box.left) / box.width : 0,
         count,
+        plotWidth,
       );
     };
     svg.addEventListener("pointermove", (event) =>

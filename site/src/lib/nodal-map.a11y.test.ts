@@ -33,6 +33,9 @@ test.skipIf(!existsSync(builtDaily))(
     expect(html).toContain('id="nodal-play"');
     expect(html).toContain('data-lane="price"');
     expect(html).toContain('data-lane="generation"');
+    // 27 September has a stretch of high reserve prices, so the reserve lane shows.
+    expect(html).toContain('data-lane="reserve"');
+    expect(html).toContain("Through the day");
     expect(html).toContain('role="status"');
     expect(html).toMatch(/Use the left and right arrow keys/);
     expect(html).toContain("ALB0331");
@@ -62,5 +65,19 @@ test.skipIf(!existsSync(builtLatest))(
     const html = readFileSync(builtLatest, "utf8");
     expect(html).toContain("29 October 2026");
     expect(html).toContain('href="/2026/10/29/#map"');
+  },
+);
+
+const builtQuiet = fileURLToPath(
+  new URL("../../dist/2026/09/26/index.html", import.meta.url),
+);
+
+test.skipIf(!existsSync(builtQuiet))(
+  "a day without high reserve prices has no reserve lane",
+  () => {
+    const html = readFileSync(builtQuiet, "utf8");
+    expect(html).toContain('data-lane="price"');
+    expect(html).not.toContain('data-lane="reserve"');
+    expect(html).not.toContain("Through the day");
   },
 );
