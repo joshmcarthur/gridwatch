@@ -7,7 +7,7 @@ import type {
 import { clockLabeller12, zonedAt } from "./period-clock.ts";
 import { centsPerKwh, placeName } from "./price-regions.ts";
 
-const TYPE_LABELS: Record<string, string> = {
+export const TYPE_LABELS: Record<string, string> = {
   price_high: "high wholesale prices",
   price_low: "low wholesale prices",
   reserve_price_high: "high reserve prices",

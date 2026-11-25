@@ -6,7 +6,12 @@ import {
   type DayPackage,
 } from "../gold/day-narrative.ts";
 import { warnNarrativeCheck } from "../gold/narrative.ts";
-import type { SiteDayNarrative } from "./contract.ts";
+import {
+  checkWeekBudget,
+  checkWeekText,
+  type WeekPackage,
+} from "../gold/week-narrative.ts";
+import type { SiteDayNarrative, SiteWeekNarrative } from "./contract.ts";
 
 const readJson = (path: string): unknown =>
   existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as unknown) : null;
@@ -45,5 +50,39 @@ export function readDayNarrative(
     cable: pkg.totals?.cable != null,
     reserve: pkg.reserve != null,
     incomplete: pkg.incomplete === true,
+  };
+}
+
+/**
+ * The "This week" paragraph for the index, when one was written for the week that ends on
+ * `latest`. A paragraph for an older week is not shown. Over-budget text stays off the page.
+ */
+export function readWeekNarrative(
+  goldDir: string,
+  latest: string | undefined,
+): SiteWeekNarrative | null {
+  if (!latest) return null;
+  const record = readJson(
+    join(goldDir, "narratives", "week", `${latest}.json`),
+  ) as { text?: unknown; model?: unknown; generated_at?: unknown } | null;
+  const pkg = readJson(
+    join(goldDir, "evidence", "week", `${latest}.json`),
+  ) as WeekPackage | null;
+  const text = asString(record?.text);
+  if (!record || !pkg || !text) return null;
+  if (!checkWeekBudget(text).ok) return null;
+  warnNarrativeCheck(
+    checkWeekText(text, pkg),
+    `week paragraph check ${latest}`,
+  );
+  return {
+    text,
+    model: asString(record.model) ?? "",
+    generated_at: asString(record.generated_at) ?? "",
+    from: pkg.from,
+    to: pkg.to,
+    incomplete_days: (pkg.days ?? [])
+      .filter((day) => day.incomplete)
+      .map((day) => day.date),
   };
 }

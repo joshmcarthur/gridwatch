@@ -440,6 +440,19 @@ export interface SiteIndex {
     /** Optional. Latest day whose events section is complete. */
     events?: string | null;
   };
+  /** Optional. The "This week" paragraph by AI, for the week ending on the latest day (ADR-0031). */
+  week?: SiteWeekNarrative;
+}
+
+export interface SiteWeekNarrative {
+  text: string;
+  model: string;
+  generated_at: string;
+  /** First and last days of the week, `YYYY-MM-DD`. */
+  from: string;
+  to: string;
+  /** Days of the week whose files were incomplete. The model was told. */
+  incomplete_days: string[];
 }
 
 const SECTION_STATES: readonly SectionState[] = [
@@ -1113,4 +1126,13 @@ export function assertSiteIndex(value: unknown): asserts value is SiteIndex {
     nullable(sections.nodal_map, text, "latest_complete_sections.nodal_map");
   if (sections.events !== undefined)
     nullable(sections.events, text, "latest_complete_sections.events");
+  if (index.week !== undefined) {
+    const week = record(index.week, "week");
+    text(week.text, "week.text");
+    text(week.model, "week.model");
+    text(week.generated_at, "week.generated_at");
+    text(week.from, "week.from");
+    text(week.to, "week.to");
+    texts(week.incomplete_days, "week.incomplete_days");
+  }
 }

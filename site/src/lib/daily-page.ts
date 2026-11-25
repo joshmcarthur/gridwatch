@@ -6,6 +6,7 @@ import type {
   SiteEpisode,
   SiteIndex,
   SiteIndexDay,
+  SiteWeekNarrative,
 } from "@gridwatch/publisher/site-contract";
 import { episodeHeadline } from "@gridwatch/publisher/story/episode-copy.ts";
 import {
@@ -518,4 +519,36 @@ export function eventLinkLabels(startUtc: string): {
         link: `Read the full write-up of the ${part}`,
         summary: `What happened in the ${part}`,
       };
+}
+
+/** "15 to 21 November", or "28 October to 3 November" across a month. */
+function dateRange(from: string, to: string): string {
+  const start = Temporal.PlainDate.from(from);
+  const end = Temporal.PlainDate.from(to);
+  const month = (date: Temporal.PlainDate) =>
+    date.toLocaleString("en-NZ", { month: "long" });
+  return start.month === end.month
+    ? `${start.day} to ${end.day} ${month(end)}`
+    : `${start.day} ${month(start)} to ${end.day} ${month(end)}`;
+}
+
+/** The list under "What this was written from" for the "This week" paragraph. */
+export function weekSources(week: SiteWeekNarrative): string[] {
+  const sources = [
+    `The days from ${dateRange(week.from, week.to)}: each day's headline, its three largest fuels, its average prices at Ōtāhuhu and Benmore, its highest price, and any unusual stretches.`,
+  ];
+  if (week.incomplete_days.length > 0) {
+    const days = week.incomplete_days
+      .map((date) =>
+        Temporal.PlainDate.from(date).toLocaleString("en-NZ", {
+          day: "numeric",
+          month: "long",
+        }),
+      )
+      .join(", ");
+    sources.push(
+      `Some files for ${days} are incomplete, and the model was told so.`,
+    );
+  }
+  return sources;
 }
