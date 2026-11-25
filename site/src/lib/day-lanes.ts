@@ -141,7 +141,10 @@ export function laneScale(lane: Lane, wide = false): LaneScale {
   const hi = niceMax(max);
   const y = (value: number) =>
     bottom - ((value - lo) / (hi - lo)) * (bottom - top);
-  const values = [...new Set([lo, 0, hi / 2, hi])];
+  // A small negative low would print on top of the zero tick, so it is left out.
+  const values = [...new Set([lo, 0, hi / 2, hi])].filter(
+    (value) => value >= 0 || y(value) - y(0) >= 12,
+  );
   return {
     height,
     squeezed,
@@ -385,13 +388,13 @@ export function priceLaneSentence(
   if (ota.length === 0) return "No prices for Ōtāhuhu were published.";
   const parts = [
     ...new Set([...peakHours].sort((a, b) => a - b).map(partOfDay)),
-  ];
+  ].map((part) => (part === "overnight" ? part : `in the ${part}`));
   const first =
     parts.length === 0
       ? `Ōtāhuhu stayed between ${centsPerKwh(Math.min(...ota))} and ${centsPerKwh(Math.max(...ota))}`
       : parts.length === 1
-        ? `Ōtāhuhu was highest in the ${parts[0]}`
-        : `Ōtāhuhu rose in the ${parts[0]} and again in the ${parts.at(-1)}`;
+        ? `Ōtāhuhu was highest ${parts[0]}`
+        : `Ōtāhuhu rose ${parts[0]} and again ${parts.at(-1)}`;
   if (ben.length === 0) return `${first}.`;
   const benMax = Math.max(...ben);
   const under = ROUND_CENTS.find((cents) => cents * 10 >= benMax);
@@ -430,4 +433,13 @@ export function reserveLaneSentence(
   });
   if (high === -1) return "No reserve prices were published.";
   return `The North Island reserve price reached ${centsPerKwh(values[high] ?? 0)} per kWh at ${times[high]}.`;
+}
+
+/** One sentence for the cable lane: how many half-hours it ran each way. */
+export function cableLaneSentence(flow: Array<number | null>): string {
+  const north = flow.filter((value) => value !== null && value > 0.5).length;
+  const south = flow.filter((value) => value !== null && value < -0.5).length;
+  if (south === 0) return `The cable ran north for ${north} half-hours.`;
+  if (north === 0) return `The cable ran south for ${south} half-hours.`;
+  return `The cable ran north for ${north} half-hours and south for ${south}.`;
 }

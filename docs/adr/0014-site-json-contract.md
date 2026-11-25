@@ -107,3 +107,10 @@ Amended 2026-11-23. `generation.source` is optional: `metered` or `dispatch`. Th
 - **Absence.** An older day file omits the field. The site treats that as metered Generation_MD.
 - **Dispatch.** Gold built the mix from nodal unit megawatts because that day's Generation_MD partition was absent. The exporter lists the dispatch inputs (`nodal_prices_and_volumes`, `entity_units`, `entity_points_of_connection`) so a complete nodal day is a complete generation section. Energy balance and the Sankey stay on the HVDC month lag.
 - **`complete` on the day.** Still generation and prices only.
+
+### Amendment: half-hourly cable (ADR-0031)
+
+Amended 2026-11-25. Each `SankeyIsland` may carry `hvdc_import_by_period`: the MWh the island received over the HVDC link in each half-hour, negative when it sent, aligned to `SiteDay.periods` and null where gold has no value. It comes from gold `energy_balance_period`, so the half-hours sum to the day's `hvdc_import_megawatt_hours`. The contract version stays 1: the field is optional. `EXPORT_VERSION` is 12 so published days rebuild.
+
+- **Absence.** An older day file omits the field. The site then draws the cable as the day's average.
+- **Sent and arrived.** The sending island's value is what it put on the cable. The receiving island's value is what arrived, after link losses. The day page uses the sent figure for the arrow and the cable lane, and both figures in the totals sentence.

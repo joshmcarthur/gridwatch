@@ -7,7 +7,7 @@ import {
 } from "../gold/energy-balance.ts";
 import { TABLES as HVDC_TABLES } from "../gold/hvdc.ts";
 import type { CompletenessView } from "../silver/completeness.ts";
-import type { SankeySection } from "./contract.ts";
+import type { SankeySection, SiteDay } from "./contract.ts";
 import {
   type Section,
   sectionDatasets,
@@ -42,6 +42,7 @@ export async function buildSankey(
   goldDir: string,
   date: string,
   completeness: CompletenessView,
+  axis: SiteDay["periods"],
 ): Promise<SankeySection> {
   const section = SANKEY_SECTION;
   const base = {
@@ -67,6 +68,26 @@ export async function buildSankey(
     "island, generation_mwh, hvdc_import_mwh, load_mwh, residual_mwh, residual_pct_of_load, inputs_complete",
     "island",
   );
+  const periodRows = await rowsOf(
+    connection,
+    goldDir,
+    "energy_balance_period",
+    date,
+    "trading_period, island, hvdc_import_mwh, residual_mwh",
+    "trading_period, island",
+  );
+  const byPeriod = new Map<string, Array<number | null>>(
+    ISLANDS.map((island) => [
+      island,
+      Array.from({ length: axis.length }, () => null),
+    ]),
+  );
+  for (const row of periodRows) {
+    const values = byPeriod.get(String(row.island));
+    const period = Number(row.trading_period);
+    if (!values || period < 1 || period > axis.length) continue;
+    values[period - 1] = roundOrNull(numberOrNull(row.hvdc_import_mwh), 3);
+  }
   const byIsland = new Map(dayRows.map((row) => [String(row.island), row]));
   const islands = ISLANDS.flatMap((island) => {
     const row = byIsland.get(island);
@@ -89,18 +110,13 @@ export async function buildSankey(
           2,
         ),
         inputs_complete: row.inputs_complete === true,
+        hvdc_import_by_period:
+          byPeriod.get(island) ??
+          Array.from({ length: axis.length }, () => null),
       },
     ];
   });
 
-  const periodRows = await rowsOf(
-    connection,
-    goldDir,
-    "energy_balance_period",
-    date,
-    "trading_period, residual_mwh",
-    "trading_period, island",
-  );
   const missingPeriods = [
     ...new Set(
       periodRows

@@ -158,6 +158,12 @@ export interface SankeyIsland {
   generation_megawatt_hours: number | null;
   /** Energy the island receives over the HVDC link. Negative when the island sends. */
   hvdc_import_megawatt_hours: number | null;
+  /**
+   * MWh the island receives over the link in each half-hour, negative when it sends. Aligned
+   * to `SiteDay.periods`; null where gold has no value. Optional so older site files still
+   * validate (ADR-0014, ADR-0031).
+   */
+  hvdc_import_by_period?: Array<number | null>;
   /** Grid load (modelled), not metered consumption. */
   load_megawatt_hours: number | null;
   /** generation + HVDC import − load. The sign is kept. Null when any term is null. */
@@ -718,6 +724,12 @@ function checkSankey(
       number,
       `${at}.hvdc_import_megawatt_hours`,
     );
+    if (row.hvdc_import_by_period !== undefined)
+      nullableNumbers(
+        row.hvdc_import_by_period,
+        base.length,
+        `${at}.hvdc_import_by_period`,
+      );
     nullable(row.load_megawatt_hours, number, `${at}.load_megawatt_hours`);
     nullable(
       row.residual_megawatt_hours,

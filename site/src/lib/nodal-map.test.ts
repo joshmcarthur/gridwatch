@@ -5,7 +5,10 @@ import {
 import { expect, test } from "vitest";
 import fixtureJson from "../../fixtures/days/2026-09-27.json";
 import {
+  cableAt,
+  cableFlow,
   clientPayload,
+  conditionalLanes,
   coverageSentence,
   defaultPeriod,
   MAP_HEIGHT,
@@ -271,4 +274,80 @@ test("the committed fixture day plots POCs that have coordinates and lists the r
     "WTK2201",
   ]);
   expect(view.pocs.every((poc) => poc.price.length === 46)).toBe(true);
+});
+
+function withCable(
+  day: SiteDay,
+  south: Array<number | null>,
+  north: Array<number | null>,
+): SiteDay {
+  for (const island of day.sankey?.islands ?? []) {
+    island.hvdc_import_by_period = island.island === "SI" ? south : north;
+  }
+  return day;
+}
+
+test("cableFlow gives what the sending island put on the cable, as MW, north positive", () => {
+  const day = withCable(
+    withMap(copy(), { periods: 3 }),
+    [-500, 20, null],
+    [480, -25, null],
+  );
+  expect(cableFlow(day)).toEqual([1000, -50, null]);
+  const old = withMap(copy(), { periods: 3 });
+  expect(cableFlow(old)).toBeNull();
+});
+
+test("the map arrow follows the half-hour and turns round when the flow runs south", () => {
+  const day = withCable(
+    withMap(copy(), { periods: 2 }),
+    [-500, 20],
+    [480, -25],
+  );
+  const view = nodalMapView(day);
+  if (!view) throw new Error("no view");
+  const first = cableAt(view, 1);
+  const second = cableAt(view, 2);
+  expect(first?.label).toBe("Cable north");
+  expect(first?.amount).toBe("about 1,000 MW");
+  expect(first?.note).toBe("this half-hour");
+  expect(second?.label).toBe("Cable south");
+  expect(second?.d).toBe(view.cable?.south);
+  expect(
+    renderMapSvg(view, 2, { id: "m", title: "t", summary: "s" }),
+  ).toContain("Cable south");
+});
+
+test("the cable lane shows when the flow runs south for part of the day, not on an all-north day", () => {
+  const south = withCable(
+    withMap(copy(), { periods: 4 }),
+    [-500, -400, 20, 30],
+    [480, 390, -25, -35],
+  );
+  const southView = nodalMapView(south);
+  if (!southView) throw new Error("no view");
+  const lane = conditionalLanes(south, southView).find(
+    (item) => item.id === "cable",
+  );
+  expect(lane?.sentence).toBe(
+    "The cable ran north for 2 half-hours and south for 2.",
+  );
+  const north = withCable(
+    withMap(copy(), { periods: 4 }),
+    [-500, -400, -300, -200],
+    [480, 390, 290, 190],
+  );
+  const northView = nodalMapView(north);
+  if (!northView) throw new Error("no view");
+  expect(
+    conditionalLanes(north, northView)
+      .map((item) => item.id)
+      .filter((id) => id === "cable"),
+  ).toEqual([]);
+  // A cable beat over part of the day brings the lane back.
+  expect(
+    conditionalLanes(north, northView, [{ rule: "cable", from: 1, to: 2 }])
+      .map((item) => item.id)
+      .filter((id) => id === "cable"),
+  ).toEqual(["cable"]);
 });

@@ -40,7 +40,7 @@ export { round };
  * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
  * rebuilt (ADR-0014).
  */
-export const EXPORT_VERSION = 11;
+export const EXPORT_VERSION = 12;
 
 const SECTIONS: readonly Section[] = [
   GENERATION_SECTION,
@@ -93,7 +93,13 @@ export async function buildSiteDay(options: {
       completeness,
       periods,
     );
-    const sankey = await buildSankey(connection, goldDir, date, completeness);
+    const sankey = await buildSankey(
+      connection,
+      goldDir,
+      date,
+      completeness,
+      periods,
+    );
     const episodes = await buildEpisodes(
       connection,
       goldDir,

@@ -2,6 +2,10 @@ import type { Island } from "@gridwatch/publisher/site-contract";
 import type { Lane } from "./day-lanes.ts";
 import { centsPerKwh } from "./price-regions.ts";
 
+const cableMegawatts = new Intl.NumberFormat("en-NZ", {
+  maximumFractionDigits: 0,
+});
+
 export const MISSING_FILL = "#b7c5c0";
 export const DOT_RADIUS = 3.5;
 export const OUTLIER_RADIUS = 5.5;
@@ -61,6 +65,8 @@ export interface NodalMapPayload {
   places: Array<{ point_of_connection: string; prices: Array<number | null> }>;
   beats: NodalMapBeat[];
   islands: NodalMapIsland[];
+  /** Average MW sent over the cable in each half-hour, positive north. */
+  cable?: Array<number | null> | null;
   /** The lanes beside the map, for tooltips (ADR-0031). */
   lanes?: Lane[];
   p05: Array<number | null>;
@@ -168,4 +174,21 @@ export function rowsForPeriod(
     ...payload.pocs.map((poc) => rowOf(poc, "On the map")),
     ...payload.unlocated.map((poc) => rowOf(poc, "")),
   ];
+}
+
+export function cableLabels(megawatts: number): {
+  label: string;
+  amount: string;
+} {
+  return {
+    label:
+      Math.round(megawatts) === 0
+        ? "Cable idle"
+        : `Cable ${megawatts > 0 ? "north" : "south"}`,
+    amount: `about ${cableMegawatts.format(Math.abs(megawatts))} MW`,
+  };
+}
+
+export function cableWidth(megawatts: number): number {
+  return Math.min(8, Math.max(2, Math.abs(megawatts) / 120));
 }

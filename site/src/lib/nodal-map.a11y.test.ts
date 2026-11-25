@@ -81,3 +81,19 @@ test.skipIf(!existsSync(builtQuiet))(
     expect(html).not.toContain("Through the day");
   },
 );
+
+const builtJuly = fileURLToPath(
+  new URL("../../dist/2026/07/27/index.html", import.meta.url),
+);
+
+test.skipIf(!existsSync(builtJuly))(
+  "a day with half-hourly cable flow shows the arrow for the half-hour on the slider",
+  () => {
+    const html = readFileSync(builtJuly, "utf8");
+    expect(html).toContain("data-cable-path");
+    expect(html).toContain("this half-hour");
+    expect(html).not.toContain("day average");
+    // 27 July ran north all day, so there is no cable lane.
+    expect(html).not.toContain('data-lane="cable"');
+  },
+);

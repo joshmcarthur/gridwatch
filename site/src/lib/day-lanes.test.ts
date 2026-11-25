@@ -51,6 +51,9 @@ test("the price sentence follows the peaks and names Benmore's high", () => {
   expect(priceLaneSentence([50, 170], [10, 43], [20])).toBe(
     "Ōtāhuhu was highest in the evening, while Benmore stayed under 5c.",
   );
+  expect(priceLaneSentence([50, 170], [10, 43], [1])).toBe(
+    "Ōtāhuhu was highest overnight, while Benmore stayed under 5c.",
+  );
   expect(priceLaneSentence([50, 170], [], [])).toBe(
     "Ōtāhuhu stayed between 5.0c and 17c.",
   );
@@ -88,4 +91,13 @@ test("a point on the lane maps to its half-hour, and the tick column clamps", ()
   expect(laneIndexAt(0, 48)).toBe(0);
   expect(laneIndexAt(0.5, 48)).toBe(27);
   expect(laneIndexAt(0.99, 48)).toBe(47);
+});
+
+test("a small negative low does not get a tick on top of zero", () => {
+  const lane = priceLane([-5, 170, 120]);
+  expect(laneScale(lane).ticks.map((tick) => tick.value)).toEqual([
+    0, 100, 200,
+  ]);
+  const deep = priceLane([-200, 170, 120]);
+  expect(laneScale(deep).ticks.map((tick) => tick.value)).toContain(-200);
 });
