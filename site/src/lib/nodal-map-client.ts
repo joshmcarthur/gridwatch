@@ -1,3 +1,4 @@
+import { centsPerKwh } from "@gridwatch/publisher/story/price-regions.ts";
 import {
   type Lane,
   laneCentreShare,
@@ -19,7 +20,6 @@ import {
   rowsForPeriod,
   sortRows,
 } from "./nodal-map-scale.ts";
-import { centsPerKwh } from "@gridwatch/publisher/story/price-regions.ts";
 
 export type { NodalMapPayload };
 

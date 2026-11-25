@@ -3,8 +3,15 @@ import type {
   SiteDay,
 } from "@gridwatch/publisher/site-contract";
 import { episodeClockRange } from "@gridwatch/publisher/story/episode-copy.ts";
-import { clockLabeller, timeTicks, zonedAt } from "@gridwatch/publisher/story/period-clock.ts";
-import { placeLegend, placeName } from "@gridwatch/publisher/story/price-regions.ts";
+import {
+  clockLabeller,
+  timeTicks,
+  zonedAt,
+} from "@gridwatch/publisher/story/period-clock.ts";
+import {
+  placeLegend,
+  placeName,
+} from "@gridwatch/publisher/story/price-regions.ts";
 
 export const PRICE_MISSING =
   "Wholesale prices for this day are missing, so there is no chart.";

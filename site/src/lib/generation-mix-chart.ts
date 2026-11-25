@@ -1,6 +1,4 @@
 import type { SiteDay } from "@gridwatch/publisher/site-contract";
-import * as Plot from "@observablehq/plot";
-import { type ChartLabels, renderPlot } from "./chart-svg.ts";
 import {
   batteryPointTitle,
   type GenerationMix,
@@ -11,6 +9,8 @@ import {
   mixPointTitle,
   type StackFuel,
 } from "@gridwatch/publisher/story/generation-mix.ts";
+import * as Plot from "@observablehq/plot";
+import { type ChartLabels, renderPlot } from "./chart-svg.ts";
 import { formatTradingDate } from "./site-data.ts";
 
 /** Fuel colours come from the Landscape tokens in tokens.css (ADR-0015). */

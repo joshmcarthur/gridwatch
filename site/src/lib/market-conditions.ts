@@ -3,8 +3,8 @@ import type {
   SiteIndex,
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
-import { dailyPath, pageLead } from "./daily-page.ts";
 import { centsPerKwh } from "@gridwatch/publisher/story/price-regions.ts";
+import { dailyPath, pageLead } from "./daily-page.ts";
 import { formatTradingDate } from "./site-data.ts";
 
 const RANK_WINDOW = 365;
