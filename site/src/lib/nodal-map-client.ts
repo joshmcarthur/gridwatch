@@ -5,6 +5,8 @@ import {
   tooltipRows,
 } from "./day-lanes.ts";
 import {
+  cableLabels,
+  cableWidth,
   DOT_RADIUS,
   formatPrice,
   isOutlier,
@@ -65,6 +67,28 @@ function paintMap(
     if (label)
       label.textContent = price === null ? "No data" : centsPerKwh(price);
   }
+}
+
+/** Turn and resize the cable arrow for the half-hour, when the day has half-hourly flow. */
+function paintCable(
+  root: ParentNode,
+  flow: Array<number | null> | null | undefined,
+  period: number,
+): void {
+  const path = root.querySelector<SVGPathElement>("[data-cable-path]");
+  if (!flow || !path) return;
+  const group = path.closest("g");
+  const megawatts = flow[period - 1] ?? null;
+  if (group) group.toggleAttribute("hidden", megawatts === null);
+  if (megawatts === null) return;
+  const d = megawatts >= 0 ? path.dataset.north : path.dataset.south;
+  if (d) path.setAttribute("d", d);
+  path.setAttribute("stroke-width", cableWidth(megawatts).toFixed(1));
+  const labels = cableLabels(megawatts);
+  const label = root.querySelector('[data-cable-line="0"]');
+  const amount = root.querySelector('[data-cable-line="1"]');
+  if (label) label.textContent = labels.label;
+  if (amount) amount.textContent = labels.amount;
 }
 
 function paintIslands(
@@ -268,6 +292,7 @@ export function bindNodalMap(root: ParentNode = document): void {
   const paint = () => {
     paintMap(root, payload, period);
     paintIslands(root, payload.islands ?? [], period);
+    paintCable(root, payload.cable, period);
     const clock =
       payload.periods.find((item) => item.period === period)?.time ?? "";
     if (output) output.textContent = clock;

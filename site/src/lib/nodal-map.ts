@@ -5,6 +5,7 @@ import type {
 } from "@gridwatch/publisher/site-contract";
 import coastlineJson from "../data/nz-coastline.json";
 import {
+  cableLaneSentence,
   generationLaneSentence,
   type Lane,
   type LaneTick,
@@ -14,6 +15,8 @@ import {
 import { FUEL_LABELS, STACK_ORDER } from "./generation-mix.ts";
 import { FUEL_COLOUR } from "./generation-mix-chart.ts";
 import {
+  cableLabels,
+  cableWidth,
   DOT_RADIUS,
   formatPrice,
   islandLabel,
@@ -87,14 +90,21 @@ export interface MapPlace {
   prices: Array<number | null>;
 }
 
-/** The Cook Strait cable as a day average (the site files have no half-hourly flow yet). */
+/**
+ * The Cook Strait cable. With half-hourly flow in the day file the arrow follows the slider;
+ * older files give only the day's average.
+ */
 export interface MapCable {
   d: string;
+  /** Arrow paths for each direction, so the client can turn the arrow round. */
+  north: string;
+  south: string;
   width: number;
   labelX: number;
   labelY: number;
   label: string;
   amount: string;
+  note: string;
 }
 
 export interface NodalMapView {
@@ -112,6 +122,8 @@ export interface NodalMapView {
   priced: number;
   places: MapPlace[];
   cable: MapCable | null;
+  /** Average MW sent over the cable in each half-hour, positive north. Null without it. */
+  cableFlow: Array<number | null> | null;
   /** Null when generation for the day is missing. */
   islands: NodalMapIsland[] | null;
 }
@@ -136,10 +148,6 @@ const REFERENCE_PLACES = [
 /** Cable ends: Marlborough (South Island) to the Wellington coast (North Island). */
 const CABLE_SOUTH = [173.95, -41.7] as const;
 const CABLE_NORTH = [174.9, -41.2] as const;
-
-const megawattsWhole = new Intl.NumberFormat("en-NZ", {
-  maximumFractionDigits: 0,
-});
 
 function islandGeneration(day: SiteDay): NodalMapIsland[] | null {
   const section = day.generation;
@@ -294,22 +302,32 @@ export function nodalMapView(
       },
     ];
   });
+  const flow = cableFlow(day);
+  const [sx, sy] = project(CABLE_SOUTH[0], CABLE_SOUTH[1]);
+  const [nx, ny] = project(CABLE_NORTH[0], CABLE_NORTH[1]);
+  const curve = (north: boolean) => {
+    const [ax, ay, bx, by] = north ? [sx, sy, nx, ny] : [nx, ny, sx, sy];
+    return `M${ax.toFixed(1)},${ay.toFixed(1)} Q${((sx + nx) / 2 + 6).toFixed(1)},${((sy + ny) / 2 + 10).toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`;
+  };
+  const startPeriod = defaultPeriod(day);
   const south = day.sankey?.islands.find((island) => island.island === "SI");
   const sent = south?.hvdc_import_megawatt_hours ?? null;
+  const megawattsNow = flow
+    ? (flow[startPeriod - 1] ?? null)
+    : sent !== null && sent !== 0
+      ? -sent / 24
+      : null;
   let cable: MapCable | null = null;
-  if (sent !== null && sent !== 0) {
-    const [sx, sy] = project(CABLE_SOUTH[0], CABLE_SOUTH[1]);
-    const [nx, ny] = project(CABLE_NORTH[0], CABLE_NORTH[1]);
-    const north = sent < 0;
-    const [ax, ay, bx, by] = north ? [sx, sy, nx, ny] : [nx, ny, sx, sy];
-    const average = Math.abs(sent) / 24;
+  if (megawattsNow !== null) {
     cable = {
-      d: `M${ax.toFixed(1)},${ay.toFixed(1)} Q${((sx + nx) / 2 + 6).toFixed(1)},${((sy + ny) / 2 + 10).toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`,
-      width: Math.min(8, Math.max(2, average / 120)),
+      d: curve(megawattsNow >= 0),
+      north: curve(true),
+      south: curve(false),
+      width: cableWidth(megawattsNow),
       labelX: nx + 8,
       labelY: ny + 22,
-      label: `Cable ${north ? "north" : "south"}`,
-      amount: `about ${megawattsWhole.format(average)} MW`,
+      ...cableLabels(megawattsNow),
+      note: flow ? "this half-hour" : "day average",
     };
   }
   return {
@@ -342,6 +360,7 @@ export function nodalMapView(
     priced: section.pocs.length + section.unlocated.length,
     places,
     cable,
+    cableFlow: flow,
     islands: islandGeneration(day),
   };
 }
@@ -374,20 +393,65 @@ export function renderMapSvg(
 <desc id="${labels.id}-summary">${escapeText(labels.summary)}</desc>
 <g class="land">${land}</g>
 <g class="nodes">${dots}</g>
-${cableSvg(view.cable)}
+${cableSvg(cableAt(view, period))}
 <g class="places">${view.places.map((place) => placeSvg(place, i)).join("")}</g>
 </svg>`;
 }
 
+/** Average MW sent over the cable in each half-hour, positive north (ADR-0031). */
+export function cableFlow(day: SiteDay): Array<number | null> | null {
+  const islands = day.sankey?.islands ?? [];
+  const southSeries = islands.find(
+    (island) => island.island === "SI",
+  )?.hvdc_import_by_period;
+  const northSeries = islands.find(
+    (island) => island.island === "NI",
+  )?.hvdc_import_by_period;
+  if (!southSeries || !northSeries) return null;
+  const flow = day.periods.map((_, index) => {
+    const fromSouth = southSeries[index] ?? null;
+    const fromNorth = northSeries[index] ?? null;
+    // What the sending island put on the cable, as average MW for the half-hour.
+    if (fromSouth !== null && fromSouth < 0) return -fromSouth * 2;
+    if (fromNorth !== null && fromNorth < 0) return fromNorth * 2;
+    if (fromSouth === null && fromNorth === null) return null;
+    return 0;
+  });
+  return flow.some((value) => value !== null) ? flow : null;
+}
+
+/** The cable arrow for one half-hour, when the day file has the half-hourly flow. */
+export function cableAt(view: NodalMapView, period: number): MapCable | null {
+  const cable = view.cable;
+  if (!cable || !view.cableFlow) return cable;
+  const megawatts = view.cableFlow[period - 1] ?? null;
+  if (megawatts === null) return null;
+  return {
+    ...cable,
+    ...cableLabels(megawatts),
+    ...cablePath(cable, megawatts),
+  };
+}
+
+function cablePath(
+  cable: Pick<MapCable, "north" | "south">,
+  megawatts: number,
+): { d: string; width: number } {
+  return {
+    d: megawatts >= 0 ? cable.north : cable.south,
+    width: cableWidth(megawatts),
+  };
+}
+
 function cableSvg(cable: MapCable | null): string {
   if (!cable) return "";
-  const lines = [cable.label, cable.amount, "day average"]
+  const lines = [cable.label, cable.amount, cable.note]
     .map(
       (line, index) =>
-        `<text x="${cable.labelX.toFixed(1)}" y="${(cable.labelY + index * 11).toFixed(1)}" class="map-note${index === 2 ? " muted" : ""}">${escapeText(line)}</text>`,
+        `<text x="${cable.labelX.toFixed(1)}" y="${(cable.labelY + index * 11).toFixed(1)}" class="map-note${index === 2 ? " muted" : ""}" data-cable-line="${index}">${escapeText(line)}</text>`,
     )
     .join("");
-  return `<g class="cable"><defs><marker id="cable-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--color-ink)"/></marker></defs><path d="${cable.d}" fill="none" stroke="var(--color-ink)" stroke-opacity="0.75" stroke-width="${cable.width.toFixed(1)}" stroke-linecap="round" marker-end="url(#cable-arrow)"/>${lines}</g>`;
+  return `<g class="cable"><defs><marker id="cable-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--color-ink)"/></marker></defs><path data-cable-path data-north="${cable.north}" data-south="${cable.south}" d="${cable.d}" fill="none" stroke="var(--color-ink)" stroke-opacity="0.75" stroke-width="${cable.width.toFixed(1)}" stroke-linecap="round" marker-end="url(#cable-arrow)"/>${lines}</g>`;
 }
 
 function placeSvg(place: MapPlace, index: number): string {
@@ -421,6 +485,7 @@ export function clientPayload(
     })),
     beats,
     islands: view.islands ?? [],
+    cable: view.cableFlow,
     p05: view.p05,
     p95: view.p95,
     min: view.min,
@@ -606,9 +671,14 @@ export function laneAxis(day: SiteDay): LaneTick[] {
 
 /**
  * Lanes under the map that show only on days that call for them (ADR-0031). Reserve shows
- * when an episode had high reserve prices.
+ * when an episode had high reserve prices. The cable shows when it ran south for part of the
+ * day, or a cable beat covers part of the day (the all-day cable beat does not count).
  */
-export function conditionalLanes(day: SiteDay, view: NodalMapView): Lane[] {
+export function conditionalLanes(
+  day: SiteDay,
+  view: NodalMapView,
+  beats: Array<{ rule: string; from: number; to: number }> = [],
+): Lane[] {
   const lanes: Lane[] = [];
   const highReserve = (day.episodes?.items ?? []).some((episode) =>
     episode.observation_types.includes("reserve_price_high"),
@@ -663,6 +733,32 @@ export function conditionalLanes(day: SiteDay, view: NodalMapView): Lane[] {
           values: fast ?? new Array<number | null>(count).fill(null),
         },
       ],
+    });
+  }
+  const flow = view.cableFlow;
+  const southward = flow?.some((value) => value !== null && value < -0.5);
+  const cableBeat = beats.some(
+    (beat) =>
+      beat.rule === "cable" &&
+      !(beat.from === 1 && beat.to === view.periods.length),
+  );
+  if (flow && (southward || cableBeat)) {
+    lanes.push({
+      id: "cable",
+      name: "Cable",
+      sentence: cableLaneSentence(flow),
+      unit: "megawatts",
+      stacked: false,
+      series: [
+        {
+          key: "cable",
+          label: "Flow, north above zero and south below",
+          colour: "var(--color-ink)",
+          values: flow,
+        },
+      ],
+      gap: null,
+      extra: [],
     });
   }
   return lanes;

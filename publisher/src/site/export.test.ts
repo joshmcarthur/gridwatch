@@ -687,6 +687,7 @@ async function writeSankeyGold(
     {
       trading_period: "INTEGER",
       island: "VARCHAR",
+      hvdc_import_mwh: "DOUBLE",
       residual_mwh: "DOUBLE",
     },
     period.map((row) => ({ ...stamp, ...row })),
@@ -1256,8 +1257,13 @@ test("sankey carries the gold day table, with residual sign and percent of load"
   // SI 192, -57.6, 120, 14.4 (12% of load); losses 9.6.
   await writeSankeyGold(DATE, {
     period: [
-      { trading_period: 1, island: "NI", residual_mwh: 2 },
-      { trading_period: 1, island: "SI", residual_mwh: 0.3 },
+      { trading_period: 1, island: "NI", hvdc_import_mwh: 1, residual_mwh: 2 },
+      {
+        trading_period: 1,
+        island: "SI",
+        hvdc_import_mwh: -1.2,
+        residual_mwh: 0.3,
+      },
     ],
     day: [
       {
@@ -1299,6 +1305,8 @@ test("sankey carries the gold day table, with residual sign and percent of load"
       residual_megawatt_hours: 96,
       residual_percent_of_load: 40,
       inputs_complete: true,
+      // Half-hourly cable for the slider (ADR-0031): what each island received, by period.
+      hvdc_import_by_period: [1, ...new Array(47).fill(null)],
     },
     {
       island: "SI",
@@ -1308,6 +1316,7 @@ test("sankey carries the gold day table, with residual sign and percent of load"
       residual_megawatt_hours: 14.4,
       residual_percent_of_load: 12,
       inputs_complete: true,
+      hvdc_import_by_period: [-1.2, ...new Array(47).fill(null)],
     },
   ]);
   expect(day.complete).toBe(false);

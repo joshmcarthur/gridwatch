@@ -42,7 +42,7 @@ The chart sections move into one "The numbers behind this" disclosure. It holds 
 
 ### Half-hourly cable in the site contract
 
-The publisher adds each half-hour's cable flow to the day file, from gold `hvdc_transfer_period`, and bumps the site contract version ([ADR-0014](0014-site-json-contract.md)). The map arrow then shows the selected half-hour's flow, not the day's average.
+The publisher adds each island's half-hourly cable flow to the day file, from gold `energy_balance_period`, so the half-hours sum to the day's figures. The field is optional, so the contract version stays 1 and `EXPORT_VERSION` goes up ([ADR-0014](0014-site-json-contract.md)). The map arrow then shows the selected half-hour's flow, not the day's average.
 
 ### Day and week write-ups
 
@@ -84,7 +84,7 @@ Short, budgeted write-ups give the page one paragraph of warmth without going ba
 ## Consequences
 
 - `daily-page.a11y.test.ts` and `nodal-map.a11y.test.ts` change: section headings move into the disclosure, and the lanes add markup.
-- The site contract version goes up twice: once for the half-hourly cable, once for the day write-up field. The site reads both.
+- The half-hourly cable and the day write-up are optional fields, so the site contract version stays 1 and `EXPORT_VERSION` goes up for each ([ADR-0014](0014-site-json-contract.md)). Older day files still render, with the day-average arrow and the rule-based lede.
 - The publisher needs an LLM key to write day and week text. Without one, or when a write-up fails the budget, the page shows the rule-based lede, as it does today.
 - A squeezed lane does not compare heights above 40c with heights below it. The ticks and tooltips give the true values.
 - Changing `docs/site-copy.md` changes the narrative system prompt, so `PROMPT_VERSION` goes up with it.

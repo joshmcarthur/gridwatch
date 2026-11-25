@@ -13,6 +13,7 @@ const payload: NodalMapPayload = {
     { at: 2, from: 2, to: 2, fuels: ["gas"] },
     { at: 1, from: 1, to: 2 },
   ],
+  cable: [1000, -50],
   lanes: [
     {
       id: "price",
@@ -65,7 +66,8 @@ function page() {
       <p id="nodal-period-label"></p>
       <p id="nodal-map-live-summary"></p>
       <svg><circle data-poc="ALB0331"><title></title></circle>
-        <g data-place="OTA2201"><text data-place-price></text></g></svg>
+        <g data-place="OTA2201"><text data-place-price></text></g>
+        <g class="cable"><path data-cable-path data-north="M0,0 L1,1" data-south="M1,1 L0,0" d="M0,0 L1,1" /><text data-cable-line="0"></text><text data-cable-line="1"></text></g></svg>
       <ol>
         <li data-beat="0"><button type="button">Peak</button><p>One</p></li>
         <li data-beat="1"><button type="button">Cable</button><p>Two</p></li>
@@ -215,4 +217,23 @@ test("a lane shows its tooltip on focus and the arrow keys move the slider", () 
   );
   plot.dispatchEvent(key("Escape"));
   expect(tip.hidden).toBe(true);
+});
+
+test("the cable arrow turns round and relabels when the half-hour's flow runs south", () => {
+  const { document, Event } = page();
+  bindNodalMap(document);
+  const label = () =>
+    document.querySelector('[data-cable-line="0"]')?.textContent;
+  expect(label()).toBe("Cable north");
+  const slider = document.querySelector<HTMLInputElement>("#nodal-period");
+  if (!slider) throw new Error("missing slider");
+  slider.value = "2";
+  slider.dispatchEvent(new Event("input"));
+  expect(label()).toBe("Cable south");
+  expect(document.querySelector('[data-cable-line="1"]')?.textContent).toBe(
+    "about 50 MW",
+  );
+  expect(document.querySelector("[data-cable-path]")?.getAttribute("d")).toBe(
+    "M1,1 L0,0",
+  );
 });

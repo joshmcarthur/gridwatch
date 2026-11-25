@@ -37,7 +37,7 @@ const peak = beats
   )[0];
 const period = peak?.at ?? view?.defaultPeriod ?? 1;
 const lanes = view ? dayLanes(day, view, beats) : [];
-const wideLanes = view ? conditionalLanes(day, view) : [];
+const wideLanes = view ? conditionalLanes(day, view, beats) : [];
 const axis = laneAxis(day);
 const payload = view
   ? {
@@ -262,8 +262,10 @@ const islandsNow = (view?.islands ?? []).map((island) => {
           beside the map follows the same three places. Above 40c per kWh the
           lane squeezes its scale, so a spike keeps its shape, and the labels
           give the true values. The generation lane stacks every fuel for both
-          islands. The cable arrow shows the day's average flow across Cook
-          Strait. The flow in each half-hour isn't on this page yet.
+          islands.{" "}
+          {view.cableFlow
+            ? "The cable arrow shows what was sent across Cook Strait in the half-hour on the slider."
+            : "The cable arrow shows the day's average flow across Cook Strait."}
         </p>
         <p>
           The moments beside the map come from fixed rules run over the day's
