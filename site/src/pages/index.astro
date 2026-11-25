@@ -275,10 +275,6 @@ const mapSvg = mapView
     color: var(--color-ink-muted);
   }
 
-  .card.story {
-    max-width: none;
-  }
-
   .story h2 {
     margin: 0;
     font-size: var(--text-title);
@@ -372,7 +368,9 @@ const mapSvg = mapView
   }
 
   .band {
+    display: inline-block;
     white-space: nowrap;
+    margin-right: var(--space-2);
   }
 
   .swatch {
@@ -440,6 +438,12 @@ const mapSvg = mapView
     flex-direction: column;
     gap: var(--space-4);
     margin-bottom: var(--space-6);
+  }
+
+  /* Every card spans the page like the lead story; text inside keeps a reading width. */
+  .card > p,
+  .card > details,
+  .episodes {
     max-width: var(--measure-prose);
   }
 
@@ -467,7 +471,6 @@ const mapSvg = mapView
   .condition {
     margin-bottom: 0;
     min-width: 0;
-    max-width: none;
   }
 
   .condition h3 {
