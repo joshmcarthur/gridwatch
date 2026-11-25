@@ -4,6 +4,12 @@ import type {
   SiteDay,
 } from "@gridwatch/publisher/site-contract";
 import coastlineJson from "../data/nz-coastline.json";
+import {
+  generationLaneSentence,
+  type Lane,
+  type LaneTick,
+  priceLaneSentence,
+} from "./day-lanes.ts";
 import { FUEL_LABELS, STACK_ORDER } from "./generation-mix.ts";
 import { FUEL_COLOUR } from "./generation-mix-chart.ts";
 import {
@@ -17,7 +23,7 @@ import {
   OUTLIER_RADIUS,
   priceBandFill,
 } from "./nodal-map-scale.ts";
-import { clockLabeller12, zonedAt } from "./period-clock.ts";
+import { clockLabeller12, clockText12, zonedAt } from "./period-clock.ts";
 import { centsPerKwh } from "./price-regions.ts";
 
 export {
@@ -450,64 +456,149 @@ export function coverageSentence(view: NodalMapView): string {
   return `The map plots ${plotted} of ${priced} named places that have a wholesale price. The other ${skipped} have no coordinates in the public mapping files, so they are in the table only. Grid substations such as Haywards and Benmore often have no coordinates.`;
 }
 
-const SPARK_WIDTH = 320;
-const SPARK_HEIGHT = 76;
-const SPARK_PAD = 4;
-const SPARK_COLOUR: Record<string, string> = {
+/** Line colours for the three places, in the map's lanes. */
+const PLACE_COLOUR: Record<string, string> = {
   OTA2201: "var(--color-island-north)",
-  HAY2201: "#6fb3ba",
+  HAY2201: "var(--color-fuel-battery)",
   BEN2201: "var(--color-island-south)",
 };
 
+function fuelTotals(
+  islands: NodalMapIsland[],
+  count: number,
+): Array<{
+  fuel: string;
+  label: string;
+  colour: string;
+  values: Array<number | null>;
+}> {
+  const byFuel = new Map<
+    string,
+    {
+      fuel: string;
+      label: string;
+      colour: string;
+      values: Array<number | null>;
+    }
+  >();
+  for (const fuel of STACK_ORDER) {
+    const rows = islands.flatMap((island) =>
+      island.fuels.filter((item) => item.fuel === fuel),
+    );
+    if (rows.length === 0) continue;
+    const first = rows[0];
+    if (!first) continue;
+    byFuel.set(fuel, {
+      fuel,
+      label: first.label,
+      colour: first.colour,
+      values: Array.from({ length: count }, (_, index) => {
+        const values = rows.map((row) => row.megawatts[index] ?? null);
+        if (values.every((value) => value === null)) return null;
+        return values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+      }),
+    });
+  }
+  return [...byFuel.values()];
+}
+
 /**
- * The day's prices at the three reference places, with beat windows shaded and a cursor
- * the client moves. Decorative: the beats list and the table carry the same facts.
+ * The price and generation lanes beside the map (ADR-0031). Generation is null when the
+ * day has no generation numbers.
  */
-export function sparklineSvg(
+export function dayLanes(
+  day: SiteDay,
   view: NodalMapView,
-  beats: Array<{ from: number; to: number }>,
-  period: number,
-): string {
+  beats: Array<{ rule: string; at: number }>,
+): Lane[] {
   const count = view.periods.length;
-  const width = SPARK_WIDTH - SPARK_PAD * 2;
-  const x = (index: number) =>
-    SPARK_PAD + (count > 1 ? (index / (count - 1)) * width : 0);
-  const values = view.places.flatMap((place) =>
-    place.prices.filter((value): value is number => value !== null),
-  );
-  const top = Math.max(1, ...values);
-  const y = (value: number) =>
-    SPARK_HEIGHT -
-    SPARK_PAD -
-    (Math.max(0, value) / top) * (SPARK_HEIGHT - SPARK_PAD * 2);
-  const bands = beats
-    .filter((beat) => !(beat.from === 1 && beat.to === count))
-    .map(
-      (beat) =>
-        `<rect x="${x(beat.from - 1).toFixed(1)}" y="0" width="${Math.max(2, x(beat.to - 1) - x(beat.from - 1)).toFixed(1)}" height="${SPARK_HEIGHT}" fill="var(--color-ink)" opacity="0.06"/>`,
-    )
-    .join("");
-  const lines = view.places
-    .map((place) => {
-      const segments: string[] = [];
-      let current: string[] = [];
-      place.prices.forEach((value, index) => {
-        if (value === null) {
-          if (current.length > 1) segments.push(current.join(" "));
-          current = [];
-          return;
-        }
-        current.push(`${x(index).toFixed(1)},${y(value).toFixed(1)}`);
+  const times = view.periods.map((item) => item.time);
+  const pricesOf = (poc: string) =>
+    view.places.find((place) => place.point_of_connection === poc)?.prices ??
+    new Array<number | null>(count).fill(null);
+  const peakHours = beats
+    .filter((beat) => beat.rule === "price_peak")
+    .flatMap((beat) => {
+      const start = day.periods[beat.at - 1]?.start_utc;
+      return start ? [zonedAt(start).hour] : [];
+    });
+  const lanes: Lane[] = [
+    {
+      id: "price",
+      name: "Price",
+      sentence: priceLaneSentence(
+        pricesOf("OTA2201"),
+        pricesOf("BEN2201"),
+        peakHours,
+      ),
+      unit: "price",
+      stacked: false,
+      series: view.places.map((place) => ({
+        key: place.point_of_connection,
+        label: place.name,
+        colour: PLACE_COLOUR[place.point_of_connection] ?? "var(--color-ink)",
+        values: place.prices,
+      })),
+      gap: {
+        from: "OTA2201",
+        to: "BEN2201",
+        label: "Gap between Ōtāhuhu and Benmore",
+      },
+      extra: [],
+    },
+  ];
+  const islands = view.islands;
+  if (islands) {
+    const fuels = fuelTotals(islands, count);
+    const islandTotal = (island: NodalMapIsland) =>
+      Array.from({ length: count }, (_, index) => {
+        const values = island.fuels.map(
+          (fuel) => fuel.megawatts[index] ?? null,
+        );
+        if (values.every((value) => value === null)) return null;
+        return values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
       });
-      if (current.length > 1) segments.push(current.join(" "));
-      return segments
-        .map(
-          (points) =>
-            `<polyline points="${points}" fill="none" stroke="${SPARK_COLOUR[place.point_of_connection] ?? "var(--color-ink)"}" stroke-width="1.6"/>`,
-        )
-        .join("");
-    })
-    .join("");
-  const cx = x(period - 1).toFixed(1);
-  return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}" class="spark" aria-hidden="true" focusable="false">${bands}${lines}<line data-spark-cursor data-x0="${SPARK_PAD}" data-width="${width}" x1="${cx}" x2="${cx}" y1="0" y2="${SPARK_HEIGHT}" stroke="var(--color-ink)" stroke-width="1.5"/></svg>`;
+    const totals = Array.from({ length: count }, (_, index) => {
+      const values = fuels.map((fuel) => fuel.values[index] ?? null);
+      if (values.every((value) => value === null)) return null;
+      return values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+    });
+    lanes.push({
+      id: "generation",
+      name: "Generation",
+      sentence: generationLaneSentence(totals, times),
+      unit: "megawatts",
+      stacked: true,
+      series: fuels.map((fuel) => ({
+        key: fuel.fuel,
+        label: fuel.label,
+        colour: fuel.colour,
+        values: fuel.values,
+      })),
+      gap: null,
+      extra: [
+        { key: "total", label: "Total", colour: "", values: totals },
+        ...islands.map((island) => ({
+          key: island.key,
+          label: island.key === "north" ? "North Island" : "South Island",
+          colour: "",
+          values: islandTotal(island),
+        })),
+      ],
+    });
+  }
+  return lanes;
+}
+
+/** Time labels under the last lane: midnight, 6am, noon, 6pm and the next midnight. */
+export function laneAxis(day: SiteDay): LaneTick[] {
+  const ticks: LaneTick[] = [];
+  day.periods.forEach((period, index) => {
+    const zoned = zonedAt(period.start_utc);
+    if (zoned.minute === 0 && zoned.hour % 6 === 0) {
+      ticks.push({ index, label: clockText12(zoned).replace(":00", "") });
+    }
+  });
+  ticks.push({ index: day.periods.length, label: "12am" });
+  return ticks;
 }

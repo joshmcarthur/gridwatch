@@ -12,17 +12,17 @@
   --color-rule: #b7c5c0;
   --color-fuel-hydro: #2c7da0;
   --color-fuel-geothermal: #c8553d;
-  --color-fuel-wind: #8fd3c9;
-  --color-fuel-solar: #f2b544;
-  --color-fuel-gas: #7a8a8e;
+  --color-fuel-wind: #2e8b76;
+  --color-fuel-solar: #b5730f;
+  --color-fuel-gas: #66757a;
   --color-fuel-coal-gas: #2b3a3f;
   --color-fuel-battery: #8a5aa8;
-  --color-fuel-other: var(--color-rule);
+  --color-fuel-other: #8c7a6b;
   --color-fuel-unmapped: var(--color-ink-muted);
   --color-island-north: #1f6f78;
   --color-island-south: #b7791f;
   /* Data-layer accents for How. Left rules and chips only; body text stays ink.
-     Distinct from fuel solar (#f2b544) and caution amber (#b7791f). */
+     Distinct from fuel solar (#b5730f) and caution amber (#b7791f). */
   --color-layer-bronze: #9c5a3c;
   --color-layer-silver: #6a7c80;
   --color-layer-gold: #8a6b24;

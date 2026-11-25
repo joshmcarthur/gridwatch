@@ -23,12 +23,12 @@ test("formatPrice uses two decimal places and a no-data label", () => {
 
 test("priceBandFill is grey when missing and uses fixed bands in cents per kWh", () => {
   expect(priceBandFill(null)).toBe(MISSING_FILL);
-  expect(priceBandFill(-5)).toBe("#4fa89a");
-  expect(priceBandFill(29.99)).toBe("#4fa89a");
-  expect(priceBandFill(30)).toBe("#9fb3ae");
-  expect(priceBandFill(80)).toBe("#e0a23a");
-  expect(priceBandFill(200)).toBe("#c8553d");
-  expect(priceBandFill(3296)).toBe("#c8553d");
+  expect(priceBandFill(-5)).toBe("#72bcae");
+  expect(priceBandFill(29.99)).toBe("#72bcae");
+  expect(priceBandFill(30)).toBe("#869792");
+  expect(priceBandFill(80)).toBe("#b06a08");
+  expect(priceBandFill(200)).toBe("#8a2716");
+  expect(priceBandFill(3296)).toBe("#8a2716");
 });
 
 test("periodSummary says the clock and the range in cents per kWh", () => {
