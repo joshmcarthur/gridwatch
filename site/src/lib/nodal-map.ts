@@ -149,7 +149,6 @@ const REFERENCE_PLACES = [
 const CABLE_SOUTH = [173.95, -41.7] as const;
 const CABLE_NORTH = [174.9, -41.2] as const;
 
-
 function islandGeneration(day: SiteDay): NodalMapIsland[] | null {
   const section = day.generation;
   if (section.state === "missing" || section.series.length === 0) return null;
