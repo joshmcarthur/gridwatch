@@ -112,11 +112,11 @@ const mapSvg = mapView
         ) : null}
         {week.length > 0 ? (
           <div class="this-week">
-            <h3 class="week-heading">This week</h3>
+            <h3 class="week-heading">In the last 7 days</h3>
             {index.week ? (
               <AiWriteup text={index.week.text} sources={weekSources(index.week)} />
             ) : null}
-            <ol class="days-inline" aria-label="Days this week">
+            <ol class="days-inline" aria-label="The last 7 days">
               {week.map((day) => (
                 <li>
                   <a href={day.href}>{shortDayLabel(day.date)}</a>

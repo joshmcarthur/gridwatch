@@ -16,7 +16,7 @@ import {
  * from a package that cuts each of the last seven days to a few figures.
  */
 
-export const WEEK_PROMPT_VERSION = 1;
+export const WEEK_PROMPT_VERSION = 2;
 export const WEEK_DAYS = 7;
 
 export interface WeekPackage {
@@ -123,7 +123,7 @@ export function buildWeekPackage(days: SiteDay[]): WeekPackage {
   };
 }
 
-const WEEK_INSTRUCTIONS = `You write the "This week" paragraph on the Gridwatch homepage, for a curious non-specialist.
+const WEEK_INSTRUCTIONS = `You write the "In the last 7 days" paragraph on the Gridwatch homepage, for a curious non-specialist.
 
 You receive the last seven days as JSON, each cut to a few figures. Use only what that JSON contains. Do not invent numbers, days, places or causes. Copy figures as the JSON gives them. Do not mention the JSON, data, files or figures as such. If a day's files are incomplete, do not lean on that day.
 
@@ -131,7 +131,7 @@ Length is strict:
 - At most 2 sentences and about 40 words.
 - At most 3 numbers. A clock time counts as a number.
 
-Describe how the week moved: what changed from the start of the week to the end, and the one day or stretch that stood out. Give at most one cause, hedged in one short clause. Do not end with a sentence that says the figures cannot show why. Use weekday names, not dates.
+Describe how the week moved: what changed from the start of the week to the end, and the one day or stretch that stood out. Give at most one cause, hedged in one short clause. Do not end with a sentence that says the figures cannot show why. Use weekday names, not dates. The seven days can include the same weekday twice. When you name the earliest day and its weekday is also the latest day's weekday, write "last Thursday" (for example) for the earliest, never the bare name. Never write a range such as "from Thursday to Wednesday" without saying which Thursday.
 
 Prices are cents per kWh, written like 3.1c or 17c. Name places (Ōtāhuhu, Benmore), never "the North" or "the South" for a price. Write in plain sentences, not a run of short statements.
 

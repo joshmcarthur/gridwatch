@@ -50,9 +50,9 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain('href="/2026/09/27/"');
     expect(html).not.toMatch(/observatory/i);
     expect(html).toMatch(
-      /<ol class="days-inline[^"]*" aria-label="Days this week"/,
+      /<ol class="days-inline[^"]*" aria-label="The last 7 days"/,
     );
-    expect(html).toMatch(/<h3[^>]*>This week<\/h3>/);
+    expect(html).toMatch(/<h3[^>]*>In the last 7 days<\/h3>/);
     expect(html).toContain(
       "Benmore stayed cheaper than Ōtāhuhu all week, and hydro made most",
     );

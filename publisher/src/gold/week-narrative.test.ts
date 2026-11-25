@@ -51,10 +51,10 @@ test("the week check accepts the package's figures and catches others", () => {
 });
 
 test("the week prompt is pinned: a changed prompt without a WEEK_PROMPT_VERSION bump fails here", () => {
-  expect(WEEK_PROMPT_VERSION).toBe(1);
+  expect(WEEK_PROMPT_VERSION).toBe(2);
   expect(weekSystemPrompt()).toContain("Use weekday names, not dates.");
   expect(createHash("sha256").update(weekSystemPrompt()).digest("hex")).toBe(
-    "b87f6cbcec87101d8d4bcef0fad1074338e3c22a8819ef9d295ca39326b28995",
+    "9d5c383a9fd09748de561db7ce0322e05cff50eeccea89d6b1ea66790eb05a91",
   );
 });
 
