@@ -14,7 +14,13 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain("<main");
     expect(html).toContain('aria-labelledby="latest-heading"');
     expect(html).toContain('aria-labelledby="conditions-heading"');
-    expect(html).toContain('aria-labelledby="recent-days-heading"');
+    // This week sits in the lead card, beside the map, before the market conditions.
+    expect(html.indexOf('class="this-week')).toBeGreaterThan(
+      html.indexOf('id="latest-heading"'),
+    );
+    expect(html.indexOf('class="this-week')).toBeLessThan(
+      html.indexOf('id="conditions-heading"'),
+    );
     // The latest day's story leads, with a still map at its main moment.
     expect(html).toMatch(/<h2 id="latest-heading"[^>]*>[^<]+<\/h2>/);
     // The latest day's write-up by AI leads, in place of the list of moments (ADR-0031).
@@ -31,7 +37,7 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(
       /<h2 id="conditions-heading"[^>]*>Market conditions<\/h2>/,
     );
-    expect(html).toMatch(/<h2 id="recent-days-heading"[^>]*>Recent days<\/h2>/);
+    expect(html).not.toContain("recent-days-heading");
     expect(html).toContain("Wholesale prices");
     expect(html).not.toMatch(/<h3[^>]*>Supply<\/h3>/);
     expect(html).toContain(

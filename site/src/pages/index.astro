@@ -110,6 +110,29 @@ const mapSvg = mapView
             </a>
           </p>
         ) : null}
+        {week.length > 0 ? (
+          <div class="this-week">
+            <h3 class="week-heading">This week</h3>
+            {index.week ? (
+              <AiWriteup text={index.week.text} sources={weekSources(index.week)} />
+            ) : null}
+            <ol class="days-inline" aria-label="Days this week">
+              {week.map((day) => (
+                <li>
+                  <a href={day.href}>{shortDayLabel(day.date)}</a>
+                  {day.complete ? null : (
+                    <span class="incomplete" title="Some files for this day are missing">
+                      *<span class="visually-hidden"> (incomplete)</span>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+            {week.some((day) => !day.complete) ? (
+              <p class="note">* Some files for that day are missing.</p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {mapSvg ? (
         <figure class="still-map">
@@ -164,53 +187,25 @@ const mapSvg = mapView
     </ul>
   </section>
 
-  <section class="card" aria-labelledby="recent-days-heading">
-    <h2 id="recent-days-heading">Recent days</h2>
-    {
-      recent.length === 0 ? (
-        <p>No days on this site yet.</p>
-      ) : (
-        <>
-          <h3 class="week-heading">This week</h3>
-          {index.week ? (
-            <AiWriteup text={index.week.text} sources={weekSources(index.week)} />
-          ) : null}
-          <ol class="days-inline" aria-label="Days this week">
-            {week.map((day) => (
-              <li>
-                <a href={day.href}>{shortDayLabel(day.date)}</a>
-                {day.complete ? null : (
-                  <span class="incomplete" title="Some files for this day are missing">
-                    *<span class="visually-hidden"> (incomplete)</span>
-                  </span>
-                )}
-              </li>
-            ))}
-          </ol>
-          {recent.some((day) => !day.complete) ? (
-            <p class="note">* Some files for that day are missing.</p>
-          ) : null}
-          {earlier.length > 0 ? (
-            <details>
-              <summary>Earlier days</summary>
-              <ol class="days">
-                {earlier.map((day) => (
-                  <li>
-                    <a href={day.href}>{day.label}</a>
-                    {day.complete ? null : (
-                      <span class="incomplete" title="Some files for this day are missing">
-                        *<span class="visually-hidden"> (incomplete)</span>
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            </details>
-          ) : null}
-        </>
-      )
-    }
-  </section>
+  {
+    earlier.length > 0 ? (
+      <details class="card earlier">
+        <summary>Earlier days</summary>
+        <ol class="days">
+          {earlier.map((day) => (
+            <li>
+              <a href={day.href}>{day.label}</a>
+              {day.complete ? null : (
+                <span class="incomplete" title="Some files for this day are missing">
+                  *<span class="visually-hidden"> (incomplete)</span>
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </details>
+    ) : null
+  }
 
   {
     events.length > 0 ? (
@@ -386,6 +381,19 @@ const mapSvg = mapView
     cursor: pointer;
     font-size: var(--text-label);
     font-weight: 700;
+  }
+
+  .earlier > summary {
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .this-week {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-rule);
   }
 
   .week-heading {
