@@ -2,8 +2,8 @@
 import type { SiteDay } from "@gridwatch/publisher/site-contract";
 import Layout from "../layouts/Layout.astro";
 import { dailyPath } from "../lib/daily-page";
-import { episodeHeadline } from "../lib/episode-copy";
-import { dayBeats } from "../lib/day-beats";
+import { episodeHeadline } from "@gridwatch/publisher/story/episode-copy.ts";
+import { dayBeats } from "@gridwatch/publisher/story/day-beats.ts";
 import {
   groupRecentDays,
   latestMarketUpdate,

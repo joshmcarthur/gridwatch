@@ -4,7 +4,7 @@ import type {
   SankeyIsland,
   SiteDay,
 } from "@gridwatch/publisher/site-contract";
-import { STACK_ORDER } from "./generation-mix.ts";
+import { STACK_ORDER } from "@gridwatch/publisher/story/generation-mix.ts";
 
 const energyFormat = new Intl.NumberFormat("en-NZ", {
   maximumFractionDigits: 1,

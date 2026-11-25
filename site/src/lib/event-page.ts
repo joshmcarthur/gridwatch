@@ -8,16 +8,16 @@ import type {
   SiteIndex,
 } from "@gridwatch/publisher/site-contract";
 import { dailyPath } from "./daily-page.ts";
-import { episodeHeadline } from "./episode-copy.ts";
+import { episodeHeadline } from "@gridwatch/publisher/story/episode-copy.ts";
 import { type LinePlot, type PlotLine, renderLinePlot } from "./line-plot.ts";
 import {
   clockLabeller12,
   clockText12,
   timeTicks,
   zonedAt,
-} from "./period-clock.ts";
+} from "@gridwatch/publisher/story/period-clock.ts";
 import { NODE_STYLE, type PriceIsland } from "./price-chart.ts";
-import { placeName } from "./price-regions.ts";
+import { placeName } from "@gridwatch/publisher/story/price-regions.ts";
 
 export const AI_LABEL = "Written by AI";
 

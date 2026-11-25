@@ -5,9 +5,9 @@ import type {
 } from "@gridwatch/publisher/site-contract";
 import * as Plot from "@observablehq/plot";
 import { renderPlot } from "./chart-svg.ts";
-import { episodeClockRange } from "./episode-copy.ts";
+import { episodeClockRange } from "@gridwatch/publisher/story/episode-copy.ts";
 import { type LinePlot, type PlotLine, renderLinePlot } from "./line-plot.ts";
-import { clockLabeller, timeTicks, zonedAt } from "./period-clock.ts";
+import { clockLabeller, timeTicks, zonedAt } from "@gridwatch/publisher/story/period-clock.ts";
 
 export const RESERVE_MISSING = "Reserve prices are not ready for this day yet.";
 

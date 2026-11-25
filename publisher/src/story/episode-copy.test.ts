@@ -1,5 +1,5 @@
-import type { SiteEpisodeHighlight } from "@gridwatch/publisher/site-contract";
 import { expect, test } from "vitest";
+import type { SiteEpisodeHighlight } from "../site/contract.ts";
 import {
   episodeClockRange,
   episodeEvidenceLinks,

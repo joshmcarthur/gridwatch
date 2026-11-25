@@ -1,9 +1,17 @@
-import type { SiteDay } from "@gridwatch/publisher/site-contract";
 import { expect, test } from "vitest";
-import july27 from "../../fixtures/days/2026-07-27.json";
-import september26 from "../../fixtures/days/2026-09-26.json";
-import september27 from "../../fixtures/days/2026-09-27.json";
-import october29 from "../../fixtures/days/2026-10-29.json";
+import july27 from "../../../site/fixtures/days/2026-07-27.json" with {
+  type: "json",
+};
+import september26 from "../../../site/fixtures/days/2026-09-26.json" with {
+  type: "json",
+};
+import september27 from "../../../site/fixtures/days/2026-09-27.json" with {
+  type: "json",
+};
+import october29 from "../../../site/fixtures/days/2026-10-29.json" with {
+  type: "json",
+};
+import type { SiteDay } from "../site/contract.ts";
 import { centsPerKwh, dayBeats } from "./day-beats.ts";
 
 const fixture = (day: unknown): SiteDay =>

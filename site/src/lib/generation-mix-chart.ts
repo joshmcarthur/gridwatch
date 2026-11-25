@@ -10,7 +10,7 @@ import {
   type MixPoint,
   mixPointTitle,
   type StackFuel,
-} from "./generation-mix.ts";
+} from "@gridwatch/publisher/story/generation-mix.ts";
 import { formatTradingDate } from "./site-data.ts";
 
 /** Fuel colours come from the Landscape tokens in tokens.css (ADR-0015). */

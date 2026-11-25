@@ -1,6 +1,6 @@
 ---
 import type { SiteDay, SiteEvent } from "@gridwatch/publisher/site-contract";
-import { episodeClockRange } from "../lib/episode-copy";
+import { episodeClockRange } from "@gridwatch/publisher/story/episode-copy.ts";
 import {
   AI_LABEL,
   CONFIDENCE_LEVELS,
@@ -13,7 +13,7 @@ import {
   linkClaims,
   requireCheckedEvent,
 } from "../lib/event-page";
-import { placeName } from "../lib/price-regions";
+import { placeName } from "@gridwatch/publisher/story/price-regions.ts";
 import ChartFigure from "./ChartFigure.astro";
 
 /**

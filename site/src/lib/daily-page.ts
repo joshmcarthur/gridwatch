@@ -6,10 +6,10 @@ import type {
   SiteIndex,
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
-import { episodeHeadline } from "./episode-copy.ts";
-import { FUEL_LABELS, type StackFuel } from "./generation-mix.ts";
-import { clockLabeller12, zonedAt } from "./period-clock.ts";
-import { centsPerKwh, placeName } from "./price-regions.ts";
+import { episodeHeadline } from "@gridwatch/publisher/story/episode-copy.ts";
+import { FUEL_LABELS, type StackFuel } from "@gridwatch/publisher/story/generation-mix.ts";
+import { clockLabeller12, zonedAt } from "@gridwatch/publisher/story/period-clock.ts";
+import { centsPerKwh, placeName } from "@gridwatch/publisher/story/price-regions.ts";
 
 const energyFormat = new Intl.NumberFormat("en-NZ", {
   maximumFractionDigits: 0,

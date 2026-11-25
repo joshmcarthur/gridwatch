@@ -1,10 +1,12 @@
+import { expect, test } from "vitest";
+import fixtureJson from "../../../site/fixtures/days/2026-09-27.json" with {
+  type: "json",
+};
 import {
   assertSiteDay,
   type GenerationSection,
   type SiteDay,
-} from "@gridwatch/publisher/site-contract";
-import { expect, test } from "vitest";
-import fixtureJson from "../../fixtures/days/2026-09-27.json";
+} from "../site/contract.ts";
 import {
   BATTERY_HEADER,
   batteryPointTitle,

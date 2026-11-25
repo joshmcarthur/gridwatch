@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     "./site-contract": "./src/site/contract.ts",
-    "./narrative": "./src/gold/narrative.ts"
+    "./narrative": "./src/gold/narrative.ts",
+    "./story/*": "./src/story/*"
   },
   "scripts": {
     "start": "node src/main.ts",

@@ -19,7 +19,7 @@ import {
   rowsForPeriod,
   sortRows,
 } from "./nodal-map-scale.ts";
-import { centsPerKwh } from "./price-regions.ts";
+import { centsPerKwh } from "@gridwatch/publisher/story/price-regions.ts";
 
 export type { NodalMapPayload };
 
