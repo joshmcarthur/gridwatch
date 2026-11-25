@@ -199,24 +199,25 @@ import Layout from "../layouts/Layout.astro";
       <h2 id="ai-heading">How this site uses AI</h2>
       <p>
         A large language model, a kind of artificial intelligence (AI), writes
-        two kinds of passage on the day pages: the short write-up under each
-        day's headline, and the longer write-ups of unusual stretches. Each one
+        three kinds of passage: the short write-up under each day's headline,
+        which also leads the home page, the "This week" paragraph on the home
+        page, and the longer write-ups of unusual stretches. Each one
         carries a "Written by AI" label and lists the figures it was written
         from.
       </p>
       <p>
-        The model gets the figures for that day or stretch and nothing else:
-        the moments this site picked out, the day's totals and the half-hour
-        prices they point to, or for a stretch, its figures labelled by how sure
-        each one is. It doesn't search the web. Its instructions
+        The model gets the figures for that day, week or stretch and nothing
+        else: for a day, the moments this site picked out, the day's totals and
+        the half-hour prices they point to; for a week, a few figures from each
+        day; for a stretch, its figures labelled by how sure each one is. It doesn't search the web. Its instructions
         say to add no fact beyond those figures, and to hedge any cause that
         isn't confirmed.
       </p>
       <p>
         A program then checks every number in the write-up against those
         figures. If a number doesn't match, the program logs a warning and the
-        write-up is still published. A day write-up longer than two sentences
-        isn't published, and the page shows its usual summary instead. Nobody
+        write-up is still published. A day or week write-up longer than two
+        sentences isn't published, and the page shows its usual summary instead. Nobody
         reviews the write-ups by hand, so read any "why" in them as a likely
         explanation, not a finding.
       </p>

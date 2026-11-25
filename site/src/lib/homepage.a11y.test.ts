@@ -17,7 +17,12 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain('aria-labelledby="recent-days-heading"');
     // The latest day's story leads, with a still map at its main moment.
     expect(html).toMatch(/<h2 id="latest-heading"[^>]*>[^<]+<\/h2>/);
-    expect(html).toContain('aria-label="Moments in the day"');
+    // The latest day's write-up by AI leads, in place of the list of moments (ADR-0031).
+    expect(html).not.toContain('aria-label="Moments in the day"');
+    expect(html).toContain(
+      "Benmore was cheaper than Ōtāhuhu all day, and hydro made most",
+    );
+    expect(html).toMatch(/>See the whole day<\/a>/);
     expect(html).toContain('id="home-map"');
     expect(html.indexOf('id="latest-heading"')).toBeLessThan(
       html.indexOf('id="about-heading"'),
@@ -35,10 +40,23 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toContain("Reserves");
     expect(html).toContain("Regional price differences");
     expect(html).toContain("Gas and coal");
-    expect(html).toMatch(/Sunday, 27 September 2026/);
+    expect(html).toMatch(/Sun, 27 Sept/);
     expect(html).toContain('href="/2026/09/27/"');
     expect(html).not.toMatch(/observatory/i);
-    expect(html).toMatch(/<ol class="days week[^"]*"/);
+    expect(html).toMatch(
+      /<ol class="days-inline[^"]*" aria-label="Days this week"/,
+    );
+    expect(html).toMatch(/<h3[^>]*>This week<\/h3>/);
+    expect(html).toContain(
+      "Benmore stayed cheaper than Ōtāhuhu all week, and hydro made most",
+    );
+    expect(html).toContain(
+      "The days from 23 to 29 October: each day&#39;s headline",
+    );
+    expect(html).toContain(
+      "Some files for 25 October are incomplete, and the model was told so.",
+    );
+    expect((html.match(/Written by AI<\/p>/g) ?? []).length).toBe(2);
     expect(html).not.toMatch(/trading day|grouped readings|dataset/i);
     expect(html).not.toMatch(/placeholder homepage/i);
     expect(html).not.toMatch(/green\/amber\/red/);
@@ -52,7 +70,8 @@ test.skipIf(!existsSync(builtPage))(
     expect(html).toMatch(/household bill/);
     const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(html).toMatch(/backup generation/);
+    expect(html).toMatch(/spare generating capacity/);
+    expect(html).not.toMatch(/backup generation/);
     expect(html).toMatch(/Recently detected/);
     expect(html).toMatch(
       /<h2 id="recent-events-heading"[^>]*>Recent events<\/h2>/,

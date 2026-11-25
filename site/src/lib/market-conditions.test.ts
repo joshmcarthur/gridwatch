@@ -431,7 +431,7 @@ test("each condition card uses its own latest complete date and has no composite
   );
   expect(cards.find((card) => card.id === "supply")?.figure).toMatch(/50%/);
   expect(cards.find((card) => card.id === "reserves")?.figure).toMatch(
-    /backup generation/,
+    /spare generating capacity/,
   );
   expect(cards.find((card) => card.id === "regional")?.figure).toMatch(
     /Haywards/,
@@ -517,7 +517,7 @@ test("a missing reserves section is its own empty card, not a score", () => {
   ).filter((card) => card.id === "reserves");
   expect(reserves?.date).toBeNull();
   expect(reserves?.figure).toMatch(/not been published yet/i);
-  expect(reserves?.figure).toMatch(/backup generation/);
+  expect(reserves?.figure).toMatch(/spare generating capacity/);
 });
 
 test("homepage figures stay past tense and skip good, bad, safe, next", () => {

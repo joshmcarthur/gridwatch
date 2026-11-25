@@ -233,7 +233,8 @@ const EXTRA_LEAD_METRICS: Metric[] = [
     id: "reserves",
     label: "Reserve prices",
     section: "reserves",
-    subject: "Reserve prices (the cost of backup generation kept ready) were",
+    subject:
+      "Reserve prices (the cost of keeping spare generating capacity ready) were",
     metric: meanReservePrice,
     change: null,
   },
@@ -436,9 +437,9 @@ function reservesCard(
     loadDay,
     metricFrom: meanReservePrice,
     figure: (value) =>
-      `Reserve prices, the cost of backup generation kept ready if something trips, averaged ${centsPerKwh(value)} per kWh across both islands and every kind of reserve.`,
+      `Reserve prices, the cost of keeping spare generating capacity ready in case a plant trips, averaged ${centsPerKwh(value)} per kWh across both islands and every kind of reserve.`,
     empty:
-      "Reserve prices, the cost of backup generation kept ready if something trips, have not been published yet.",
+      "Reserve prices, the cost of keeping spare generating capacity ready in case a plant trips, have not been published yet.",
     noFigure: "Reserve prices for this day have no figure.",
   });
 }

@@ -1,7 +1,7 @@
 import { chat } from "@tanstack/ai";
 import { createOpenRouterText } from "@tanstack/ai-openrouter";
 import type { CompletenessView } from "../silver/completeness.ts";
-import { narrateDays } from "../site/narrate-days.ts";
+import { narrateDays, narrateWeek } from "../site/narrate-days.ts";
 import { narrateCandidates } from "./narrate-candidates.ts";
 import {
   type CompleteNarrative,
@@ -71,4 +71,15 @@ export async function narrateIfKeyed(ctx: {
     }`,
   );
   for (const line of days.failed) console.warn(`day write-ups: ${line}`);
+  const week = await narrateWeek({
+    ...ctx,
+    complete: openRouterComplete(key, model),
+    model,
+  });
+  console.log(
+    `week paragraph: wrote ${week.written}, skipped ${week.skipped}${
+      week.failed.length > 0 ? `, failed ${week.failed.length}` : ""
+    }`,
+  );
+  for (const line of week.failed) console.warn(`week paragraph: ${line}`);
 }

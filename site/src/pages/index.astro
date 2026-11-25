@@ -1,11 +1,11 @@
 ---
 import type { SiteDay } from "@gridwatch/publisher/site-contract";
+import AiWriteup from "../components/AiWriteup.astro";
 import Layout from "../layouts/Layout.astro";
-import { dailyPath } from "../lib/daily-page";
+import { dailyPath, daySources, weekSources } from "../lib/daily-page";
 import { episodeHeadline } from "@gridwatch/publisher/story/episode-copy.ts";
 import { dayBeats } from "@gridwatch/publisher/story/day-beats.ts";
 import {
-  groupRecentDays,
   latestMarketUpdate,
   marketConditionCards,
   recentDays,
@@ -35,8 +35,8 @@ const loadDay = (date: string): SiteDay => {
 };
 const update = latestMarketUpdate(index, loadDay);
 const cards = marketConditionCards(index, loadDay);
-const recent = recentDays(index, undefined, loadDay);
-const week = groupRecentDays(recent.slice(0, 7));
+const recent = recentDays(index);
+const week = recent.slice(0, 7);
 const earlier = recent.slice(7);
 const episodes = recentEpisodes(index, loadDay);
 const events = recentEvents(index, loadDay);
@@ -64,9 +64,6 @@ const mapSvg = mapView
       summary: `Each dot is a named place on the grid, coloured by its wholesale price at ${mapClock}.`,
     })
   : null;
-const leadBeats = (story?.beats ?? []).filter(
-  (beat) => beat.rule !== "cable",
-);
 ---
 
 <Layout
@@ -83,18 +80,14 @@ const leadBeats = (story?.beats ?? []).filter(
     <h2 id="latest-heading">{story?.headline ?? "Latest market update"}</h2>
     <div class="story-body">
       <div class="story-text">
-        <p class="lede">{story?.lede ?? update.summary}</p>
-        {leadBeats.length > 0 ? (
-          <ol class="moments" aria-label="Moments in the day">
-            {leadBeats.map((beat) => (
-              <li>
-                <span class="moment-title">{beat.title}</span>{" "}
-                <span class="note">{beat.when}</span>
-                <p>{beat.text}</p>
-              </li>
-            ))}
-          </ol>
-        ) : null}
+        {latestDay?.narrative ? (
+          <AiWriteup
+            text={latestDay.narrative.text}
+            sources={daySources(latestDay.narrative)}
+          />
+        ) : (
+          <p class="lede">{story?.lede ?? update.summary}</p>
+        )}
         {update.generationLag ? (
           <p class="note">
             {update.generationLag.text}
@@ -113,8 +106,7 @@ const leadBeats = (story?.beats ?? []).filter(
         {update.href ? (
           <p>
             <a class="open" href={update.href}>
-              Open the {update.dateLabel} page, with the map you can play
-              through the day
+              See the whole day
             </a>
           </p>
         ) : null}
@@ -179,27 +171,19 @@ const leadBeats = (story?.beats ?? []).filter(
         <p>No days on this site yet.</p>
       ) : (
         <>
-          <ol class="days week">
-            {week.map((group) => (
+          <h3 class="week-heading">This week</h3>
+          {index.week ? (
+            <AiWriteup text={index.week.text} sources={weekSources(index.week)} />
+          ) : null}
+          <ol class="days-inline" aria-label="Days this week">
+            {week.map((day) => (
               <li>
-                {group.lead ? (
-                  <span class="lead">{group.lead}</span>
-                ) : null}
-                <span class="dates">
-                  {group.days.map((day, at) => (
-                    <>
-                      <a href={day.href}>
-                        {group.days.length > 1 ? shortDayLabel(day.date) : day.label}
-                      </a>
-                      {day.complete ? null : (
-                        <span class="incomplete" title="Some files for this day are missing">
-                          *<span class="visually-hidden"> (incomplete)</span>
-                        </span>
-                      )}
-                      {at < group.days.length - 1 ? ", " : ""}
-                    </>
-                  ))}
-                </span>
+                <a href={day.href}>{shortDayLabel(day.date)}</a>
+                {day.complete ? null : (
+                  <span class="incomplete" title="Some files for this day are missing">
+                    *<span class="visually-hidden"> (incomplete)</span>
+                  </span>
+                )}
               </li>
             ))}
           </ol>
@@ -316,7 +300,7 @@ const leadBeats = (story?.beats ?? []).filter(
 
   @media (min-width: 48rem) {
     .story-body {
-      grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem);
+      grid-template-columns: minmax(0, 1fr) minmax(12rem, 14rem);
     }
   }
 
@@ -330,28 +314,6 @@ const leadBeats = (story?.beats ?? []).filter(
   .lede {
     margin: 0;
     font-size: var(--text-body);
-  }
-
-  .moments {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .moments li {
-    border-left: 3px solid var(--color-rule);
-    padding-left: var(--space-3);
-  }
-
-  .moment-title {
-    font-weight: 700;
-  }
-
-  .moments p {
-    margin: var(--space-1) 0 0;
   }
 
   .open {
@@ -428,9 +390,24 @@ const leadBeats = (story?.beats ?? []).filter(
     font-weight: 700;
   }
 
-  .lead {
-    display: block;
-    font-weight: 700;
+  .week-heading {
+    margin: 0;
+    font-size: var(--text-body);
+  }
+
+  .days-inline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .days-inline li + li::before {
+    content: "·";
+    margin-right: var(--space-2);
+    color: var(--color-ink-muted);
   }
 
   .incomplete {

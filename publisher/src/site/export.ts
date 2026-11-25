@@ -25,7 +25,7 @@ import {
   type Section,
   sectionDatasets,
 } from "./export-common.ts";
-import { readDayNarrative } from "./export-day-narrative.ts";
+import { readDayNarrative, readWeekNarrative } from "./export-day-narrative.ts";
 import { buildEpisodes, EPISODES_SECTION } from "./export-episodes.ts";
 import { buildEvents, eventsFingerprint } from "./export-events.ts";
 import { buildGeneration, GENERATION_SECTION } from "./export-generation.ts";
@@ -330,6 +330,8 @@ export async function exportSite(options: {
       events: latestSection("events"),
     },
   };
+  const week = readWeekNarrative(goldDir, entries.at(-1)?.date);
+  if (week) index.week = week;
   assertSiteIndex(index);
   const text = `${JSON.stringify(index)}\n`;
   const onDisk = existsSync(indexPath)
