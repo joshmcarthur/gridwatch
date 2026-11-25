@@ -2,7 +2,7 @@ import type {
   FuelCategory,
   GenerationSection,
   SiteDay,
-} from "@gridwatch/publisher/site-contract";
+} from "../site/contract.ts";
 import { clockLabeller, timeTicks, zonedAt } from "./period-clock.ts";
 
 /** Bottom to top. Battery is not here: it is never in the stack (ADR-0014, glossary). */

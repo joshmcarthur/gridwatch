@@ -2,14 +2,24 @@ import type {
   FuelCategory,
   SectionState,
   SiteDay,
+  SiteDayNarrative,
   SiteEpisode,
   SiteIndex,
   SiteIndexDay,
 } from "@gridwatch/publisher/site-contract";
-import { episodeHeadline } from "./episode-copy.ts";
-import { FUEL_LABELS, type StackFuel } from "./generation-mix.ts";
-import { clockLabeller12, zonedAt } from "./period-clock.ts";
-import { centsPerKwh, placeName } from "./price-regions.ts";
+import { episodeHeadline } from "@gridwatch/publisher/story/episode-copy.ts";
+import {
+  FUEL_LABELS,
+  type StackFuel,
+} from "@gridwatch/publisher/story/generation-mix.ts";
+import {
+  clockLabeller12,
+  zonedAt,
+} from "@gridwatch/publisher/story/period-clock.ts";
+import {
+  centsPerKwh,
+  placeName,
+} from "@gridwatch/publisher/story/price-regions.ts";
 
 const energyFormat = new Intl.NumberFormat("en-NZ", {
   maximumFractionDigits: 0,
@@ -452,4 +462,60 @@ function meanPrices(day: HeadlineSource): PlacePrice[] {
 function capitalize(text: string): string {
   if (text.length === 0) return text;
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+}
+
+/** The list under "What this was written from" for a day write-up (ADR-0030, ADR-0031). */
+export function daySources(narrative: SiteDayNarrative): string[] {
+  const sources: string[] = [];
+  if (narrative.moments.length > 0) {
+    const moments = narrative.moments
+      .map((moment) => `${moment.title} (${moment.when})`)
+      .join(", ");
+    sources.push(`The day's moments: ${moments}.`);
+  }
+  sources.push(
+    narrative.cable
+      ? "The day's totals: the electricity generated, and what the cable sent and what arrived."
+      : "The electricity generated over the day.",
+  );
+  sources.push(
+    "Each fuel's share of the day, and the half-hour wholesale prices at Ōtāhuhu, Haywards and Benmore at each moment.",
+  );
+  if (narrative.reserve) {
+    sources.push("The highest half-hour reserve price in the North Island.");
+  }
+  if (narrative.incomplete) {
+    sources.push(
+      "Some of this day's files are incomplete, and the model was told so.",
+    );
+  }
+  return sources;
+}
+
+/** Overnight, or the morning, afternoon or evening, from a UTC start. */
+function partOfDayAt(
+  startUtc: string,
+): "overnight" | "morning" | "afternoon" | "evening" {
+  const hour = zonedAt(startUtc).hour;
+  if (hour < 6) return "overnight";
+  if (hour < 12) return "morning";
+  if (hour < 17) return "afternoon";
+  return "evening";
+}
+
+/** The link from the day write-up to an event's full write-up, and its disclosure title. */
+export function eventLinkLabels(startUtc: string): {
+  link: string;
+  summary: string;
+} {
+  const part = partOfDayAt(startUtc);
+  return part === "overnight"
+    ? {
+        link: "Read the full write-up of the night",
+        summary: "What happened overnight",
+      }
+    : {
+        link: `Read the full write-up of the ${part}`,
+        summary: `What happened in the ${part}`,
+      };
 }

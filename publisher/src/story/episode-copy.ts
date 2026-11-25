@@ -3,7 +3,7 @@ import type {
   SiteDay,
   SiteEpisode,
   SiteEpisodeHighlight,
-} from "@gridwatch/publisher/site-contract";
+} from "../site/contract.ts";
 import { clockLabeller12, zonedAt } from "./period-clock.ts";
 import { centsPerKwh, placeName } from "./price-regions.ts";
 

@@ -1,4 +1,4 @@
-import type { SiteDay } from "@gridwatch/publisher/site-contract";
+import type { SiteDay } from "../site/contract.ts";
 
 export const ZONE = "Pacific/Auckland";
 

@@ -25,6 +25,7 @@ import {
   type Section,
   sectionDatasets,
 } from "./export-common.ts";
+import { readDayNarrative } from "./export-day-narrative.ts";
 import { buildEpisodes, EPISODES_SECTION } from "./export-episodes.ts";
 import { buildEvents, eventsFingerprint } from "./export-events.ts";
 import { buildGeneration, GENERATION_SECTION } from "./export-generation.ts";
@@ -40,7 +41,7 @@ export { round };
  * Bump by hand when the export logic changes. It is part of `export_sha256`, so every day is
  * rebuilt (ADR-0014).
  */
-export const EXPORT_VERSION = 12;
+export const EXPORT_VERSION = 13;
 
 const SECTIONS: readonly Section[] = [
   GENERATION_SECTION,
@@ -122,6 +123,7 @@ export async function buildSiteDay(options: {
       periods,
     );
     const events = await buildEvents(connection, goldDir, date);
+    const narrative = readDayNarrative(goldDir, date);
     const datasets = Object.fromEntries(
       DATASET_IDS.map((id) => [id, datasetStatus(completeness, id, date)]),
     );
@@ -140,6 +142,7 @@ export async function buildSiteDay(options: {
       episodes,
       nodal_map: nodalMap,
       events,
+      ...(narrative && { narrative }),
     };
   } finally {
     connection.closeSync();

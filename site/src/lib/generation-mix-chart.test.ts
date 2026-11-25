@@ -2,9 +2,12 @@ import {
   assertSiteDay,
   type SiteDay,
 } from "@gridwatch/publisher/site-contract";
+import {
+  generationMix,
+  generationMixSummary,
+} from "@gridwatch/publisher/story/generation-mix.ts";
 import { expect, test } from "vitest";
 import fixtureJson from "../../fixtures/days/2026-09-27.json";
-import { generationMix, generationMixSummary } from "./generation-mix.ts";
 import {
   mixBatterySvg,
   mixComparePayload,

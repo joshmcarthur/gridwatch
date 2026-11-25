@@ -29,7 +29,15 @@ test.skipIf(!existsSync(dailyPage))(
   () => {
     const html = readFileSync(dailyPage, "utf8");
     const scope = "394f75a3bfa948a3";
-    expect(html).toContain('id="day-events"');
+    // The event write-up sits in a closed disclosure; the day write-up links to it.
+    expect(html).not.toContain('id="day-events"');
+    expect(html).toMatch(/<details class="slot event-more"/);
+    expect(html).toContain("What happened in the evening");
+    expect(html).toMatch(
+      new RegExp(
+        `<a href="#event-${scope}"[^>]*>Read the full write-up of the evening</a>`,
+      ),
+    );
     expect(html).toContain(`id="event-${scope}"`);
     expect(html).toMatch(/Written by AI ·/);
     expect(html).not.toMatch(/Unreviewed/);
@@ -51,5 +59,22 @@ test.skipIf(!existsSync(dailyPage))(
     expect(html).not.toMatch(/\bSIR\b/);
     const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
     expect(new Set(ids).size).toBe(ids.length);
+  },
+);
+
+test.skipIf(!existsSync(dailyPage))(
+  "the 27 July day write-up replaces the lede, labelled with what it was written from",
+  () => {
+    const html = readFileSync(dailyPage, "utf8");
+    expect(html).toMatch(/<p class="label"[^>]*>Written by AI<\/p>/);
+    expect(html).toContain(
+      "Ōtāhuhu spiked twice, reaching 330c per kWh at 5:30pm",
+    );
+    expect(html).not.toContain("Hydro made 69% of the day");
+    expect(html).toContain("What this was written from");
+    expect(html).toContain(
+      "The day&#39;s moments: Morning price peak (7:30am to 8:00am)",
+    );
+    expect(html).toContain("A program checked every number");
   },
 );

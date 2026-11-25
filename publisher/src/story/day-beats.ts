@@ -1,4 +1,4 @@
-import type { SiteDay } from "@gridwatch/publisher/site-contract";
+import type { SiteDay } from "../site/contract.ts";
 import { episodeHeadline } from "./episode-copy.ts";
 import {
   FUEL_LABELS,

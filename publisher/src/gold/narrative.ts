@@ -114,14 +114,13 @@ Reply with JSON only, no markdown, in this shape:
 
 let cachedSystemPrompt: string | undefined;
 
-/** Site copy and glossary. Load only when generating, not when the site imports the checker. */
-export const systemPrompt = (): string => {
-  if (cachedSystemPrompt !== undefined) return cachedSystemPrompt;
+/** Instructions followed by site copy and the glossary, the shape of every prompt here. */
+export const withSiteCopy = (instructions: string): string => {
   const docsDir = join(
     dirname(fileURLToPath(import.meta.url)),
     "../../../docs",
   );
-  cachedSystemPrompt = `${NARRATIVE_INSTRUCTIONS}
+  return `${instructions}
 
 # Site copy
 
@@ -130,6 +129,12 @@ ${readFileSync(join(docsDir, "site-copy.md"), "utf8")}
 # Glossary
 
 ${readFileSync(join(docsDir, "glossary.md"), "utf8")}`;
+};
+
+/** Site copy and glossary. Load only when generating, not when the site imports the checker. */
+export const systemPrompt = (): string => {
+  if (cachedSystemPrompt !== undefined) return cachedSystemPrompt;
+  cachedSystemPrompt = withSiteCopy(NARRATIVE_INSTRUCTIONS);
   return cachedSystemPrompt;
 };
 
@@ -274,8 +279,9 @@ const NAMED_DATE = String.raw`\b(\d{1,2})\s+(${MONTH})\s+(\d{4})\b`;
 const MONTH_FIRST_DATE = String.raw`\b(${MONTH})\s+(\d{1,2}),?\s+(\d{4})\b`;
 const WEB_LINK = String.raw`\bhttps?://[^\s)>\]]+`;
 const DAILY_PATH = String.raw`/\d{4}/\d{2}/\d{2}/?`;
-const CLOCK_TOKEN = String.raw`\b\d{1,2}:\d{2}(?:am|pm)?\b`;
-const NUMBER_TOKEN = String.raw`(?<![A-Za-z0-9])\$?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?![A-Za-z0-9])`;
+export const CLOCK_TOKEN = String.raw`\b\d{1,2}:\d{2}(?:am|pm)?\b`;
+/** A number, with an optional `$` before it or a `c` (cents per kWh) after it. */
+export const NUMBER_TOKEN = String.raw`(?<![A-Za-z0-9])\$?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)c?(?![A-Za-z0-9])`;
 
 const globalRe = (source: string, flags = "g"): RegExp =>
   new RegExp(source, flags);
@@ -444,7 +450,18 @@ const addEpisodeClocks = (value: unknown, allowed: AllowedFacts): void => {
 export const checkNarrative = (
   sections: NarrativeSections,
   evidence: unknown,
-): NarrativeCheck => {
+): NarrativeCheck =>
+  checkText(
+    `${sections.what_happened}\n${sections.why}\n${sections.what_it_means}`,
+    evidence,
+  );
+
+/**
+ * Every number, date, link and clock time in `text` must appear in `evidence`. A number may
+ * be rounded from a figure there. Cents (`330c`) are checked as numbers, so a package that
+ * lets the text give cents must carry the cents figures.
+ */
+export const checkText = (text: string, evidence: unknown): NarrativeCheck => {
   const allowed: AllowedFacts = {
     numbers: new Set(),
     dates: new Set(),
@@ -453,7 +470,6 @@ export const checkNarrative = (
   };
   collectAllowed(evidence, allowed);
   addEpisodeClocks(evidence, allowed);
-  const text = `${sections.what_happened}\n${sections.why}\n${sections.what_it_means}`;
   const mismatches: NarrativeMismatch[] = [];
 
   const rejectUnless = (
@@ -498,7 +514,7 @@ export const checkNarrative = (
   remainder = mask(remainder, DAILY_PATH);
   remainder = mask(remainder, CLOCK_TOKEN, "gi");
   eachMatch(remainder, NUMBER_TOKEN, "g", (raw) => {
-    const stripped = raw.replace(/[$,]/g, "");
+    const stripped = raw.replace(/[$,]/g, "").replace(/c$/, "");
     const dot = stripped.indexOf(".");
     const decimals = dot === -1 ? 0 : stripped.length - dot - 1;
     const value = Number(stripped);

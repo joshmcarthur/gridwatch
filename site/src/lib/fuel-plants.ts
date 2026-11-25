@@ -3,7 +3,10 @@ import type {
   Island,
   SiteDay,
 } from "@gridwatch/publisher/site-contract";
-import { FUEL_LABELS, STACK_ORDER } from "./generation-mix.ts";
+import {
+  FUEL_LABELS,
+  STACK_ORDER,
+} from "@gridwatch/publisher/story/generation-mix.ts";
 
 const energyFormat = new Intl.NumberFormat("en-NZ", {
   maximumFractionDigits: 1,

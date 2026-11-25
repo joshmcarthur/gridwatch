@@ -1,0 +1,83 @@
+---
+/**
+ * A short passage written by AI (ADR-0030, ADR-0031): the label, the text, and what it was
+ * written from. Used for the day write-up, and on the homepage.
+ */
+interface Props {
+  text: string;
+  sources: string[];
+  link?: { href: string; label: string } | null;
+}
+
+const { text, sources, link = null } = Astro.props;
+---
+
+<div class="writeup">
+  <p class="label">Written by AI</p>
+  <p class="text">
+    {text}
+    {
+      link && (
+        <>
+          {" "}
+          <a href={link.href}>{link.label}</a>.
+        </>
+      )
+    }
+  </p>
+  <details class="from">
+    <summary>What this was written from</summary>
+    <ul>
+      {sources.map((source) => <li>{source}</li>)}
+    </ul>
+    <p>
+      A program checked every number in the text against these figures.{" "}
+      <a href="/how/#ai">How this site uses AI</a>
+    </p>
+  </details>
+</div>
+
+<style>
+  .writeup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    max-width: 46rem;
+    border-left: 3px solid var(--color-caution);
+    padding-left: var(--space-3);
+  }
+
+  .label {
+    margin: 0;
+    font-size: var(--text-label);
+    font-weight: 700;
+    color: var(--color-caution);
+  }
+
+  .text {
+    margin: 0;
+    color: var(--color-ink);
+  }
+
+  .from {
+    font-size: var(--text-label);
+  }
+
+  .from summary {
+    cursor: pointer;
+    color: var(--color-ink-muted);
+  }
+
+  .from ul {
+    margin: var(--space-2) 0;
+    padding-left: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .from p {
+    margin: 0;
+    font-size: var(--text-label);
+  }
+</style>

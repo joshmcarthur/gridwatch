@@ -1,4 +1,4 @@
-import { centsPerKwh } from "./price-regions.ts";
+import { centsPerKwh } from "@gridwatch/publisher/story/price-regions.ts";
 
 /**
  * Lanes beside the day map (ADR-0031): small charts that share the slider's time axis,

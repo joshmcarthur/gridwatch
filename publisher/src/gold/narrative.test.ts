@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { expect, test } from "vitest";
 import {
   checkNarrative,
+  checkText,
   DEFAULT_MODEL,
   generateNarrative,
   llmModel,
@@ -230,4 +231,12 @@ test("checkNarrative rejects a clock time that is not in the payload", () => {
   );
   expect(result.ok).toBe(false);
   expect(result.mismatches).toEqual([{ kind: "time", text: "9:00pm" }]);
+});
+
+test("checkText checks cents per kWh as numbers", () => {
+  const evidence = { claims: [{ value: 330 }] };
+  expect(checkText("Ōtāhuhu reached 330c per kWh.", evidence).ok).toBe(true);
+  expect(
+    checkText("Ōtāhuhu reached 331c per kWh.", evidence).mismatches,
+  ).toEqual([{ kind: "number", text: "331c" }]);
 });

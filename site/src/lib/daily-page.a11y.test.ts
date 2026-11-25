@@ -146,6 +146,8 @@ test.skipIf(!existsSync(builtPage))(
   () => {
     const html = readFileSync(builtPage, "utf8");
     expect(html).not.toContain('class="stats');
+    // No day write-up in this fixture, so the rule-based lede stays.
+    expect(html).not.toContain("Written by AI</p>");
     expect(html).toMatch(/The two islands generated [\d,]+ MWh over the day\./);
     expect(html).toContain('<details class="slot numbers" id="numbers"');
     expect(html).toContain("The numbers behind this");

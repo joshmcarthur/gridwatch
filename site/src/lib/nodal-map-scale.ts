@@ -1,6 +1,6 @@
 import type { Island } from "@gridwatch/publisher/site-contract";
+import { centsPerKwh } from "@gridwatch/publisher/story/price-regions.ts";
 import type { Lane } from "./day-lanes.ts";
-import { centsPerKwh } from "./price-regions.ts";
 
 const cableMegawatts = new Intl.NumberFormat("en-NZ", {
   maximumFractionDigits: 0,
