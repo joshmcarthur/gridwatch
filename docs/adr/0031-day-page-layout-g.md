@@ -46,12 +46,12 @@ The publisher adds each island's half-hourly cable flow to the day file, from go
 
 ### Day and week write-ups
 
-A day write-up sits under the headline in place of the rule-based lede. The homepage leads with the latest day's write-up and adds a "This week" paragraph.
+A day write-up sits under the headline in place of the rule-based lede. The homepage leads with the latest day's write-up and adds an "In the last 7 days" paragraph.
 
 | Slot | Budget |
 | --- | --- |
 | Day write-up | At most 2 sentences, about 40 words, at most 3 numbers. A clock time counts as a number. |
-| This week | The same budget. |
+| In the last 7 days | The same budget. |
 
 Every slot picks the one or two things that matter most, gives at most one hedged cause in one short clause, does not repeat the headline, and ends without a sentence that disclaims the figures.
 
@@ -70,7 +70,7 @@ On an event day the standalone event box goes. The day write-up ends with a link
 
 ### Homepage
 
-The latest day's write-up leads, beside a smaller still map, with a link to the whole day. Under "Recent days", the "This week" paragraph is followed by one row of compact date links. The incomplete-day mark stays.
+The latest day's write-up leads, beside a smaller still map, with a link to the whole day. Under "Recent days", the "In the last 7 days" paragraph is followed by one row of compact date links. The incomplete-day mark stays.
 
 ### Words and colours
 
